@@ -1,0 +1,335 @@
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+
+import { Icon, type IconName } from "~/components/Icon";
+import { MAP_COLOR_DEFAULTS, MAP_COLOR_KEYS, readableOn, type MapColors } from "~/components/map/colors";
+import { useMapColors } from "~/components/map/useMapColors";
+import { Alert, Spinner, useErrorMessage, useToast } from "~/components/ui";
+import { useFormat, useT } from "~/lib/i18n";
+import { useUrlState } from "~/lib/useUrlState";
+import { api } from "~/trpc/react";
+
+type Tab = "photo" | "map";
+
+const TABS: { id: Tab; label: string; icon: IconName }[] = [
+  { id: "photo", label: "settings.tabPhoto", icon: "image" },
+  { id: "map", label: "settings.tabMap", icon: "map" },
+];
+
+const PHOTO_KEYS = [
+  { key: "photo.allowed_types", label: "settings.allowedTypes", hint: "settings.allowedTypesHint", type: "text" },
+  { key: "photo.max_size_mb", label: "settings.maxSize", hint: "settings.maxSizeHint", type: "number" },
+  { key: "photo.max_per_visit", label: "settings.maxPerVisit", hint: "settings.maxPerVisitHint", type: "number" },
+  { key: "photo.max_per_master_place", label: "settings.maxPerMaster", hint: "settings.maxPerMasterHint", type: "number" },
+] as const;
+
+function Settings() {
+  const { t } = useT();
+  const [s, set] = useUrlState({ tab: "photo" });
+  const tab: Tab = s.tab === "map" ? "map" : "photo";
+
+  return (
+    <div className="container page">
+      <div className="page-head">
+        <div>
+          <h1>{t("nav.settings")}</h1>
+          <p>{t("settings.hint")}</p>
+        </div>
+      </div>
+
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label={t("nav.settings")}>
+          {TABS.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              className="settings-nav-item"
+              aria-current={tab === x.id ? "page" : undefined}
+              onClick={() => set({ tab: x.id })}
+            >
+              <Icon name={x.icon} /> {t(x.label)}
+            </button>
+          ))}
+        </nav>
+
+        <section className="settings-panel card card-flush">
+          {/* Catatan "berlaku untuk upload berikutnya" hanya relevan untuk aturan foto. */}
+          {tab === "photo" && (
+            <p className="settings-note">
+              <Icon name="circle-info" fixedWidth={false} /> {t("settings.applyNote")}
+            </p>
+          )}
+          {tab === "photo" ? <PhotoSettings /> : <MapSettings />}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/** Satu baris pengaturan: label + keterangan di kiri, kontrol di kanan. */
+function Row({
+  label,
+  hint,
+  meta,
+  dirty,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  meta?: string;
+  dirty?: boolean;
+  error?: string | null;
+  children: React.ReactNode;
+}) {
+  const { t } = useT();
+  return (
+    <div className={`setting-row ${dirty ? "is-dirty" : ""}`}>
+      <div className="setting-info">
+        <div className="setting-label">
+          {label}
+          {dirty && <span className="setting-dirty">{t("settings.unsaved")}</span>}
+        </div>
+        {hint && <div className="setting-hint">{hint}</div>}
+        {meta && <div className="setting-meta">{meta}</div>}
+        {error && (
+          <div className="helper helper-error" role="alert" style={{ marginTop: 4 }}>
+            <Icon name="warning" fixedWidth={false} /> {error}
+          </div>
+        )}
+      </div>
+      <div className="setting-control">{children}</div>
+    </div>
+  );
+}
+
+function PhotoSettings() {
+  const { t } = useT();
+  const fmt = useFormat();
+  const toast = useToast();
+  const errMsg = useErrorMessage();
+  const utils = api.useUtils();
+  const { data, isLoading } = api.settings.list.useQuery();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
+
+  useEffect(() => {
+    if (data) setValues(Object.fromEntries(data.map((d) => [d.key, d.value])));
+  }, [data]);
+
+  const update = api.settings.update.useMutation({
+    onSuccess: (_r, v) => {
+      setErrors((e) => ({ ...e, [v.key]: null }));
+      void utils.settings.invalidate();
+      toast.push(t("common.saved"), "success");
+    },
+    onError: (e, v) => setErrors((x) => ({ ...x, [v.key]: errMsg(e) })),
+  });
+
+  if (isLoading) return <Spinner />;
+
+  return (
+    <div>
+      <h2 className="settings-title">{t("settings.groupPhoto")}</h2>
+      {PHOTO_KEYS.map((k) => {
+        const row = data?.find((d) => d.key === k.key);
+        if (!row) return null;
+        const dirty = values[k.key] !== row.value;
+        return (
+          <form
+            key={k.key}
+            onSubmit={(e) => {
+              e.preventDefault();
+              update.mutate({ key: k.key, value: values[k.key] ?? "" });
+            }}
+          >
+            <Row label={t(k.label)} hint={t(k.hint)} meta={`${k.key} · ${t("settings.lastUpdated")} ${fmt.dateTime(row.updatedAt)}`} dirty={dirty} error={errors[k.key]}>
+              <input
+                id={k.key}
+                className="input"
+                style={{ width: k.type === "text" ? 180 : 110 }}
+                type={k.type}
+                step={k.type === "number" ? "any" : undefined}
+                value={values[k.key] ?? ""}
+                aria-label={t(k.label)}
+                aria-invalid={!!errors[k.key]}
+                onChange={(e) => setValues((v) => ({ ...v, [k.key]: e.target.value }))}
+              />
+              <button className="btn btn-primary btn-sm" disabled={update.isPending || !dirty}>
+                <Icon name="save" /> {t("common.save")}
+              </button>
+            </Row>
+          </form>
+        );
+      })}
+    </div>
+  );
+}
+
+const COLOR_FIELDS = [
+  { prop: "master", label: "settings.colorMaster", glyph: "M" },
+  { prop: "mine", label: "settings.colorMine", glyph: "" },
+  { prop: "favorite", label: "settings.colorFavorite", glyph: "★" },
+  { prop: "newPin", label: "settings.colorNewPin", glyph: "+" },
+] as const;
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** Pratinjau bentuk pin Google Maps dengan warna terpilih. */
+function PinPreview({ color, glyph }: { color: string; glyph: string }) {
+  return (
+    <svg width="22" height="30" viewBox="0 0 30 40" aria-hidden style={{ flexShrink: 0 }}>
+      <path d="M15 1C7.3 1 1 7.2 1 14.9 1 25 15 39 15 39s14-14 14-24.1C29 7.2 22.7 1 15 1z" fill={color} stroke="#fff" strokeWidth="2" />
+      {glyph ? (
+        <text x="15" y="20" textAnchor="middle" fontSize="13" fontWeight="700" fill={readableOn(color)}>{glyph}</text>
+      ) : (
+        <circle cx="15" cy="15" r="4.5" fill={readableOn(color)} />
+      )}
+    </svg>
+  );
+}
+
+function MapSettings() {
+  const { t } = useT();
+  const fmt = useFormat();
+  const toast = useToast();
+  const errMsg = useErrorMessage();
+  const utils = api.useUtils();
+  const current = useMapColors();
+  const { data } = api.settings.list.useQuery();
+
+  // --- jumlah data per muat ---
+  const sizeRow = data?.find((d) => d.key === "map.recent_page_size");
+  const [size, setSize] = useState("3");
+  const [sizeError, setSizeError] = useState<string | null>(null);
+  useEffect(() => {
+    if (sizeRow) setSize(sizeRow.value);
+  }, [sizeRow]);
+  const updateSize = api.settings.update.useMutation({
+    onSuccess: () => {
+      setSizeError(null);
+      void utils.settings.invalidate();
+      toast.push(t("common.saved"), "success");
+    },
+    onError: (e) => setSizeError(errMsg(e)),
+  });
+  const sizeDirty = size !== (sizeRow?.value ?? "3");
+
+  // --- warna pin ---
+  const [draft, setDraft] = useState<MapColors>(current);
+  const [colorError, setColorError] = useState<string | null>(null);
+  const updateColor = api.settings.update.useMutation();
+  useEffect(() => setDraft(current), [current]);
+  const colorDirty = COLOR_FIELDS.some((f) => draft[f.prop].toUpperCase() !== current[f.prop].toUpperCase());
+  const colorValid = COLOR_FIELDS.every((f) => HEX.test(draft[f.prop]));
+
+  const saveColors = async () => {
+    setColorError(null);
+    try {
+      for (const f of COLOR_FIELDS) {
+        if (draft[f.prop].toUpperCase() !== current[f.prop].toUpperCase())
+          await updateColor.mutateAsync({ key: MAP_COLOR_KEYS[f.prop], value: draft[f.prop] });
+      }
+      await utils.settings.invalidate();
+      toast.push(t("common.saved"), "success");
+    } catch (e) {
+      setColorError(errMsg(e));
+    }
+  };
+
+  return (
+    <div>
+      <h2 className="settings-title">{t("settings.groupSearch")}</h2>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          updateSize.mutate({ key: "map.recent_page_size", value: size });
+        }}
+      >
+        <Row
+          label={t("settings.recentPageSize")}
+          hint={t("settings.recentPageSizeHint")}
+          meta={sizeRow ? `map.recent_page_size · ${t("settings.lastUpdated")} ${fmt.dateTime(sizeRow.updatedAt)}` : "map.recent_page_size"}
+          dirty={sizeDirty}
+          error={sizeError}
+        >
+          <input
+            className="input"
+            style={{ width: 90 }}
+            type="number"
+            min={1}
+            max={50}
+            value={size}
+            aria-label={t("settings.recentPageSize")}
+            aria-invalid={!!sizeError}
+            onChange={(e) => setSize(e.target.value)}
+          />
+          <button type="button" className="btn btn-ghost btn-sm" disabled={size === "3"} onClick={() => setSize("3")}>
+            {t("settings.resetColor")}
+          </button>
+          <button className="btn btn-primary btn-sm" disabled={updateSize.isPending || !sizeDirty}>
+            <Icon name="save" /> {t("common.save")}
+          </button>
+        </Row>
+      </form>
+
+      <h2 className="settings-title">{t("settings.mapColors")}</h2>
+      <p className="settings-sub">{t("settings.mapColorsHint")}</p>
+      {colorError && (
+        <div style={{ padding: "0 20px 12px" }}>
+          <Alert kind="error">{colorError}</Alert>
+        </div>
+      )}
+      {COLOR_FIELDS.map((f) => {
+        const v = draft[f.prop];
+        const ok = HEX.test(v);
+        return (
+          <Row key={f.prop} label={t(f.label)} dirty={v.toUpperCase() !== current[f.prop].toUpperCase()}>
+            <PinPreview color={ok ? v : "#999999"} glyph={f.glyph} />
+            <input
+              type="color"
+              aria-label={t(f.label)}
+              value={ok ? v : "#999999"}
+              onChange={(e) => setDraft({ ...draft, [f.prop]: e.target.value.toUpperCase() })}
+              className="color-swatch"
+            />
+            <input
+              className="input mono"
+              style={{ width: 106 }}
+              maxLength={7}
+              value={v}
+              aria-label={`${t(f.label)} HEX`}
+              aria-invalid={!ok}
+              onChange={(e) => setDraft({ ...draft, [f.prop]: e.target.value.toUpperCase() })}
+            />
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setDraft({ ...draft, [f.prop]: MAP_COLOR_DEFAULTS[f.prop] })}
+              disabled={v.toUpperCase() === MAP_COLOR_DEFAULTS[f.prop]}
+            >
+              {t("settings.resetColor")}
+            </button>
+          </Row>
+        );
+      })}
+      <div className="settings-footer">
+        <button className="btn btn-primary btn-sm" disabled={!colorDirty || !colorValid || updateColor.isPending} onClick={() => void saveColors()}>
+          <Icon name="save" /> {t("common.save")}
+        </button>
+        <button className="btn btn-secondary btn-sm" disabled={!colorDirty} onClick={() => setDraft(current)}>
+          {t("common.cancel")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <Settings />
+    </Suspense>
+  );
+}
