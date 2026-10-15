@@ -571,3 +571,18 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
 .dropdown-menu a:hover .menu-ico, .dropdown-menu button:hover .menu-ico { color: var(--color-primary); transform: translateX(1px); }
 .dropdown-menu .menu-danger:hover { background: #fef2f2; color: var(--color-error); }
 .dropdown-menu .menu-danger:hover .menu-ico { color: var(--color-error); }
+
+/* ---------- Layar loading saat pindah mode ---------- */
+.switch-overlay { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; padding: 24px; background: rgb(250 252 255 / 0.88); backdrop-filter: blur(6px); animation: switch-fade 180ms ease both; }
+.switch-card { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(340px, 100%); padding: 32px 28px 26px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-large); text-align: center; }
+.switch-logo { position: relative; width: 96px; height: 96px; display: grid; place-items: center; }
+.switch-logo img { animation: switch-pulse 1.6s ease-in-out infinite; }
+.switch-ring { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--color-tint-active); border-top-color: var(--color-primary); animation: spin 0.9s linear infinite; }
+.switch-title { font: 600 18px var(--font-headline); color: var(--color-text); }
+.switch-sub { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-muted); }
+.switch-bar { width: 100%; height: 4px; margin-top: 6px; border-radius: 999px; background: var(--color-tint-active); overflow: hidden; }
+.switch-bar span { display: block; width: 40%; height: 100%; border-radius: 999px; background: var(--color-primary); animation: switch-slide 1.2s ease-in-out infinite; }
+@keyframes switch-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes switch-pulse { 0%, 100% { transform: scale(0.94); } 50% { transform: scale(1.04); } }
+@keyframes switch-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .switch-logo img, .switch-ring, .switch-bar span { animation: none; } }

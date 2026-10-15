@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "~/components/Icon";
+import { ModeSwitchOverlay } from "~/components/ModeSwitchOverlay";
 import { useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
 
@@ -94,12 +95,28 @@ export function AppShell({
   const isActive = (n: NavLeaf) =>
     n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + "/");
 
+  const [switching, setSwitching] = useState<null | "ADMIN" | "EXPLORER">(null);
+
   const switchMode = async () => {
     const to = adminMode ? "EXPLORER" : "ADMIN";
-    await update({ mode: to });
-    router.push(to === "ADMIN" ? "/admin" : "/places");
-    router.refresh();
+    setMenu(false);
+    setSwitching(to);
+    try {
+      await update({ mode: to });
+      router.push(to === "ADMIN" ? "/admin" : "/places");
+      router.refresh();
+    } catch {
+      setSwitching(null);
+    }
   };
+
+  // Tutup layar loading setelah halaman tujuan tampil; batas waktu 10 detik sebagai pengaman.
+  useEffect(() => {
+    if (!switching) return;
+    const arrived = switching === "ADMIN" ? pathname.startsWith("/admin") : !pathname.startsWith("/admin");
+    const h = setTimeout(() => setSwitching(null), arrived ? 500 : 10000);
+    return () => clearTimeout(h);
+  }, [switching, pathname]);
 
   const toggleLang = () => {
     const next = lang === "ID" ? "EN" : "ID";
@@ -252,6 +269,8 @@ export function AppShell({
           </nav>
         )}
       </header>
+
+      {switching && <ModeSwitchOverlay to={switching} />}
 
       <main className="shell-main">{children}</main>
 
