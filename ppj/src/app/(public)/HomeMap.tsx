@@ -167,6 +167,7 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
     <div className="map-full">
       <MapView
         className="map-box"
+        satelliteToggle
         markers={markers}
         deviceLocation={location}
         focus={focus}

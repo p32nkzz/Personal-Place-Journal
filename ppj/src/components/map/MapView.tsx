@@ -3,7 +3,9 @@
 import {
   AdvancedMarker,
   APIProvider,
+  ControlPosition,
   Map,
+  MapControl,
   Pin,
   useMap,
   useMapsLibrary,
@@ -160,6 +162,7 @@ export function MapView({
   fit,
   deviceLocation = null,
   className = "map-box",
+  satelliteToggle = false,
 }: {
   markers?: MapMarker[];
   lines?: MapLine[];
@@ -172,8 +175,26 @@ export function MapView({
   fit?: boolean;
   deviceLocation?: DeviceLocation;
   className?: string;
+  /** Tampilkan tombol ganti tampilan peta jalan ⇄ satelit. */
+  satelliteToggle?: boolean;
 }) {
   const { t } = useT();
+  const [satellite, setSatellite] = useState(() => {
+    try {
+      return localStorage.getItem("ppj.map.satellite") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleSatellite = () =>
+    setSatellite((v) => {
+      try {
+        localStorage.setItem("ppj.map.satellite", v ? "0" : "1");
+      } catch {
+        // penyimpanan tidak tersedia
+      }
+      return !v;
+    });
   if (!KEY) {
     return (
       <div className={className} style={{ display: "grid", placeItems: "center", padding: 24, textAlign: "center" }}>
@@ -186,6 +207,7 @@ export function MapView({
       <Map
         className={className}
         mapId="DEMO_MAP_ID"
+        mapTypeId={satelliteToggle && satellite ? "hybrid" : "roadmap"}
         defaultCenter={{ lat: -2.5, lng: 118 }}
         defaultZoom={5}
         gestureHandling="greedy"
@@ -203,6 +225,19 @@ export function MapView({
           if (c && onCenterChange) onCenterChange(c.lat(), c.lng());
         }}
       >
+        {satelliteToggle && (
+          <MapControl position={ControlPosition.LEFT_BOTTOM}>
+            <button
+              type="button"
+              className="map-type-btn"
+              aria-pressed={satellite}
+              title={satellite ? t("map.typeRoadmap") : t("map.typeSatellite")}
+              onClick={toggleSatellite}
+            >
+              <Icon name={satellite ? "map" : "image"} fixedWidth={false} /> {satellite ? t("map.typeRoadmap") : t("map.typeSatellite")}
+            </button>
+          </MapControl>
+        )}
         <Controller markers={markers} focus={focus} fit={fit} deviceLocation={deviceLocation} />
         <Lines lines={lines} />
         {markers.map((m) => (

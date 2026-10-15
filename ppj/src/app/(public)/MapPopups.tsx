@@ -1,7 +1,9 @@
 "use client";
 
+import { Fancybox } from "@fancyapps/ui";
+import "@fancyapps/ui/dist/fancybox/fancybox.css";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { ActiveChip, CategoryChips, MasterStatusChip, RelationChip, TagList, VisitStatusChip } from "~/components/chips";
 import { Icon } from "~/components/Icon";
@@ -36,14 +38,41 @@ function Header({ label, onClose }: { label: string; onClose: () => void }) {
   );
 }
 
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Foto pada pop-up; klik membuka pratinjau Fancybox (dengan caption bila ada). */
 function Photos({ photos, alt }: { photos: { uid: string; url: string; caption: string | null }[]; alt: string }) {
   const [i, setI] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const group = useId();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    Fancybox.bind(el, "a[data-fancybox]", { Hash: false });
+    return () => Fancybox.unbind(el);
+  }, []);
   if (!photos.length) return null;
-  const cur = photos[Math.min(i, photos.length - 1)]!;
+  const idx = Math.min(i, photos.length - 1);
+  const cur = photos[idx]!;
   return (
-    <div className="stack-sm">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={cur.url} alt={cur.caption ?? alt} style={{ width: "100%", height: 170, objectFit: "cover", borderRadius: 8 }} />
+    <div className="stack-sm" ref={ref}>
+      {photos.map((p, n) => (
+        <a
+          key={p.uid}
+          href={p.url}
+          data-fancybox={group}
+          data-caption={p.caption ? escapeHtml(p.caption) : undefined}
+          aria-label={p.caption ?? alt}
+          style={n === idx ? { display: "block", cursor: "zoom-in" } : { display: "none" }}
+        >
+          {n === idx && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cur.url} alt={cur.caption ?? alt} style={{ width: "100%", height: 170, objectFit: "cover", borderRadius: 8, display: "block" }} />
+          )}
+        </a>
+      ))}
+      {cur.caption && <div className="t-caption muted">{cur.caption}</div>}
       {photos.length > 1 && (
         <div className="row" style={{ gap: 6 }}>
           {photos.map((p, n) => (
@@ -51,7 +80,7 @@ function Photos({ photos, alt }: { photos: { uid: string; url: string; caption: 
               key={p.uid}
               onClick={() => setI(n)}
               aria-label={p.caption ?? `${n + 1}`}
-              style={{ padding: 0, width: 48, height: 36, borderRadius: 6, overflow: "hidden", cursor: "pointer", border: n === i ? "2px solid var(--color-primary)" : "1px solid var(--color-border)", background: "none" }}
+              style={{ padding: 0, width: 48, height: 36, borderRadius: 6, overflow: "hidden", cursor: "pointer", border: n === idx ? "2px solid var(--color-primary)" : "1px solid var(--color-border)", background: "none" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
