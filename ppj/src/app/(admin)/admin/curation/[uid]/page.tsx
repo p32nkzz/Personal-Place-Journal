@@ -94,6 +94,22 @@ export default function CurationDetailPage() {
           </div>
 
           <div className="card stack-sm">
+            <h2 className="card-title">{t("place.reviewPhotos")}</h2>
+            {!p.reviewPhotos.length ? (
+              <p className="muted" style={{ margin: 0 }}>{t("photo.none")}</p>
+            ) : (
+              <div className="photo-grid">
+                {p.reviewPhotos.map((ph) => (
+                  <div key={ph.uid} className="photo">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={ph.url} alt={ph.caption ?? ""} loading="lazy" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card stack-sm">
             <h2 className="card-title">{t("curation.visitPhotos")}</h2>
             {!p.photos.length ? (
               <p className="muted" style={{ margin: 0 }}>{t("photo.none")}</p>

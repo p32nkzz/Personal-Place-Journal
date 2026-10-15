@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
+import { Avatar } from "~/components/Avatar";
 import { Icon } from "~/components/Icon";
 import { Select } from "~/components/Select";
 import { SettingRow, SettingsShell } from "~/components/SettingRow";
@@ -13,11 +14,6 @@ import { useUrlState } from "~/lib/useUrlState";
 import { api } from "~/trpc/react";
 
 type Tab = "profile" | "account" | "security";
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase();
-}
 
 function Profile() {
   const { t, setLang } = useT();
@@ -38,6 +34,8 @@ function Profile() {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [conf, setConf] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
@@ -64,6 +62,31 @@ function Profile() {
     },
     onError: (e, v) => setErr(v.name !== me?.name ? "name" : "language", errMsg(e)),
   });
+  const removeAvatar = api.account.removeAvatar.useMutation({
+    onSuccess: () => {
+      setErr("avatar", null);
+      done(t("profile.avatarRemoved"));
+    },
+    onError: (e) => setErr("avatar", errMsg(e)),
+  });
+  const uploadAvatar = async (file: File) => {
+    setAvatarBusy(true);
+    setErr("avatar", null);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await fetch("/api/upload/avatar", { method: "POST", body: fd });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        const key = `err.${json.error ?? "UPLOAD_FAILED"}`;
+        setErr("avatar", t(key) !== key ? t(key) : t("err.UPLOAD_FAILED"));
+      } else done(t("profile.avatarSaved"));
+    } catch {
+      setErr("avatar", t("err.UPLOAD_FAILED"));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
   const uname = api.account.changeUsername.useMutation({
     onSuccess: () => {
       setErr("username", null);
@@ -115,7 +138,7 @@ function Profile() {
       <SettingsShell tabs={tabs} value={tab} onChange={(id) => set({ tab: id })} ariaLabel={t("nav.profile")}>
         {/* Ringkasan akun */}
         <div className="profile-head">
-          <span className="avatar avatar-lg">{initials(me.name)}</span>
+          <Avatar name={me.name} src={me.avatarUrl} large />
           <div style={{ minWidth: 0 }}>
             <div className="profile-name">{me.name}</div>
             <div className="t-caption muted">@{me.username} · {me.email}</div>
@@ -126,6 +149,30 @@ function Profile() {
         {tab === "profile" && (
           <div>
             <h2 className="settings-title">{t("profile.groupPersonal")}</h2>
+            <SettingRow label={t("profile.avatar")} hint={t("profile.avatarHint")} error={errors.avatar}>
+              <div className="avatar-edit">
+                <Avatar name={me.name} src={me.avatarUrl} xl />
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void uploadAvatar(f);
+                  }}
+                />
+                <button type="button" className="btn btn-secondary btn-sm" disabled={avatarBusy || removeAvatar.isPending} onClick={() => fileRef.current?.click()}>
+                  <Icon name="upload" /> {me.avatarUrl ? t("profile.avatarChange") : t("profile.avatarUpload")}
+                </button>
+                {me.avatarUrl && (
+                  <button type="button" className="btn btn-danger-ghost btn-sm" disabled={avatarBusy || removeAvatar.isPending} onClick={() => removeAvatar.mutate()}>
+                    <Icon name="trash" /> {t("profile.avatarRemove")}
+                  </button>
+                )}
+              </div>
+            </SettingRow>
             <form
               onSubmit={(e) => {
                 e.preventDefault();

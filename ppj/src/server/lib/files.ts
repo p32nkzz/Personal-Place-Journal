@@ -5,7 +5,9 @@ import sharp from "sharp";
 
 import { env } from "~/env";
 import { fail } from "./errors";
-import { type PhotoRules } from "./settings";
+import { type AvatarRules, type PhotoRules } from "./settings";
+
+export type UploadKind = "visit" | "master" | "my" | "avatar";
 
 export const uploadRoot = () => path.resolve(process.cwd(), env.UPLOAD_DIR);
 export const backupRoot = () => path.resolve(process.cwd(), env.BACKUP_DIR);
@@ -31,7 +33,7 @@ const FORMAT_TO_EXT: Record<string, string> = {
  */
 export async function processImage(
   buffer: Buffer,
-  rules: PhotoRules,
+  rules: Pick<PhotoRules | AvatarRules, "allowedTypes" | "maxSizeMb">,
 ): Promise<{ data: Buffer; ext: string }> {
   if (buffer.length > rules.maxSizeMb * 1024 * 1024) fail("PHOTO_TOO_LARGE");
   let format: string | undefined;
@@ -48,7 +50,7 @@ export async function processImage(
   return { data, ext };
 }
 
-export async function saveUpload(kind: "visit" | "master", data: Buffer, ext: string) {
+export async function saveUpload(kind: UploadKind, data: Buffer, ext: string) {
   const rel = `${kind}/${randomUUID()}.${ext}`;
   const abs = absoluteUploadPath(rel);
   await mkdir(path.dirname(abs), { recursive: true });
@@ -57,7 +59,7 @@ export async function saveUpload(kind: "visit" | "master", data: Buffer, ext: st
 }
 
 /** Salinan independen file (MASTER PHOTO dari VISIT PHOTO, DD-12). */
-export async function copyUpload(kind: "visit" | "master", fromRel: string) {
+export async function copyUpload(kind: UploadKind, fromRel: string) {
   const ext = path.extname(fromRel).slice(1) || "jpg";
   const rel = `${kind}/${randomUUID()}.${ext}`;
   const abs = absoluteUploadPath(rel);

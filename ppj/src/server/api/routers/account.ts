@@ -7,6 +7,7 @@ import {
   createTRPCRouter,
   publicProcedure,
 } from "~/server/api/trpc";
+import { removeUpload } from "~/server/lib/files";
 import { users } from "~/server/db/schema";
 import {
   confirmEmailChange,
@@ -30,6 +31,17 @@ export const accountRouter = createTRPCRouter({
     const pending = await pendingEmailRequest(ctx.user.id);
     const { id: _id, ...user } = ctx.user; // eslint-disable-line @typescript-eslint/no-unused-vars
     return { ...user, pendingEmail: pending };
+  }),
+
+  /** Hapus avatar profil sendiri; tampilan kembali ke inisial (TX-19). */
+  removeAvatar: activeProcedure.mutation(async ({ ctx }) => {
+    const [u] = await ctx.db.select().from(users).where(eq(users.id, ctx.user.id));
+    await ctx.db
+      .update(users)
+      .set({ avatarFilePath: null, avatarStorageType: null, updatedAt: new Date() })
+      .where(eq(users.id, ctx.user.id));
+    await removeUpload(u?.avatarFilePath ?? null);
+    return { ok: true };
   }),
 
   /** Ganti password sendiri — memerlukan password saat ini (K-51). */

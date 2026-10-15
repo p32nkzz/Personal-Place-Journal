@@ -1,7 +1,7 @@
 /**
  * Query bersama: nilai turunan (rating, effective category) dihitung saat dibaca (DD-09, ERD 19).
  */
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "~/server/db";
 import {
@@ -10,6 +10,7 @@ import {
   masterPlacePhotos,
   masterPlaces,
   myPlaceCategories,
+  myPlacePhotos,
   myPlaceTags,
   myPlaces,
   tags,
@@ -183,6 +184,36 @@ export function visitPhotoUrl(p: {
   return p.storageType === "EXTERNAL" && p.externalUrl
     ? p.externalUrl
     : `/api/files/visit/${p.uid}`;
+}
+
+export function myPlacePhotoUrl(p: {
+  uid: string;
+  storageType: string;
+  externalUrl: string | null;
+}) {
+  return p.storageType === "EXTERNAL" && p.externalUrl
+    ? p.externalUrl
+    : `/api/files/myplace/${p.uid}`;
+}
+
+/** Foto tinjauan MY PLACE (utama dulu) untuk banyak tempat; id → daftar foto. */
+export async function myPlacePhotosFor(placeIds: number[]) {
+  const map = new Map<
+    number,
+    { uid: string; url: string; caption: string | null; isPrimary: boolean }[]
+  >();
+  if (!placeIds.length) return map;
+  const rows = await db
+    .select()
+    .from(myPlacePhotos)
+    .where(inArray(myPlacePhotos.myPlaceId, placeIds))
+    .orderBy(desc(myPlacePhotos.isPrimary), asc(myPlacePhotos.sortOrder), asc(myPlacePhotos.id));
+  for (const r of rows) {
+    const list = map.get(r.myPlaceId) ?? [];
+    list.push({ uid: r.uid, url: myPlacePhotoUrl(r), caption: r.caption, isPrimary: r.isPrimary });
+    map.set(r.myPlaceId, list);
+  }
+  return map;
 }
 
 /** Foto utama (atau pertama) per MASTER. */

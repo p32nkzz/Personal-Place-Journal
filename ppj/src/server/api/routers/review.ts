@@ -26,6 +26,7 @@ import {
   activeMasterCond,
   categoriesForPlaces,
   effectiveCategories,
+  myPlacePhotosFor,
   placeRatings,
   visitPhotoUrl,
 } from "~/server/lib/queries";
@@ -255,6 +256,7 @@ export const reviewRouter = createTRPCRouter({
           caption: x.ph.caption,
           visitedAt: x.visitedAt,
         })),
+        reviewPhotos: (await myPlacePhotosFor([p.id])).get(p.id) ?? [],
         history,
       };
     }),

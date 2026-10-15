@@ -20,6 +20,7 @@ import {
   masterPlacePhotos,
   masterPlaces,
   myPlaceMasterHistories,
+  myPlacePhotos,
   myPlaceTags,
   myPlaces,
   tags,
@@ -28,6 +29,7 @@ import {
 } from "~/server/db/schema";
 import { fail, notFound } from "~/server/lib/errors";
 import { removeUpload } from "~/server/lib/files";
+import { assertMyPlacePhotoCapacity, insertMyPlacePhoto } from "~/server/lib/photos";
 import { newUid } from "~/server/lib/ids";
 import { distanceMeters } from "~/server/lib/geo";
 import {
@@ -41,6 +43,7 @@ import {
   categoriesForPlaces,
   effectiveCategories,
   masterPhotoUrl,
+  myPlacePhotosFor,
   placeRatings,
   tagsForPlaces,
   visitPhotoUrl,
@@ -65,6 +68,16 @@ const placeFields = {
 };
 
 /** Mengambil MY PLACE milik user (ownership divalidasi server-side). */
+async function ownedMyPlacePhoto(userId: number, photoUid: string, tx?: Tx) {
+  const [r] = await (tx ?? db)
+    .select({ ph: myPlacePhotos })
+    .from(myPlacePhotos)
+    .innerJoin(myPlaces, eq(myPlaces.id, myPlacePhotos.myPlaceId))
+    .where(and(eq(myPlacePhotos.uid, photoUid), eq(myPlaces.userId, userId)));
+  if (!r) notFound();
+  return r.ph;
+}
+
 export async function ownedPlace(userId: number, uid: string, tx?: Tx) {
   const q = (tx ?? db)
     .select()
@@ -320,6 +333,7 @@ export const placeRouter = createTRPCRouter({
         rating: ratings.get(p.id) ?? { avg: null, count: 0 },
         history: history.map((h) => ({ ...h, hasSnapshot: !!Number(h.hasSnapshot) })),
         itineraries: itinRows,
+        photos: (await myPlacePhotosFor([p.id])).get(p.id) ?? [],
         visits: visitRows.map(({ v, itineraryName }) => ({
           uid: v.uid,
           visitedAt: v.visitedAt,
@@ -494,6 +508,62 @@ export const placeRouter = createTRPCRouter({
       return { ok: true };
     }),
 
+  /* --------------------------- MY PLACE PHOTO --------------------------- */
+
+  addExternalPhoto: explorerProcedure
+    .input(
+      z.object({
+        placeUid: uidSchema,
+        url: z.string().url().max(2000),
+        caption: z.string().trim().max(2000).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const p = await ownedPlace(ctx.user.id, input.placeUid);
+      await assertMyPlacePhotoCapacity(p.id);
+      await insertMyPlacePhoto({
+        myPlaceId: p.id,
+        storageType: "EXTERNAL",
+        externalUrl: input.url,
+        caption: input.caption ?? null,
+      });
+      return { ok: true };
+    }),
+
+  setPrimaryPhoto: explorerProcedure
+    .input(z.object({ photoUid: uidSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.transaction(async (tx) => {
+        const r = await ownedMyPlacePhoto(ctx.user.id, input.photoUid, tx);
+        await tx
+          .update(myPlacePhotos)
+          .set({ isPrimary: false })
+          .where(and(eq(myPlacePhotos.myPlaceId, r.myPlaceId), eq(myPlacePhotos.isPrimary, true)));
+        await tx.update(myPlacePhotos).set({ isPrimary: true }).where(eq(myPlacePhotos.id, r.id));
+      });
+      return { ok: true };
+    }),
+
+  updatePhotoCaption: explorerProcedure
+    .input(z.object({ photoUid: uidSchema, caption: z.string().trim().max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      const r = await ownedMyPlacePhoto(ctx.user.id, input.photoUid);
+      await ctx.db
+        .update(myPlacePhotos)
+        .set({ caption: input.caption || null })
+        .where(eq(myPlacePhotos.id, r.id));
+      return { ok: true };
+    }),
+
+  deletePhoto: explorerProcedure
+    .input(z.object({ photoUid: uidSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const r = await ownedMyPlacePhoto(ctx.user.id, input.photoUid);
+      await ctx.db.delete(myPlacePhotos).where(eq(myPlacePhotos.id, r.id));
+      if (r.storageType === "UPLOAD") await removeUpload(r.filePath);
+      return { ok: true };
+    }),
+
   /** P-10 langkah 1 — data terkait yang ikut terhapus + apakah perlu DELETE CONSENT. */
   deletePreview: explorerProcedure
     .input(z.object({ uid: uidSchema }))
@@ -508,6 +578,10 @@ export const placeRouter = createTRPCRouter({
         .from(visitPhotos)
         .innerJoin(visits, eq(visits.id, visitPhotos.visitId))
         .where(eq(visits.myPlaceId, p.id));
+      const [mph] = await ctx.db
+        .select({ n: sql<number>`count(*)` })
+        .from(myPlacePhotos)
+        .where(eq(myPlacePhotos.myPlaceId, p.id));
       const [h] = await ctx.db
         .select({ n: sql<number>`count(*)` })
         .from(myPlaceMasterHistories)
@@ -521,6 +595,7 @@ export const placeRouter = createTRPCRouter({
       return {
         visits: Number(v?.n ?? 0),
         visitPhotos: Number(ph?.n ?? 0),
+        myPlacePhotos: Number(mph?.n ?? 0),
         histories: history,
         itineraryPlaces: itin.map((i) => i.name),
         needsConsent: history > 0 || itin.length > 0,
@@ -550,6 +625,12 @@ export const placeRouter = createTRPCRouter({
           .innerJoin(visits, eq(visits.id, visitPhotos.visitId))
           .where(eq(visits.myPlaceId, p.id));
         for (const ph of photos)
+          if (ph.storageType === "UPLOAD" && ph.filePath) files.push(ph.filePath);
+        const ownPhotos = await tx
+          .select({ filePath: myPlacePhotos.filePath, storageType: myPlacePhotos.storageType })
+          .from(myPlacePhotos)
+          .where(eq(myPlacePhotos.myPlaceId, p.id));
+        for (const ph of ownPhotos)
           if (ph.storageType === "UPLOAD" && ph.filePath) files.push(ph.filePath);
         await tx.delete(myPlaces).where(eq(myPlaces.id, p.id));
       });

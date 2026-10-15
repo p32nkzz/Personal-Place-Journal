@@ -13,6 +13,7 @@ import {
 } from "~/components/chips";
 import { MapView } from "~/components/map/MapView";
 import { useMapColors } from "~/components/map/useMapColors";
+import { MyPlacePhotos } from "~/components/MyPlacePhotos";
 import { PhotoGallery } from "~/components/PhotoGallery";
 import {
   Alert,
@@ -146,6 +147,11 @@ export default function PlaceDetailPage() {
               <dt>{t("master.rating")}</dt>
               <dd><Stars value={p.rating.avg} count={p.rating.count} /></dd>
             </dl>
+          </div>
+
+          <div className="card stack-sm">
+            <h2 className="card-title">{t("place.reviewPhotos")} ({p.photos.length})</h2>
+            <MyPlacePhotos placeUid={uid} photos={p.photos} onChanged={refresh} />
           </div>
 
           <div className="card">
@@ -335,6 +341,7 @@ export default function PlaceDetailPage() {
             ) : (
               <>
                 <p style={{ margin: 0 }}>{t("place.deleteText", { visits: preview.data.visits, photos: preview.data.visitPhotos })}</p>
+                {preview.data.myPlacePhotos > 0 && <p style={{ margin: 0 }}>{t("place.deleteMyPhotos", { n: preview.data.myPlacePhotos })}</p>}
                 {preview.data.needsConsent && (
                   <>
                     <Alert kind="warning">

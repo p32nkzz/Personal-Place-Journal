@@ -300,7 +300,7 @@ export const settingsRouter = createTRPCRouter({
       const err = validateSetting(input.key, input.value);
       if (err) fail(err);
       const value =
-        input.key === "photo.allowed_types"
+        input.key === "photo.allowed_types" || input.key === "avatar.allowed_types"
           ? input.value
               .split(",")
               .map((s) => s.trim().toLowerCase())

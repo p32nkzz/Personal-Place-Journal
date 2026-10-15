@@ -73,6 +73,7 @@ export default async function RootLayout({
                           role: user.role,
                           mode: user.mode,
                           mustChangePassword: user.mustChangePassword,
+                          avatarUrl: user.avatarUrl,
                         }
                       : null
                   }

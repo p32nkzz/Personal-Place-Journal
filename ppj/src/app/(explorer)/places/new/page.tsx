@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
+import { PendingPhotoPicker } from "~/components/PendingPhotoPicker";
+import { uploadPhotos } from "~/components/PhotoGallery";
 import { PlaceForm, type PlaceFormValues } from "~/components/PlaceForm";
 import { Spinner, useErrorMessage, useToast } from "~/components/ui";
 import { useT } from "~/lib/i18n";
@@ -15,6 +17,7 @@ function NewPlace() {
   const toast = useToast();
   const errMsg = useErrorMessage();
   const [error, setError] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
 
   const masterUid = sp.get("master");
   const master = api.master.get.useQuery({ uid: masterUid ?? "" }, { enabled: !!masterUid });
@@ -53,6 +56,15 @@ function NewPlace() {
   const create = api.place.create.useMutation({
     onSuccess: async (r) => {
       toast.push(t("common.saved"), "success");
+      if (files.length) {
+        // Foto tinjauan diunggah setelah MY PLACE tersimpan; kegagalan tidak membatalkan penyimpanan.
+        try {
+          await uploadPhotos("/api/upload/my-place-photo", "placeUid", r.uid, files);
+        } catch (e) {
+          const key = `err.${(e as Error).message}`;
+          toast.push(t(key) !== key ? t(key) : t("photo.uploadFailedAfterSave"), "error");
+        }
+      }
       if (itineraryUid) {
         // P-07 langkah 2b: tempat baru langsung menjadi ITINERARY PLACE.
         try {
@@ -87,6 +99,7 @@ function NewPlace() {
         error={error}
         cancelHref="/places"
         showFavorite
+        photoSlot={<PendingPhotoPicker files={files} onChange={setFiles} />}
         onSubmit={(v) => {
           setError(null);
           create.mutate({

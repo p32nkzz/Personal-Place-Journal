@@ -25,7 +25,13 @@ const PHOTO_KEYS = [
   { key: "photo.allowed_types", label: "settings.allowedTypes", hint: "settings.allowedTypesHint", type: "text" },
   { key: "photo.max_size_mb", label: "settings.maxSize", hint: "settings.maxSizeHint", type: "number" },
   { key: "photo.max_per_visit", label: "settings.maxPerVisit", hint: "settings.maxPerVisitHint", type: "number" },
+  { key: "photo.max_per_my_place", label: "settings.maxPerMyPlace", hint: "settings.maxPerMyPlaceHint", type: "number" },
   { key: "photo.max_per_master_place", label: "settings.maxPerMaster", hint: "settings.maxPerMasterHint", type: "number" },
+] as const;
+
+const AVATAR_KEYS = [
+  { key: "avatar.allowed_types", label: "settings.avatarTypes", hint: "settings.avatarTypesHint", type: "text" },
+  { key: "avatar.max_size_mb", label: "settings.avatarMaxSize", hint: "settings.avatarMaxSizeHint", type: "number" },
 ] as const;
 
 function Settings() {
@@ -80,10 +86,7 @@ function PhotoSettings() {
 
   if (isLoading) return <Spinner />;
 
-  return (
-    <div>
-      <h2 className="settings-title">{t("settings.groupPhoto")}</h2>
-      {PHOTO_KEYS.map((k) => {
+  const renderRow = (k: { key: string; label: string; hint: string; type: "text" | "number" }) => {
         const row = data?.find((d) => d.key === k.key);
         if (!row) return null;
         const dirty = values[k.key] !== row.value;
@@ -113,7 +116,14 @@ function PhotoSettings() {
             </SettingRow>
           </form>
         );
-      })}
+  };
+
+  return (
+    <div>
+      <h2 className="settings-title">{t("settings.groupPhoto")}</h2>
+      {PHOTO_KEYS.map(renderRow)}
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupAvatar")}</h2>
+      {AVATAR_KEYS.map(renderRow)}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { db } from "~/server/db";
 import {
   masterPlacePhotos,
   masterPlaces,
+  myPlacePhotos,
   myPlaces,
   users,
   visitPhotos,
@@ -81,6 +82,41 @@ export async function GET(
     if (!isOwner && !isAdmin) return new NextResponse("Not found", { status: 404 });
     try {
       return respond(await readUpload(r.ph.filePath), r.ph.filePath, false);
+    } catch {
+      return new NextResponse("Not found", { status: 404 });
+    }
+  }
+
+  if (kind === "myplace") {
+    if (!user || user.mustChangePassword)
+      return new NextResponse("Forbidden", { status: 403 });
+    const [r] = await db
+      .select({ ph: myPlacePhotos, p: myPlaces, ownerDeleted: users.deletedAt })
+      .from(myPlacePhotos)
+      .innerJoin(myPlaces, eq(myPlaces.id, myPlacePhotos.myPlaceId))
+      .innerJoin(users, eq(users.id, myPlaces.userId))
+      .where(eq(myPlacePhotos.uid, uid));
+    if (!r?.ph.filePath) return new NextResponse("Not found", { status: 404 });
+    const isOwner = r.p.userId === user.id && user.mode === "EXPLORER";
+    const isAdmin = user.role === "ADMIN" && user.mode === "ADMIN" && !r.ownerDeleted;
+    if (!isOwner && !isAdmin) return new NextResponse("Not found", { status: 404 });
+    try {
+      return respond(await readUpload(r.ph.filePath), r.ph.filePath, false);
+    } catch {
+      return new NextResponse("Not found", { status: 404 });
+    }
+  }
+
+  // Avatar: uid = users.uid. Pemilik sendiri atau Admin (bukan Guest).
+  if (kind === "avatar") {
+    if (!user || user.mustChangePassword)
+      return new NextResponse("Forbidden", { status: 403 });
+    const [u] = await db.select().from(users).where(eq(users.uid, uid));
+    if (!u?.avatarFilePath || u.deletedAt) return new NextResponse("Not found", { status: 404 });
+    if (u.id !== user.id && user.role !== "ADMIN")
+      return new NextResponse("Not found", { status: 404 });
+    try {
+      return respond(await readUpload(u.avatarFilePath), u.avatarFilePath, false);
     } catch {
       return new NextResponse("Not found", { status: 404 });
     }

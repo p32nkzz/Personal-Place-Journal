@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { MyPlacePhotos } from "~/components/MyPlacePhotos";
 import { PlaceForm, type PlaceFormValues } from "~/components/PlaceForm";
 import { Alert, EmptyState, Spinner, useErrorMessage, useToast } from "~/components/ui";
 import { useT } from "~/lib/i18n";
@@ -69,6 +70,7 @@ export default function EditPlacePage() {
         error={error}
         cancelHref={`/places/${uid}`}
         showFavorite
+        photoSlot={<MyPlacePhotos placeUid={uid} photos={p.photos} onChanged={() => void utils.place.get.invalidate({ uid })} />}
         onSubmit={(v) => {
           setError(null);
           update.mutate({

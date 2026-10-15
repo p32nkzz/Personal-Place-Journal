@@ -38,6 +38,7 @@ export function PlaceForm({
   onSubmit,
   cancelHref,
   showFavorite,
+  photoSlot,
 }: {
   initial: PlaceFormValues;
   masterUid?: string | null;
@@ -49,6 +50,8 @@ export function PlaceForm({
   onSubmit: (v: PlaceFormValues) => void;
   cancelHref: string;
   showFavorite?: boolean;
+  /** Konten foto tinjauan (galeri saat ubah, pemilih berkas saat buat). */
+  photoSlot?: React.ReactNode;
 }) {
   const { t } = useT();
   const [v, setV] = useState<PlaceFormValues>(initial);
@@ -58,7 +61,10 @@ export function PlaceForm({
   const mapColors = useMapColors();
   const tags = api.tag.list.useQuery();
 
-  useEffect(() => setV(initial), [initial]);
+  // Reset hanya saat nilai awal benar-benar berubah (bukan saat foto di-refetch).
+  const initialKey = JSON.stringify(initial);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setV(initial), [initialKey]);
 
   const set = <K extends keyof PlaceFormValues>(k: K, val: PlaceFormValues[K]) =>
     setV((x) => ({ ...x, [k]: val }));
@@ -202,6 +208,14 @@ export function PlaceForm({
             <p className="helper" style={{ margin: 0 }}>{t("place.pinHint")}</p>
             {v.googlePlaceId && <p className="helper mono" style={{ margin: 0 }}>Google ID: {v.googlePlaceId}</p>}
           </div>
+
+          {photoSlot && (
+            <div className="card stack-sm">
+              <h2 className="card-title">{t("place.reviewPhotos")}</h2>
+              <p className="helper" style={{ margin: 0 }}>{t("place.reviewPhotosHint")}</p>
+              {photoSlot}
+            </div>
+          )}
 
           {!!dup.data?.length && (
             <Alert kind="warning">

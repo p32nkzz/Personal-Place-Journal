@@ -8,7 +8,10 @@ export type PhotoRules = {
   maxSizeMb: number;
   maxPerVisit: number;
   maxPerMasterPlace: number;
+  maxPerMyPlace: number;
 };
+
+export type AvatarRules = { allowedTypes: string[]; maxSizeMb: number };
 
 /** DV-10 — aturan foto aktif dibaca dari app_settings saat upload (tidak hard-coded). */
 export async function getPhotoRules(): Promise<PhotoRules> {
@@ -25,6 +28,20 @@ export async function getPhotoRules(): Promise<PhotoRules> {
     maxSizeMb: Number(m.get("photo.max_size_mb") ?? 5),
     maxPerVisit: Number(m.get("photo.max_per_visit") ?? 10),
     maxPerMasterPlace: Number(m.get("photo.max_per_master_place") ?? 20),
+    maxPerMyPlace: Number(m.get("photo.max_per_my_place") ?? 10),
+  };
+}
+
+/** Aturan avatar profil (app_settings avatar.*), terpisah dari aturan foto tempat. */
+export async function getAvatarRules(): Promise<AvatarRules> {
+  const rows = await db.select().from(appSettings).where(like(appSettings.key, "avatar.%"));
+  const m = new Map(rows.map((r) => [r.key, r.value]));
+  return {
+    allowedTypes: (m.get("avatar.allowed_types") ?? "jpg,png,webp")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+    maxSizeMb: Number(m.get("avatar.max_size_mb") ?? 5),
   };
 }
 
@@ -33,7 +50,8 @@ const IMAGE_TYPES = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);
 /** Validasi nilai per key (ERD 12.20). Mengembalikan null bila valid, atau kode error. */
 export function validateSetting(key: string, value: string): string | null {
   switch (key) {
-    case "photo.allowed_types": {
+    case "photo.allowed_types":
+    case "avatar.allowed_types": {
       const types = value
         .split(",")
         .map((s) => s.trim().toLowerCase())
@@ -42,12 +60,14 @@ export function validateSetting(key: string, value: string): string | null {
         return "SETTING_TYPES_INVALID";
       return null;
     }
-    case "photo.max_size_mb": {
+    case "photo.max_size_mb":
+    case "avatar.max_size_mb": {
       const n = Number(value);
       return Number.isFinite(n) && n > 0 ? null : "SETTING_POSITIVE_NUMBER";
     }
     case "photo.max_per_visit":
-    case "photo.max_per_master_place": {
+    case "photo.max_per_master_place":
+    case "photo.max_per_my_place": {
       const n = Number(value);
       return Number.isInteger(n) && n >= 1 ? null : "SETTING_POSITIVE_INTEGER";
     }
@@ -103,6 +123,9 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   ...MAP_COLOR_DEFAULTS,
   "map.recent_page_size": String(RECENT_PAGE_SIZE_DEFAULT),
   "app.timezone": "Asia/Jakarta",
+  "photo.max_per_my_place": "10",
+  "avatar.allowed_types": "jpg,png,webp",
+  "avatar.max_size_mb": "5",
 };
 
 /** Zona waktu default aplikasi (IANA); bawaan Asia/Jakarta (WIB). */

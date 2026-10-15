@@ -69,6 +69,8 @@ export const usersRouter = createTRPCRouter({
         .select({
           uid: users.uid,
           name: users.name,
+          hasAvatar: sql<number>`(${users.avatarFilePath} is not null)`,
+          avatarVersion: users.updatedAt,
           username: users.username,
           email: users.email,
           isActive: users.isActive,
@@ -81,7 +83,16 @@ export const usersRouter = createTRPCRouter({
         .orderBy(input.order === "asc" ? asc(col) : desc(col))
         .limit(input.limit)
         .offset((input.page - 1) * input.limit);
-      return { rows, total: Number(totalRow?.total ?? 0) };
+      return {
+        rows: rows.map(({ hasAvatar, avatarVersion, ...r }) => ({
+          ...r,
+          avatarUrl:
+            Number(hasAvatar) && !r.deletedAt
+              ? `/api/files/avatar/${r.uid}?v=${avatarVersion.getTime()}`
+              : null,
+        })),
+        total: Number(totalRow?.total ?? 0),
+      };
     }),
 
   /** TX-13 — create Explorer; password awal wajib diganti saat login pertama. */

@@ -18,7 +18,7 @@ export type GalleryPhoto = {
 /** Upload multipart ke route handler (validasi aturan app_settings + hapus EXIF di server). */
 export async function uploadPhotos(
   endpoint: string,
-  field: "visitUid" | "masterUid",
+  field: "visitUid" | "masterUid" | "placeUid",
   uid: string,
   files: File[],
   caption?: string,
@@ -53,7 +53,7 @@ export function PhotoGallery({
   photos: GalleryPhoto[];
   canEdit: boolean;
   uploadEndpoint?: string;
-  parentField?: "visitUid" | "masterUid";
+  parentField?: "visitUid" | "masterUid" | "placeUid";
   parentUid?: string;
   onSetPrimary?: (uid: string) => Promise<unknown>;
   onDelete?: (uid: string) => Promise<unknown>;

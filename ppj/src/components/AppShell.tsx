@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 
+import { Avatar } from "~/components/Avatar";
 import { Icon } from "~/components/Icon";
 import { ModeSwitchOverlay } from "~/components/ModeSwitchOverlay";
 import { useT } from "~/lib/i18n";
@@ -17,15 +18,11 @@ type ShellUser = {
   role: string;
   mode: "ADMIN" | "EXPLORER";
   mustChangePassword: boolean;
+  avatarUrl: string | null;
 } | null;
 
 type NavLeaf = { href: string; label: string; exact?: boolean };
 type NavItem = NavLeaf | { group: string; label: string; children: NavLeaf[] };
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase();
-}
 
 export function AppShell({
   user,
@@ -190,7 +187,7 @@ export function AppShell({
                   title={`${user.name}${user.role === "ADMIN" ? ` — ${adminMode ? t("mode.admin") : t("mode.explorer")}` : ""}`}
                   onClick={() => setMenu((m) => !m)}
                 >
-                  <span className="avatar">{initials(user.name)}</span>
+                  <Avatar name={user.name} src={user.avatarUrl} />
                   {user.role === "ADMIN" && !user.mustChangePassword && (
                     <span className="avatar-mode" aria-hidden>
                       <Icon name={adminMode ? "shield" : "user"} fixedWidth={false} />
@@ -200,7 +197,7 @@ export function AppShell({
                 {menu && (
                   <div className="dropdown-menu" role="menu">
                     <div className="menu-head">
-                      <span className="avatar avatar-lg">{initials(user.name)}</span>
+                      <Avatar name={user.name} src={user.avatarUrl} large />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 600 }}>{user.name}</div>
                         <div className="t-caption muted">@{user.username}</div>

@@ -145,7 +145,7 @@ export default function MasterEditPage() {
             {!deleted && <button className="btn btn-secondary btn-sm" onClick={() => setPickOpen(true)}>{t("master.photoFromVisit")}</button>}
           </div>
           <PhotoGallery
-            photos={m.photos.map((p) => ({ uid: p.uid, url: p.url, caption: p.caption, isPrimary: p.isPrimary, badge: p.originType === "VISIT" ? t("master.photoVisitOrigin") : undefined }))}
+            photos={m.photos.map((p) => ({ uid: p.uid, url: p.url, caption: p.caption, isPrimary: p.isPrimary, badge: p.originType === "VISIT" ? t("master.photoVisitOrigin") : p.originType === "MY_PLACE" ? t("master.photoMyPlaceOrigin") : undefined }))}
             canEdit={!deleted}
             uploadEndpoint="/api/upload/master-photo"
             parentField="masterUid"
@@ -226,19 +226,29 @@ function VisitPhotoPicker({
   const fmt = useFormat();
   const toast = useToast();
   const errMsg = useErrorMessage();
-  const { data, isLoading } = api.master.visitPhotoCandidates.useQuery({ masterUid });
+  const [source, setSource] = useState<"VISIT" | "MY_PLACE">("VISIT");
+  const visitQ = api.master.visitPhotoCandidates.useQuery({ masterUid }, { enabled: source === "VISIT" });
+  const myQ = api.master.myPlacePhotoCandidates.useQuery({ masterUid }, { enabled: source === "MY_PLACE" });
+  const { data, isLoading } = source === "VISIT" ? visitQ : myQ;
   const [error, setError] = useState<string | null>(null);
-  const add = api.master.addFromVisitPhoto.useMutation({
+  const cbs = {
     onSuccess: () => {
       toast.push(t("photo.uploaded"), "success");
       onAdded();
     },
-    onError: (e) => setError(errMsg(e)),
-  });
+    onError: (e: unknown) => setError(errMsg(e)),
+  };
+  const addVisit = api.master.addFromVisitPhoto.useMutation(cbs);
+  const addMy = api.master.addFromMyPlacePhoto.useMutation(cbs);
+  const pending = addVisit.isPending || addMy.isPending;
   return (
     <Modal title={t("master.photoFromVisit")} large onClose={onClose} actions={<button className="btn btn-secondary" onClick={onClose}>{t("common.close")}</button>}>
       <div className="stack">
-        <Alert kind="info">{t("master.photoFromVisitNote")}</Alert>
+        <div className="row" role="tablist">
+          <button role="tab" aria-selected={source === "VISIT"} className={`btn btn-sm ${source === "VISIT" ? "btn-primary" : "btn-secondary"}`} onClick={() => setSource("VISIT")}>{t("master.sourceVisit")}</button>
+          <button role="tab" aria-selected={source === "MY_PLACE"} className={`btn btn-sm ${source === "MY_PLACE" ? "btn-primary" : "btn-secondary"}`} onClick={() => setSource("MY_PLACE")}>{t("master.sourceMyPlace")}</button>
+        </div>
+        <Alert kind="info">{source === "VISIT" ? t("master.photoFromVisitNote") : t("master.photoFromMyPlaceNote")}</Alert>
         {error && <Alert kind="error">{error}</Alert>}
         {isLoading ? <Spinner /> : !data?.length ? <EmptyState title={t("master.noCandidates")} /> : (
           <div className="photo-grid">
@@ -247,7 +257,7 @@ function VisitPhotoPicker({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.url} alt={p.caption ?? ""} loading="lazy" />
                 <div className="photo-actions">
-                  <button className="btn" disabled={add.isPending} onClick={() => add.mutate({ masterUid, visitPhotoUid: p.uid })}><Icon name="plus" /> {t("master.useThis")}</button>
+                  <button className="btn" disabled={pending} onClick={() => (source === "VISIT" ? addVisit.mutate({ masterUid, visitPhotoUid: p.uid }) : addMy.mutate({ masterUid, myPlacePhotoUid: p.uid }))}><Icon name="plus" /> {t("master.useThis")}</button>
                 </div>
                 <div style={{ position: "absolute", top: 6, left: 6, background: "rgb(15 23 42 / 0.6)", color: "#fff", fontSize: 11, padding: "2px 6px", borderRadius: 4 }}>
                   {p.placeName} · {fmt.date(p.visitedAt)}

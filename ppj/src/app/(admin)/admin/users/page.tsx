@@ -20,6 +20,7 @@ import { useFormat, useT } from "~/lib/i18n";
 import { useUrlState } from "~/lib/useUrlState";
 import { Select } from "~/components/Select";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { Avatar } from "~/components/Avatar";
 import { Icon } from "~/components/Icon";
 
 type Row = RouterOutputs["users"]["list"]["rows"][number];
@@ -112,7 +113,7 @@ function Users() {
                 {data.rows.map((u, i) => (
                   <tr key={u.uid}>
                     <td className="col-no">{(page - 1) * limit + i + 1}</td>
-                    <td><b>{u.name}</b></td>
+                    <td><span className="row" style={{ gap: 8, flexWrap: "nowrap" }}><Avatar name={u.name} src={u.avatarUrl} /><b>{u.name}</b></span></td>
                     <td className="mono">{u.username}</td>
                     <td>{u.email}</td>
                     <td>

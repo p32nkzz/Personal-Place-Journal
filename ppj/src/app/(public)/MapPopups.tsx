@@ -196,6 +196,7 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
             {!p.isActive && <ActiveChip active={false} />}
           </div>
           <Stars value={p.rating.avg} count={p.rating.count} />
+          <Photos photos={p.photos} alt={p.name} />
           <GooglePhotosToggle key={p.uid} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} fallbackName={p.name} />
           <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
             <dt>{t("common.address")}</dt>
