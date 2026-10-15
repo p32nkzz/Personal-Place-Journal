@@ -51,6 +51,14 @@ export function validateSetting(key: string, value: string): string | null {
       const n = Number(value);
       return Number.isInteger(n) && n >= 1 ? null : "SETTING_POSITIVE_INTEGER";
     }
+    case "app.timezone": {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: value });
+        return null;
+      } catch {
+        return "SETTING_TIMEZONE_INVALID";
+      }
+    }
     case "map.recent_page_size": {
       const n = Number(value);
       return Number.isInteger(n) && n >= 1 && n <= 50 ? null : "SETTING_PAGE_SIZE";
@@ -94,7 +102,23 @@ export const RECENT_PAGE_SIZE_DEFAULT = 3;
 export const SETTING_DEFAULTS: Record<string, string> = {
   ...MAP_COLOR_DEFAULTS,
   "map.recent_page_size": String(RECENT_PAGE_SIZE_DEFAULT),
+  "app.timezone": "Asia/Jakarta",
 };
+
+/** Zona waktu default aplikasi (IANA); bawaan Asia/Jakarta (WIB). */
+export async function getTimezone() {
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, "app.timezone"));
+  const v = row?.value;
+  if (v) {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: v });
+      return v;
+    } catch {
+      // nilai rusak → pakai bawaan
+    }
+  }
+  return "Asia/Jakarta";
+}
 
 /** Jumlah data awal & per pemuatan pada daftar filter tempat (menu Peta). */
 export async function getMapSearchConfig() {

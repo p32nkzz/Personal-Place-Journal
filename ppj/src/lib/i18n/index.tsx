@@ -8,6 +8,8 @@ export type { Lang } from "./messages";
 
 type Ctx = {
   lang: Lang;
+  /** Zona waktu tampilan (IANA) dari pengaturan aplikasi. */
+  timezone: string;
   setLang: (l: Lang) => void;
   t: (key: MessageKey | (string & {}), vars?: Record<string, string | number>) => string;
 };
@@ -16,11 +18,15 @@ const I18nContext = createContext<Ctx | null>(null);
 
 export const LANG_COOKIE = "ppj_lang";
 
+export const DEFAULT_TIMEZONE = "Asia/Jakarta";
+
 export function I18nProvider({
   initialLang,
+  timezone = DEFAULT_TIMEZONE,
   children,
 }: {
   initialLang: Lang;
+  timezone?: string;
   children: React.ReactNode;
 }) {
   const [lang, setLangState] = useState<Lang>(initialLang);
@@ -43,7 +49,7 @@ export function I18nProvider({
     [lang],
   );
 
-  const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
+  const value = useMemo(() => ({ lang, timezone, setLang, t }), [lang, timezone, setLang, t]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
@@ -53,21 +59,40 @@ export function useT() {
   return ctx;
 }
 
-/** Zona waktu tampilan: WIB (NFR-I18N-001). */
-const TZ = "Asia/Jakarta";
+/** Zona waktu tampilan dari pengaturan aplikasi (default Asia/Jakarta). */
+export function useTimezone() {
+  return useT().timezone;
+}
+
+/** Singkatan zona waktu pada saat tertentu, mis. "WIB" atau "GMT+7". */
+export function tzShortName(tz: string, locale: string, at: Date = new Date()) {
+  try {
+    return (
+      new Intl.DateTimeFormat(locale, { timeZone: tz, timeZoneName: "short" })
+        .formatToParts(at)
+        .find((p) => p.type === "timeZoneName")?.value ?? tz
+    );
+  } catch {
+    return tz;
+  }
+}
 
 export function useFormat() {
-  const { lang } = useT();
+  const { lang, timezone: TZ } = useT();
   const locale = lang === "ID" ? "id-ID" : "en-GB";
   return useMemo(
     () => ({
       dateTime: (d: Date | string | null | undefined) =>
         d
           ? new Intl.DateTimeFormat(locale, {
-              dateStyle: "medium",
-              timeStyle: "short",
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
               timeZone: TZ,
-            }).format(new Date(d)) + " WIB"
+              timeZoneName: "short",
+            }).format(new Date(d))
           : "—",
       date: (d: Date | string | null | undefined) => {
         if (!d) return "—";
@@ -87,14 +112,31 @@ export function useFormat() {
       number: (n: number, digits = 1) =>
         new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(n),
     }),
-    [locale],
+    [locale, TZ],
   );
 }
 
-/** Date → nilai `datetime-local` (WIB). */
-export function toWibInput(d: Date | string) {
+/** Offset zona waktu (ms) pada instan UTC tertentu. */
+export function tzOffsetMs(tz: string, utcMs: number) {
+  const p = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(utcMs));
+  const g = (type: string) => Number(p.find((x) => x.type === type)?.value);
+  const asUtc = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second"));
+  return asUtc - Math.floor(utcMs / 1000) * 1000;
+}
+
+/** Date → nilai `datetime-local` pada zona waktu `tz`. */
+export function toZonedInput(d: Date | string, tz: string) {
   const parts = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: TZ,
+    timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -105,11 +147,27 @@ export function toWibInput(d: Date | string) {
   return parts.replace(" ", "T");
 }
 
-/** Nilai `datetime-local` (diasumsikan WIB) → ISO UTC. */
-export function fromWibInput(v: string) {
-  return new Date(`${v}:00+07:00`).toISOString();
+/** Nilai `datetime-local` (waktu dinding pada zona `tz`) → ISO UTC. */
+export function fromZonedInput(v: string, tz: string) {
+  const [dPart, tPart = "00:00"] = v.split("T");
+  const [y, m, day] = dPart!.split("-").map(Number);
+  const [h, mi] = tPart.split(":").map(Number);
+  const guess = Date.UTC(y!, m! - 1, day!, h!, mi!);
+  let utc = guess - tzOffsetMs(tz, guess);
+  utc = guess - tzOffsetMs(tz, utc);
+  return new Date(utc).toISOString();
 }
 
-export function nowWibInput() {
-  return toWibInput(new Date());
+/** Helper input tanggal-waktu pada zona waktu aplikasi. */
+export function useZonedInput() {
+  const tz = useTimezone();
+  return useMemo(
+    () => ({
+      tz,
+      toInput: (d: Date | string) => toZonedInput(d, tz),
+      fromInput: (v: string) => fromZonedInput(v, tz),
+      nowInput: () => toZonedInput(new Date(), tz),
+    }),
+    [tz],
+  );
 }

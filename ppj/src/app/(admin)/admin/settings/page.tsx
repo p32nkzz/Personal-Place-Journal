@@ -1,18 +1,21 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { Icon, type IconName } from "~/components/Icon";
 import { MAP_COLOR_DEFAULTS, MAP_COLOR_KEYS, readableOn, type MapColors } from "~/components/map/colors";
 import { useMapColors } from "~/components/map/useMapColors";
+import { Select } from "~/components/Select";
 import { Alert, Spinner, useErrorMessage, useToast } from "~/components/ui";
-import { useFormat, useT } from "~/lib/i18n";
+import { tzOffsetMs, useFormat, useT } from "~/lib/i18n";
 import { useUrlState } from "~/lib/useUrlState";
 import { api } from "~/trpc/react";
 
-type Tab = "photo" | "map";
+type Tab = "general" | "photo" | "map";
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
+  { id: "general", label: "settings.tabGeneral", icon: "gear" },
   { id: "photo", label: "settings.tabPhoto", icon: "image" },
   { id: "map", label: "settings.tabMap", icon: "map" },
 ];
@@ -26,8 +29,8 @@ const PHOTO_KEYS = [
 
 function Settings() {
   const { t } = useT();
-  const [s, set] = useUrlState({ tab: "photo" });
-  const tab: Tab = s.tab === "map" ? "map" : "photo";
+  const [s, set] = useUrlState({ tab: "general" });
+  const tab: Tab = s.tab === "map" ? "map" : s.tab === "photo" ? "photo" : "general";
 
   return (
     <div className="container page">
@@ -60,7 +63,7 @@ function Settings() {
               <Icon name="circle-info" fixedWidth={false} /> {t("settings.applyNote")}
             </p>
           )}
-          {tab === "photo" ? <PhotoSettings /> : <MapSettings />}
+          {tab === "general" ? <GeneralSettings /> : tab === "photo" ? <PhotoSettings /> : <MapSettings />}
         </section>
       </div>
     </div>
@@ -321,6 +324,129 @@ function MapSettings() {
         <button className="btn btn-secondary btn-sm" disabled={!colorDirty} onClick={() => setDraft(current)}>
           {t("common.cancel")}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** Daftar seluruh zona waktu IANA dengan keterangan lengkap: offset UTC, ID zona, dan nama zona. */
+function useTimezoneOptions(lang: string) {
+  return useMemo(() => {
+    const now = new Date();
+    const locale = lang === "ID" ? "id-ID" : "en-GB";
+    let ids: string[] = [];
+    try {
+      ids = (Intl as unknown as { supportedValuesOf: (k: string) => string[] }).supportedValuesOf("timeZone");
+    } catch {
+      ids = ["Asia/Jakarta", "UTC"];
+    }
+    if (!ids.includes("UTC")) ids = [...ids, "UTC"];
+    const rows = ids.map((id) => {
+      const off = tzOffsetMs(id, now.getTime()) / 60000;
+      const sign = off < 0 ? "-" : "+";
+      const abs = Math.abs(off);
+      const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+      const mm = String(abs % 60).padStart(2, "0");
+      let name = "";
+      try {
+        name =
+          new Intl.DateTimeFormat(locale, { timeZone: id, timeZoneName: "longGeneric" })
+            .formatToParts(now)
+            .find((p) => p.type === "timeZoneName")?.value ?? "";
+      } catch {
+        name = "";
+      }
+      return { id, off, label: `(UTC${sign}${hh}:${mm}) ${id.replaceAll("_", " ")}${name ? ` — ${name}` : ""}` };
+    });
+    return rows.sort((a, b) => a.off - b.off || a.id.localeCompare(b.id));
+  }, [lang]);
+}
+
+function GeneralSettings() {
+  const { t, lang, timezone } = useT();
+  const fmt = useFormat();
+  const router = useRouter();
+  const toast = useToast();
+  const errMsg = useErrorMessage();
+  const utils = api.useUtils();
+  const { data } = api.settings.list.useQuery();
+  const row = data?.find((d) => d.key === "app.timezone");
+  const options = useTimezoneOptions(lang);
+  const [value, setValue] = useState(timezone);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => setValue(timezone), [timezone]);
+  useEffect(() => {
+    const h = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(h);
+  }, []);
+
+  const update = api.settings.update.useMutation({
+    onSuccess: () => {
+      setError(null);
+      void utils.settings.invalidate();
+      toast.push(t("common.saved"), "success");
+      // Muat ulang layout server agar seluruh halaman memakai zona waktu baru.
+      router.refresh();
+    },
+    onError: (e) => setError(errMsg(e)),
+  });
+
+  const dirty = value !== timezone;
+  const preview = (() => {
+    try {
+      return new Intl.DateTimeFormat(lang === "ID" ? "id-ID" : "en-GB", {
+        dateStyle: "full",
+        timeStyle: "long",
+        timeZone: value,
+      }).format(now);
+    } catch {
+      return "—";
+    }
+  })();
+
+  return (
+    <div>
+      <h2 className="settings-title">{t("settings.groupRegional")}</h2>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          update.mutate({ key: "app.timezone", value });
+        }}
+      >
+        <Row
+          label={t("settings.timezone")}
+          hint={t("settings.timezoneHint")}
+          meta={row ? `app.timezone · ${t("settings.lastUpdated")} ${fmt.dateTime(row.updatedAt)}` : "app.timezone"}
+          dirty={dirty}
+          error={error}
+        >
+          <div style={{ width: 380, maxWidth: "100%" }}>
+            <Select value={value} onChange={(e) => setValue(e.target.value)} aria-label={t("settings.timezone")} searchFrom={0} width="100%">
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={value === "Asia/Jakarta"} onClick={() => setValue("Asia/Jakarta")}>
+            {t("settings.resetColor")}
+          </button>
+          <button className="btn btn-primary btn-sm" disabled={update.isPending || !dirty}>
+            <Icon name="save" /> {t("common.save")}
+          </button>
+        </Row>
+      </form>
+      <div className="setting-row">
+        <div className="setting-info">
+          <div className="setting-label">{t("settings.timezoneNow")}</div>
+          <div className="setting-hint">{value}</div>
+        </div>
+        <div className="setting-control">
+          <strong style={{ fontSize: 14 }}>{preview}</strong>
+        </div>
       </div>
     </div>
   );

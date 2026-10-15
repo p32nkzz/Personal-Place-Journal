@@ -30,6 +30,8 @@ export type MapMarker = {
   selected?: boolean;
   /** Penanda dapat digeser (drag & drop) oleh user. */
   draggable?: boolean;
+  /** Urutan tumpukan (z-index); makin besar makin di atas. Penanda terpilih selalu paling atas. */
+  z?: number;
 };
 
 export type MapLine = {
@@ -208,7 +210,7 @@ export function MapView({
             key={m.id}
             position={{ lat: m.lat, lng: m.lng }}
             title={m.title}
-            zIndex={m.selected ? 10 : 1}
+            zIndex={m.selected ? 100000 : (m.z ?? 1)}
             onClick={() => onMarkerClick?.(m.id)}
             draggable={m.draggable}
             onDragEnd={(e) => {

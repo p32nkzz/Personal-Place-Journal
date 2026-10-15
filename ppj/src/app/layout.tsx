@@ -12,6 +12,7 @@ import { ToastProvider } from "~/components/ui";
 import { I18nProvider, LANG_COOKIE, type Lang } from "~/lib/i18n";
 import { auth } from "~/server/auth";
 import { getCurrentUser } from "~/server/auth/session";
+import { getTimezone } from "~/server/lib/settings";
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
@@ -44,10 +45,11 @@ const plexMono = IBM_Plex_Mono({
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const [session, user, cookieStore] = await Promise.all([
+  const [session, user, cookieStore, timezone] = await Promise.all([
     auth(),
     getCurrentUser(),
     cookies(),
+    getTimezone(),
   ]);
   const cookieLang = cookieStore.get(LANG_COOKIE)?.value === "EN" ? "EN" : "ID";
   const lang: Lang = user?.preferredLanguage ?? cookieLang;
@@ -60,7 +62,7 @@ export default async function RootLayout({
       <body>
         <SessionProvider session={user ? session : null}>
           <TRPCReactProvider>
-            <I18nProvider initialLang={lang}>
+            <I18nProvider initialLang={lang} timezone={timezone}>
               <ToastProvider>
                 <AppShell
                   user={

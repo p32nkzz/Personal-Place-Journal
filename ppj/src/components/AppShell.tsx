@@ -33,7 +33,7 @@ export function AppShell({
   user: ShellUser;
   children: React.ReactNode;
 }) {
-  const { t, lang, setLang } = useT();
+  const { t, lang, setLang, timezone } = useT();
   const pathname = usePathname();
   const router = useRouter();
   const { update } = useSession();
@@ -256,7 +256,7 @@ export function AppShell({
         <footer className="site-footer">
           <div className="container row-between">
             <span>© {new Date().getFullYear()} Personal Place Journal — Your Best Place Gallery</span>
-            <span>{t("common.timezoneNote")}</span>
+            <span>{t("common.timezoneNote", { tz: timezone })}</span>
           </div>
         </footer>
       )}

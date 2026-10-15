@@ -112,6 +112,7 @@ export const masterRouter = createTRPCRouter({
         rating: ratings.get(r.id) ?? { avg: null, count: 0 },
         photoUrl: photos.get(r.id) ?? null,
         createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
       }));
     }),
 

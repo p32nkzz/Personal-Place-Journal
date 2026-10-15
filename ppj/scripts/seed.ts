@@ -89,6 +89,7 @@ const settings: [string, string, string][] = [
   ["photo.max_size_mb", "5", "Ukuran maksimum per file (MB)"],
   ["photo.max_per_visit", "10", "Jumlah maksimum foto per VISIT"],
   ["photo.max_per_master_place", "20", "Jumlah maksimum foto per MASTER PLACE"],
+  ["app.timezone", "Asia/Jakarta", "Zona waktu default aplikasi (IANA)"],
   ["map.recent_page_size", "3", "Jumlah data awal & per muat pada filter tempat (peta)"],
   ["map.color_master", "#111827", "Warna pin MASTER PLACE pada peta"],
   ["map.color_mine", "#CA8A04", "Warna pin Tempat Saya (bukan favorit)"],

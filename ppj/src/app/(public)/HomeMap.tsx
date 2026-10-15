@@ -68,6 +68,16 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
 
   const markers: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
+    // Tumpukan pin yang berdekatan: Tempat Saya di atas MASTER; di antara jenis yang sama,
+    // data yang terakhir diinput/diubah berada paling atas.
+    const rank = <T extends { updatedAt: Date | string }>(items: T[]) => {
+      const order = new Map<T, number>();
+      [...items]
+        .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
+        .forEach((it, i) => order.set(it, i));
+      return order;
+    };
+    const masterRank = rank(masterItems);
     if (showMaster)
       for (const m of masterItems)
         out.push({
@@ -77,9 +87,11 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
           color: C_MASTER,
           glyph: "M",
           title: m.name,
+          z: 1000 + (masterRank.get(m) ?? 0),
           selected: sel?.kind === "master" && sel.uid === m.uid,
         });
-    if (explorer)
+    if (explorer) {
+      const myRank = rank(myItems);
       for (const p of myItems) {
         if (p.isFavorite ? !showFav : !showMine) continue;
         out.push({
@@ -87,11 +99,13 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
           lat: p.latitude,
           lng: p.longitude,
           color: p.isFavorite ? C_FAV : C_MY,
-          glyph: p.isFavorite ? "★" : undefined,
+          glyph: p.isFavorite ? "★" : undefined, // glyph pin Google wajib teks/DOM, bukan komponen React
           title: p.name,
+          z: 5000 + (myRank.get(p) ?? 0),
           selected: sel?.kind === "my" && sel.uid === p.uid,
         });
       }
+    }
     if (sel?.kind === "pin")
       out.push({ id: "pin", lat: sel.lat, lng: sel.lng, color: C_PIN, glyph: "+", selected: true, draggable: true, title: sel.google?.name });
     return out;

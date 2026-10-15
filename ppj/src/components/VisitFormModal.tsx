@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { uploadPhotos } from "~/components/PhotoGallery";
 import { Alert, Field, Modal, StarInput, useErrorMessage, useToast } from "~/components/ui";
-import { fromWibInput, nowWibInput, toWibInput, useT } from "~/lib/i18n";
+import { useT, useZonedInput } from "~/lib/i18n";
 import { api } from "~/trpc/react";
 import { Icon } from "./Icon";
 
@@ -34,7 +34,8 @@ export function VisitFormModal({
   const { t } = useT();
   const toast = useToast();
   const errMsg = useErrorMessage();
-  const [visitedAt, setVisitedAt] = useState(visit ? toWibInput(visit.visitedAt) : nowWibInput());
+  const zi = useZonedInput();
+  const [visitedAt, setVisitedAt] = useState(visit ? zi.toInput(visit.visitedAt) : zi.nowInput());
   const [rating, setRating] = useState<number | null>(visit?.rating ?? null);
   const [note, setNote] = useState(visit?.note ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export function VisitFormModal({
 
   const submit = () => {
     setError(null);
-    const iso = fromWibInput(visitedAt);
+    const iso = zi.fromInput(visitedAt);
     if (visit) update.mutate({ uid: visit.uid, visitedAt: new Date(iso), rating, note });
     else
       create.mutate({
@@ -95,8 +96,8 @@ export function VisitFormModal({
       <div className="stack">
         {error && <Alert kind="error">{error}</Alert>}
         {itineraryUid && !itineraryPlaceUid && !visit && <Alert kind="info">{t("visit.unexpectedNote")}</Alert>}
-        <Field label={t("visit.visitedAt")} required htmlFor="v-at" helper={t("visit.visitedAtHint")}>
-          <input id="v-at" className="input" type="datetime-local" max={nowWibInput()} value={visitedAt} onChange={(e) => setVisitedAt(e.target.value)} />
+        <Field label={t("visit.visitedAt")} required htmlFor="v-at" helper={t("visit.visitedAtHint", { tz: zi.tz })}>
+          <input id="v-at" className="input" type="datetime-local" max={zi.nowInput()} value={visitedAt} onChange={(e) => setVisitedAt(e.target.value)} />
         </Field>
         <Field label={t("visit.rating")}>
           <StarInput value={rating} onChange={setRating} />

@@ -16,7 +16,7 @@ import {
 } from "~/server/db/schema";
 import { fail, isDuplicateError, notFound } from "~/server/lib/errors";
 import { newUid } from "~/server/lib/ids";
-import { getMapColors, getMapSearchConfig, getPhotoRules, SETTING_DEFAULTS, validateSetting } from "~/server/lib/settings";
+import { getMapColors, getMapSearchConfig, getPhotoRules, getTimezone, SETTING_DEFAULTS, validateSetting } from "~/server/lib/settings";
 import { slugify } from "~/server/lib/slug";
 import { hexColorSchema, longTextSchema, nameSchema } from "~/server/lib/validation";
 
@@ -277,6 +277,9 @@ export const colorsRouter = createTRPCRouter({
 });
 
 export const settingsRouter = createTRPCRouter({
+  /** Zona waktu default aplikasi — dapat dibaca siapa pun. */
+  timezone: publicProcedure.query(async () => ({ timezone: await getTimezone() })),
+
   /** Konfigurasi daftar filter tempat pada peta — dapat dibaca siapa pun. */
   mapSearch: publicProcedure.query(() => getMapSearchConfig()),
 
@@ -317,7 +320,12 @@ export const settingsRouter = createTRPCRouter({
           uid: newUid(),
           key: input.key,
           value: normalized,
-          description: input.key === "map.recent_page_size" ? "Jumlah data awal & per muat pada filter tempat (peta)" : "Warna pin peta",
+          description:
+            input.key === "map.recent_page_size"
+              ? "Jumlah data awal & per muat pada filter tempat (peta)"
+              : input.key === "app.timezone"
+                ? "Zona waktu default aplikasi (IANA)"
+                : "Warna pin peta",
           updatedBy: ctx.user.id,
         });
       }

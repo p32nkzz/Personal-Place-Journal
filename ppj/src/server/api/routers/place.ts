@@ -169,6 +169,7 @@ async function queryPlaces(
       isFavorite: r.isFavorite,
       isActive: r.isActive,
       createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
       categories: cats.get(r.id) ?? [],
       tags: tg.get(r.id) ?? [],
       rating: ratings.get(r.id) ?? { avg: null, count: 0 },
