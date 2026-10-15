@@ -120,6 +120,7 @@ export function MasterForm({
           <h2 className="card-title">{t("place.formLocation")}</h2>
           <GooglePlaceSearch
             placeholder={t("map.googlePlaceholder")}
+            origin={location ?? (v.latitude != null && v.longitude != null ? { lat: v.latitude, lng: v.longitude } : null)}
             onSelect={(g: GooglePlaceResult) =>
               setV((x) => ({ ...x, googlePlaceId: g.googlePlaceId, name: x.name || g.name, address: x.address || g.address, latitude: g.lat, longitude: g.lng }))
             }

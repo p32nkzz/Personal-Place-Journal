@@ -247,7 +247,7 @@ export function MapView({
             title={m.title}
             zIndex={m.selected ? 100000 : (m.z ?? 1)}
             onClick={() => onMarkerClick?.(m.id)}
-            draggable={m.draggable}
+            draggable={!!m.draggable}
             onDragEnd={(e) => {
               const ll = e.latLng;
               if (ll) onMarkerDragEnd?.(m.id, ll.lat(), ll.lng());

@@ -109,7 +109,7 @@ async function setPlaceTags(tx: Tx, userId: number, placeId: number, uids: strin
 
 const placeFilterSchema = z.object({
   q: z.string().trim().max(100).optional(),
-  categoryUid: uidSchema.optional(),
+  categoryUids: z.array(uidSchema).max(100).optional(),
   tagUid: uidSchema.optional(),
   favorite: z.boolean().optional(),
   visitStatus: z.enum(["PLAN", "VISITED"]).optional(),
@@ -142,14 +142,14 @@ async function queryPlaces(
       sql`${myPlaces.id} in (select mpt.my_place_id from my_place_tags mpt inner join tags t on t.id = mpt.tag_id where t.uid = ${f.tagUid} and t.user_id = ${userId})`,
     );
   }
-  if (f.categoryUid) {
+  if (f.categoryUids?.length) {
     // Effective category (DV-04): MASTER bila direferensikan, selain itu stored MY PLACE.
     conds.push(sql`(
       (${myPlaces.masterPlaceId} is not null and ${myPlaces.masterPlaceId} in (
-        select mpc.master_place_id from master_place_categories mpc inner join categories c on c.id = mpc.category_id where c.uid = ${f.categoryUid}))
+        select mpc.master_place_id from master_place_categories mpc inner join categories c on c.id = mpc.category_id where c.uid in (${sql.join(f.categoryUids.map((u) => sql`${u}`), sql`, `)})))
       or
       (${myPlaces.masterPlaceId} is null and ${myPlaces.id} in (
-        select pc.my_place_id from my_place_categories pc inner join categories c on c.id = pc.category_id where c.uid = ${f.categoryUid}))
+        select pc.my_place_id from my_place_categories pc inner join categories c on c.id = pc.category_id where c.uid in (${sql.join(f.categoryUids.map((u) => sql`${u}`), sql`, `)})))
     )`);
   }
   const where = and(...conds);

@@ -18,7 +18,17 @@ import { useMapSearchConfig } from "~/components/map/useMapSearchConfig";
 import { MasterPopup, MyPlacePopup, PinPopup, type Selection, type Viewer } from "./MapPopups";
 
 
-export function HomeMap({ viewer }: { viewer: Viewer }) {
+export function HomeMap({
+  viewer,
+  initialFreePin = false,
+  initialPin = null,
+}: {
+  viewer: Viewer;
+  /** Pin bebas langsung aktif (kembali dari form tempat baru). */
+  initialFreePin?: boolean;
+  /** Pin yang dipasang sejak awal (koordinat dari form tempat baru). */
+  initialPin?: { lat: number; lng: number } | null;
+}) {
   const { t } = useT();
   const explorer = viewer === "EXPLORER";
   const canPin = viewer !== "GUEST";
@@ -41,10 +51,10 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
   const [showFav, setShowFav] = useState(true);
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
   // Pin bebas default OFF agar peta nyaman digeser tanpa memunculkan pin baru.
-  const [freePin, setFreePin] = useState(false);
+  const [freePin, setFreePin] = useState(initialFreePin);
   const [showMaster, setShowMaster] = useState(true);
-  const [sel, setSel] = useState<Selection | null>(null);
-  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
+  const [sel, setSel] = useState<Selection | null>(initialPin ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng } : null);
+  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(initialPin ? { ...initialPin, zoom: 16 } : null);
 
   const cats = api.categories.listActive.useQuery();
   const masters = api.master.listMap.useQuery({ categoryUids: categoryUids.length ? categoryUids : undefined });

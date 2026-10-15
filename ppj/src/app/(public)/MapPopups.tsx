@@ -92,8 +92,8 @@ function Photos({ photos, alt }: { photos: { uid: string; url: string; caption: 
   );
 }
 
-/** Foto Google Maps untuk tempat tersimpan — nonaktif secara default; tampil setelah chip diklik. */
-function GooglePhotosToggle({
+/** Foto Google Maps untuk tempat tersimpan — hanya dimuat saat tab-nya dibuka. */
+function GooglePhotosPanel({
   placeId,
   lat,
   lng,
@@ -105,12 +105,10 @@ function GooglePhotosToggle({
   fallbackName: string;
 }) {
   const { t } = useT();
-  const [on, setOn] = useState(false);
-  const [state, setState] = useState<"idle" | "loading" | "done">("idle");
+  const [state, setState] = useState<"loading" | "done">("loading");
   const [data, setData] = useState<Awaited<ReturnType<typeof googlePhotosFor>>>(null);
 
   useEffect(() => {
-    if (!on) return;
     let cancelled = false;
     setState("loading");
     void googlePhotosFor(placeId, lat, lng).then((r) => {
@@ -121,31 +119,62 @@ function GooglePhotosToggle({
     return () => {
       cancelled = true;
     };
-  }, [on, placeId, lat, lng]);
+  }, [placeId, lat, lng]);
 
+  if (state === "loading") return <Spinner />;
+  if (!data) return <p className="muted t-small" style={{ margin: 0 }}>{t("map.googlePhotosNone")}</p>;
   return (
     <div className="stack-sm">
-      <div>
-        <button type="button" className="chip" aria-pressed={on} onClick={() => setOn((v) => !v)} title={t("map.googlePhotosHint")}>
-          <Icon name="image" /> {t("map.googlePhotos")}
+      <Photos photos={data.photos.map((ph, i) => ({ uid: `gp${i}`, url: ph.url, caption: null }))} alt={data.name || fallbackName} />
+      <div className="t-caption muted">
+        {data.exact ? (data.name || fallbackName) : t("map.photoNear2", { name: data.name })} · {t("map.photoBy")}{" "}
+        {[...new Map(data.photos.flatMap((ph) => ph.credits).map((c) => [c.name, c])).values()].map((c, i) => (
+          <span key={c.name}>
+            {i > 0 && ", "}
+            {c.href ? <a href={c.href} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>{c.name}</a> : c.name}
+          </span>
+        ))}{" "}
+        · Google Maps
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Foto pada pop-up dikelompokkan dalam tab chip agar pop-up tidak memanjang:
+ * foto milik tempat (MASTER / tinjauan) dan foto Google Maps (dimuat saat tab dibuka).
+ */
+function PhotoTabs({
+  ownLabel,
+  photos,
+  placeId,
+  lat,
+  lng,
+  name,
+}: {
+  ownLabel: string;
+  photos: { uid: string; url: string; caption: string | null }[];
+  placeId: string | null;
+  lat: number;
+  lng: number;
+  name: string;
+}) {
+  const { t } = useT();
+  const [tab, setTab] = useState<"own" | "google">("own");
+  return (
+    <div className="stack-sm">
+      <div className="mini-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "own"} className="mini-tab" onClick={() => setTab("own")}>
+          <Icon name="image" fixedWidth={false} /> {ownLabel} <span className="mini-tab-n">{photos.length}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "google"} className="mini-tab" title={t("map.googlePhotosHint")} onClick={() => setTab("google")}>
+          <Icon name="map" fixedWidth={false} /> {t("map.googlePhotos")}
         </button>
       </div>
-      {on && state === "loading" && <Spinner />}
-      {on && state === "done" && !data && <p className="muted t-small" style={{ margin: 0 }}>{t("map.googlePhotosNone")}</p>}
-      {on && data && (
-        <div className="stack-sm">
-          <Photos photos={data.photos.map((ph, i) => ({ uid: `gp${i}`, url: ph.url, caption: null }))} alt={data.name || fallbackName} />
-          <div className="t-caption muted">
-            {data.exact ? (data.name || fallbackName) : t("map.photoNear2", { name: data.name })} · {t("map.photoBy")}{" "}
-            {[...new Map(data.photos.flatMap((ph) => ph.credits).map((c) => [c.name, c])).values()].map((c, i) => (
-              <span key={c.name}>
-                {i > 0 && ", "}
-                {c.href ? <a href={c.href} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>{c.name}</a> : c.name}
-              </span>
-            ))}{" "}
-            · Google Maps
-          </div>
-        </div>
+      {tab === "own" ? (
+        photos.length ? <Photos photos={photos} alt={name} /> : <p className="muted t-small" style={{ margin: 0 }}>{t("photo.none")}</p>
+      ) : (
+        <GooglePhotosPanel placeId={placeId} lat={lat} lng={lng} fallbackName={name} />
       )}
     </div>
   );
@@ -162,13 +191,12 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
         <Spinner />
       ) : (
         <>
-          <Photos photos={m.photos} alt={m.name} />
           <h2 className="t-subhead">{m.name}</h2>
           <div className="row">
             <MasterStatusChip status={m.status} />
             <Stars value={m.rating.avg} count={m.rating.count} />
           </div>
-          <GooglePhotosToggle key={m.uid} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} fallbackName={m.name} />
+          <PhotoTabs key={m.uid} ownLabel={t("map.tabMasterPhotos")} photos={m.photos} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} name={m.name} />
           <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
             <dt>{t("common.address")}</dt>
             <dd>{m.address}</dd>
@@ -185,15 +213,13 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
           </dl>
           <div className="row">
             {viewer === "EXPLORER" && m.status === "ACTIVE" && (
-              <Link className="btn btn-primary btn-sm" href={`/places/new?master=${m.uid}`}>
+              <Link className="btn btn-primary btn-sm" href={`/places/new?master=${m.uid}&from=map`}>
                 <Icon name="plus" /> {t("map.saveAsMine")}
               </Link>
             )}
-            {viewer === "ADMIN" && (
-              <Link className="btn btn-secondary btn-sm" href={`/admin/masters/${m.uid}`}>
-                <Icon name="gear" /> {t("common.manage")}
-              </Link>
-            )}
+            <Link className="btn btn-secondary btn-sm" href={viewer === "ADMIN" ? `/admin/masters/${m.uid}` : `/masters/${m.uid}`}>
+              <Icon name="circle-info" /> {t("map.viewDetail")}
+            </Link>
           </div>
         </>
       )}
@@ -216,17 +242,27 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
         <Spinner />
       ) : (
         <>
-          <h2 className="t-subhead">
-            {p.isFavorite && <Icon name="star" style={{ color: "#f59e0b" }} />} {p.name}
-          </h2>
+          <div className="row-between" style={{ alignItems: "flex-start", gap: 8 }}>
+            <h2 className="t-subhead" style={{ margin: 0, minWidth: 0 }}>
+              {p.isFavorite && <Icon name="star" style={{ color: "#f59e0b" }} />} {p.name}
+            </h2>
+            <Link
+              className="btn btn-secondary btn-sm btn-icon"
+              style={{ flexShrink: 0, width: 34, minHeight: 34 }}
+              href={`/places/${p.uid}/edit`}
+              title={t("common.edit")}
+              aria-label={t("common.edit")}
+            >
+              <Icon name="pen" />
+            </Link>
+          </div>
           <div className="row">
             <VisitStatusChip status={p.visitStatus} />
             <RelationChip status={p.masterRelationStatus} />
             {!p.isActive && <ActiveChip active={false} />}
           </div>
           <Stars value={p.rating.avg} count={p.rating.count} />
-          <Photos photos={p.photos} alt={p.name} />
-          <GooglePhotosToggle key={p.uid} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} fallbackName={p.name} />
+          <PhotoTabs key={p.uid} ownLabel={t("place.reviewPhotos")} photos={p.photos} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} name={p.name} />
           <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
             <dt>{t("common.address")}</dt>
             <dd>{p.address ?? "—"}</dd>
@@ -311,8 +347,8 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
                 <Icon name="plus" /> {t("visit.add")}
               </button>
             )}
-            <Link className="btn btn-secondary btn-sm" href={`/places/${p.uid}/edit`}>
-              <Icon name="pen" /> {t("common.edit")}
+            <Link className="btn btn-secondary btn-sm" href={`/places/${p.uid}`}>
+              <Icon name="circle-info" /> {t("map.viewDetail")}
             </Link>
           </div>
 
@@ -458,7 +494,7 @@ export function PinPopup({
       )}
       <div className="row">
         {viewer === "EXPLORER" && (
-          <Link className="btn btn-primary btn-sm" href={`/places/new?${params}`}>
+          <Link className="btn btn-primary btn-sm" href={`/places/new?${params}&from=map`}>
             <Icon name="plus" /> {t("map.addAsMine")}
           </Link>
         )}

@@ -18,6 +18,9 @@ function NewPlace() {
   const errMsg = useErrorMessage();
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [urls, setUrls] = useState<string[]>([]);
+  const addPhotoUrl = api.place.addExternalPhoto.useMutation();
+  const photoMax = api.settings.photoRules.useQuery().data?.maxPerMyPlace;
 
   const masterUid = sp.get("master");
   const master = api.master.get.useQuery({ uid: masterUid ?? "" }, { enabled: !!masterUid });
@@ -65,6 +68,17 @@ function NewPlace() {
           toast.push(t(key) !== key ? t(key) : t("photo.uploadFailedAfterSave"), "error");
         }
       }
+      if (urls.length) {
+        let failed = 0;
+        for (const url of urls) {
+          try {
+            await addPhotoUrl.mutateAsync({ placeUid: r.uid, url });
+          } catch {
+            failed++;
+          }
+        }
+        if (failed) toast.push(t("photo.urlFailedAfterSave", { n: failed }), "error");
+      }
       if (itineraryUid) {
         // P-07 langkah 2b: tempat baru langsung menjadi ITINERARY PLACE.
         try {
@@ -97,9 +111,20 @@ function NewPlace() {
         submitLabel={t("common.save")}
         busy={create.isPending}
         error={error}
-        cancelHref="/places"
+        cancelHref={(v) => {
+          if (sp.get("from") !== "map") return "/places";
+          // Kembali ke Peta: pin bebas aktif; pin dipasang hanya bila titik sudah dipilih di form.
+          const q = new URLSearchParams({ freepin: "1" });
+          if (v.latitude != null && v.longitude != null) {
+            q.set("lat", String(v.latitude));
+            q.set("lng", String(v.longitude));
+          }
+          return `/?${q.toString()}`;
+        }}
         showFavorite
-        photoSlot={<PendingPhotoPicker files={files} onChange={setFiles} />}
+        photoSlot={<PendingPhotoPicker files={files} urls={urls} onFiles={setFiles} onUrls={setUrls} />}
+        pickedGoogleUrls={urls}
+        onPickGooglePhoto={(u) => setUrls((x) => (x.includes(u) || (photoMax != null && files.length + x.length >= photoMax) ? x : [...x, u]))}
         onSubmit={(v) => {
           setError(null);
           create.mutate({

@@ -38,6 +38,10 @@ export default function EditPlacePage() {
     [p],
   );
 
+  const addPhotoUrl = api.place.addExternalPhoto.useMutation({
+    onSuccess: () => void utils.place.get.invalidate({ uid }),
+    onError: (e) => setError(errMsg(e)),
+  });
   const update = api.place.update.useMutation({
     onSuccess: async () => {
       await utils.place.invalidate();
@@ -70,6 +74,8 @@ export default function EditPlacePage() {
         error={error}
         cancelHref={`/places/${uid}`}
         showFavorite
+        pickedGoogleUrls={p.photos.map((x) => x.url)}
+        onPickGooglePhoto={(url) => addPhotoUrl.mutate({ placeUid: uid, url })}
         photoSlot={<MyPlacePhotos placeUid={uid} photos={p.photos} onChanged={() => void utils.place.get.invalidate({ uid })} />}
         onSubmit={(v) => {
           setError(null);
