@@ -189,7 +189,7 @@ export function AppShell({
                         <div className="t-caption muted">@{user.username}</div>
                         {user.role === "ADMIN" && !user.mustChangePassword && (
                           <span className="mode-badge" style={{ marginTop: 6 }}>
-                            <Icon name={adminMode ? "shield" : "user"} fixedWidth={false} />&nbsp;
+                            <Icon name={adminMode ? "shield" : "user"} fixedWidth={false} />
                             {adminMode ? t("mode.admin") : t("mode.explorer")}
                           </span>
                         )}
@@ -198,17 +198,20 @@ export function AppShell({
                     <div className="dropdown-sep" />
                     {!user.mustChangePassword && (
                       <Link href="/profile" role="menuitem">
-                        {t("nav.profile")}
+                        <Icon name="user-gear" className="menu-ico" />
+                        <span>{t("nav.profile")}</span>
                       </Link>
                     )}
                     {user.role === "ADMIN" && !user.mustChangePassword && (
                       <button role="menuitem" onClick={switchMode}>
-                        {adminMode ? t("mode.switchToExplorer") : t("mode.switchToAdmin")}
+                        <Icon name="repeat" className="menu-ico" />
+                        <span>{adminMode ? t("mode.switchToExplorer") : t("mode.switchToAdmin")}</span>
                       </button>
                     )}
                     <div className="dropdown-sep" />
-                    <button role="menuitem" onClick={() => signOut({ callbackUrl: "/login" })}>
-                      {t("nav.logout")}
+                    <button role="menuitem" className="menu-danger" onClick={() => signOut({ callbackUrl: "/login" })}>
+                      <Icon name="logout" className="menu-ico" />
+                      <span>{t("nav.logout")}</span>
                     </button>
                   </div>
                 )}

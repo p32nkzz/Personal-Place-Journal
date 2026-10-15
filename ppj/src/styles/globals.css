@@ -557,3 +557,17 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
 .setting-control .input { min-height: 38px; padding: 6px 10px; }
 .color-swatch { width: 38px; height: 38px; padding: 0; border: 1.5px solid var(--color-border-input); border-radius: var(--radius-md); background: none; cursor: pointer; }
 .settings-footer { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--color-border); background: var(--color-background); }
+
+/* Badge mode pada menu avatar: satu baris, tidak terpotong/pindah baris */
+.mode-badge { white-space: nowrap; width: fit-content; gap: 4px; }
+.menu-head { min-width: 0; }
+.menu-head > div { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.menu-head > div > div { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dropdown-menu { min-width: 260px; }
+
+/* Ikon pada pilihan menu avatar */
+.dropdown-menu a, .dropdown-menu button { gap: 12px; }
+.dropdown-menu .menu-ico { width: 16px; color: var(--color-text-subtle); font-size: 14px; transition: color 150ms ease, transform 150ms ease; }
+.dropdown-menu a:hover .menu-ico, .dropdown-menu button:hover .menu-ico { color: var(--color-primary); transform: translateX(1px); }
+.dropdown-menu .menu-danger:hover { background: #fef2f2; color: var(--color-error); }
+.dropdown-menu .menu-danger:hover .menu-ico { color: var(--color-error); }
