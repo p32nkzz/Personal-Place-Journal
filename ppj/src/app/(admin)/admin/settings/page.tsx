@@ -7,6 +7,7 @@ import { Icon, type IconName } from "~/components/Icon";
 import { MAP_COLOR_DEFAULTS, MAP_COLOR_KEYS, readableOn, type MapColors } from "~/components/map/colors";
 import { useMapColors } from "~/components/map/useMapColors";
 import { Select } from "~/components/Select";
+import { SettingRow, SettingsShell } from "~/components/SettingRow";
 import { Alert, Spinner, useErrorMessage, useToast } from "~/components/ui";
 import { tzOffsetMs, useFormat, useT } from "~/lib/i18n";
 import { useUrlState } from "~/lib/useUrlState";
@@ -41,68 +42,15 @@ function Settings() {
         </div>
       </div>
 
-      <div className="settings-layout">
-        <nav className="settings-nav" aria-label={t("nav.settings")}>
-          {TABS.map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              className="settings-nav-item"
-              aria-current={tab === x.id ? "page" : undefined}
-              onClick={() => set({ tab: x.id })}
-            >
-              <Icon name={x.icon} /> {t(x.label)}
-            </button>
-          ))}
-        </nav>
-
-        <section className="settings-panel card card-flush">
-          {/* Catatan "berlaku untuk upload berikutnya" hanya relevan untuk aturan foto. */}
-          {tab === "photo" && (
-            <p className="settings-note">
-              <Icon name="circle-info" fixedWidth={false} /> {t("settings.applyNote")}
-            </p>
-          )}
-          {tab === "general" ? <GeneralSettings /> : tab === "photo" ? <PhotoSettings /> : <MapSettings />}
-        </section>
-      </div>
-    </div>
-  );
-}
-
-/** Satu baris pengaturan: label + keterangan di kiri, kontrol di kanan. */
-function Row({
-  label,
-  hint,
-  meta,
-  dirty,
-  error,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  meta?: string;
-  dirty?: boolean;
-  error?: string | null;
-  children: React.ReactNode;
-}) {
-  const { t } = useT();
-  return (
-    <div className={`setting-row ${dirty ? "is-dirty" : ""}`}>
-      <div className="setting-info">
-        <div className="setting-label">
-          {label}
-          {dirty && <span className="setting-dirty">{t("settings.unsaved")}</span>}
-        </div>
-        {hint && <div className="setting-hint">{hint}</div>}
-        {meta && <div className="setting-meta">{meta}</div>}
-        {error && (
-          <div className="helper helper-error" role="alert" style={{ marginTop: 4 }}>
-            <Icon name="warning" fixedWidth={false} /> {error}
-          </div>
+      <SettingsShell tabs={TABS.map((x) => ({ ...x, label: t(x.label) }))} value={tab} onChange={(id) => set({ tab: id })} ariaLabel={t("nav.settings")}>
+        {/* Catatan "berlaku untuk upload berikutnya" hanya relevan untuk aturan foto. */}
+        {tab === "photo" && (
+          <p className="settings-note">
+            <Icon name="circle-info" fixedWidth={false} /> {t("settings.applyNote")}
+          </p>
         )}
-      </div>
-      <div className="setting-control">{children}</div>
+        {tab === "general" ? <GeneralSettings /> : tab === "photo" ? <PhotoSettings /> : <MapSettings />}
+      </SettingsShell>
     </div>
   );
 }
@@ -147,7 +95,7 @@ function PhotoSettings() {
               update.mutate({ key: k.key, value: values[k.key] ?? "" });
             }}
           >
-            <Row label={t(k.label)} hint={t(k.hint)} meta={`${k.key} · ${t("settings.lastUpdated")} ${fmt.dateTime(row.updatedAt)}`} dirty={dirty} error={errors[k.key]}>
+            <SettingRow label={t(k.label)} hint={t(k.hint)} meta={`${k.key} · ${t("settings.lastUpdated")} ${fmt.dateTime(row.updatedAt)}`} dirty={dirty} error={errors[k.key]}>
               <input
                 id={k.key}
                 className="input"
@@ -162,7 +110,7 @@ function PhotoSettings() {
               <button className="btn btn-primary btn-sm" disabled={update.isPending || !dirty}>
                 <Icon name="save" /> {t("common.save")}
               </button>
-            </Row>
+            </SettingRow>
           </form>
         );
       })}
@@ -250,7 +198,7 @@ function MapSettings() {
           updateSize.mutate({ key: "map.recent_page_size", value: size });
         }}
       >
-        <Row
+        <SettingRow
           label={t("settings.recentPageSize")}
           hint={t("settings.recentPageSizeHint")}
           meta={sizeRow ? `map.recent_page_size · ${t("settings.lastUpdated")} ${fmt.dateTime(sizeRow.updatedAt)}` : "map.recent_page_size"}
@@ -274,7 +222,7 @@ function MapSettings() {
           <button className="btn btn-primary btn-sm" disabled={updateSize.isPending || !sizeDirty}>
             <Icon name="save" /> {t("common.save")}
           </button>
-        </Row>
+        </SettingRow>
       </form>
 
       <h2 className="settings-title">{t("settings.mapColors")}</h2>
@@ -288,7 +236,7 @@ function MapSettings() {
         const v = draft[f.prop];
         const ok = HEX.test(v);
         return (
-          <Row key={f.prop} label={t(f.label)} dirty={v.toUpperCase() !== current[f.prop].toUpperCase()}>
+          <SettingRow key={f.prop} label={t(f.label)} dirty={v.toUpperCase() !== current[f.prop].toUpperCase()}>
             <PinPreview color={ok ? v : "#999999"} glyph={f.glyph} />
             <input
               type="color"
@@ -314,7 +262,7 @@ function MapSettings() {
             >
               {t("settings.resetColor")}
             </button>
-          </Row>
+          </SettingRow>
         );
       })}
       <div className="settings-footer">
@@ -415,7 +363,7 @@ function GeneralSettings() {
           update.mutate({ key: "app.timezone", value });
         }}
       >
-        <Row
+        <SettingRow
           label={t("settings.timezone")}
           hint={t("settings.timezoneHint")}
           meta={row ? `app.timezone · ${t("settings.lastUpdated")} ${fmt.dateTime(row.updatedAt)}` : "app.timezone"}
@@ -437,7 +385,7 @@ function GeneralSettings() {
           <button className="btn btn-primary btn-sm" disabled={update.isPending || !dirty}>
             <Icon name="save" /> {t("common.save")}
           </button>
-        </Row>
+        </SettingRow>
       </form>
       <div className="setting-row">
         <div className="setting-info">

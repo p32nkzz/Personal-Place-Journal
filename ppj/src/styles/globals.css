@@ -586,3 +586,8 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
 @keyframes switch-pulse { 0%, 100% { transform: scale(0.94); } 50% { transform: scale(1.04); } }
 @keyframes switch-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .switch-logo img, .switch-ring, .switch-bar span { animation: none; } }
+
+/* Ringkasan akun pada panel Profil */
+.profile-head { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-background); }
+.profile-head > div { flex: 1; }
+.profile-name { font: 600 16px var(--font-headline); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
