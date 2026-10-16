@@ -45,3 +45,6 @@ yarn-error.log*
 # idea files
 .ideastorage/
 .next-test
+
+# uploaded files & backups (runtime data)
+/storage/
