@@ -3,6 +3,7 @@ import "select2/dist/css/select2.min.css";
 import "~/styles/globals.css";
 
 import { type Metadata } from "next";
+import { type Session } from "next-auth";
 import { Figtree, IBM_Plex_Mono, Open_Sans } from "next/font/google";
 import { cookies } from "next/headers";
 import { SessionProvider } from "next-auth/react";
@@ -12,6 +13,8 @@ import { ToastProvider } from "~/components/ui";
 import { I18nProvider, LANG_COOKIE, type Lang } from "~/lib/i18n";
 import { auth } from "~/server/auth";
 import { getCurrentUser } from "~/server/auth/session";
+import { DbUnavailable } from "~/components/DbUnavailable";
+import { isDbConnectionError } from "~/server/lib/dbError";
 import { getTimezone } from "~/server/lib/settings";
 import { TRPCReactProvider } from "~/trpc/react";
 
@@ -45,13 +48,17 @@ const plexMono = IBM_Plex_Mono({
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const [session, user, cookieStore, timezone] = await Promise.all([
-    auth(),
-    getCurrentUser(),
-    cookies(),
-    getTimezone(),
-  ]);
+  const cookieStore = await cookies();
   const cookieLang = cookieStore.get(LANG_COOKIE)?.value === "EN" ? "EN" : "ID";
+  let data;
+  try {
+    data = await Promise.all([auth() as Promise<Session | null>, getCurrentUser(), getTimezone()]);
+  } catch (e) {
+    // Database tidak terhubung: tampilkan penjelasan yang mudah dipahami, bukan halaman error mentah.
+    if (isDbConnectionError(e)) return <DbUnavailable lang={cookieLang} fonts={`${figtree.variable} ${openSans.variable} ${plexMono.variable}`} />;
+    throw e;
+  }
+  const [session, user, timezone] = data;
   const lang: Lang = user?.preferredLanguage ?? cookieLang;
 
   return (

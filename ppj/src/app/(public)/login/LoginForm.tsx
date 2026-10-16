@@ -29,8 +29,10 @@ export function LoginForm() {
       redirect: false,
     });
     if (!res || res.error) {
+      // Gagal karena database tidak terjangkau? Beri tahu, jangan salahkan kredensial.
+      const down = await fetch("/api/health", { cache: "no-store" }).then((r) => !r.ok).catch(() => true);
       // Pesan generik — tidak mengungkap bagian mana yang salah (P-15).
-      setError(t("auth.invalid"));
+      setError(down ? t("err.DB_UNAVAILABLE") : t("auth.invalid"));
       setBusy(false);
       return;
     }
