@@ -8,6 +8,7 @@ import {
   useDeviceLocation,
   type GooglePlaceResult,
 } from "~/components/map/MapView";
+import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
 import { useMapColors } from "~/components/map/useMapColors";
 import { Alert, Field } from "~/components/ui";
 import { useT } from "~/lib/i18n";
@@ -125,6 +126,7 @@ export function MasterForm({
               setV((x) => ({ ...x, googlePlaceId: g.googlePlaceId, name: x.name || g.name, address: x.address || g.address, latitude: g.lat, longitude: g.lng }))
             }
           />
+          <MapTypeSwitch />
           <div className="map-box-sm">
             <MapView
               markers={markers}

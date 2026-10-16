@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
 import { ItineraryForm } from "~/components/ItineraryForm";
 import { MapView, type MapLine, type MapMarker } from "~/components/map/MapView";
 import {
@@ -121,6 +122,7 @@ export default function ItineraryDetailPage() {
           <span><i className="line" style={{ borderColor: C_ACTUAL }} /> {t("itinerary.legendActual")}</span>
           <span><i style={{ background: C_UNEXPECTED }} /> {t("visit.unexpected")}</span>
         </div>
+        <MapTypeSwitch />
         <div className="map-box-md">
           <MapView markers={markers} lines={lines} fit />
         </div>

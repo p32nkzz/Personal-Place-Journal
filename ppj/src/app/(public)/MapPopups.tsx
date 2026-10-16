@@ -233,7 +233,7 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
             <InfoRow icon="map-pin" label={t("common.address")}>{m.address}</InfoRow>
             {m.description && <InfoRow icon="circle-info" label={t("common.description")}><ClampText text={m.description} /></InfoRow>}
             {m.categories.length > 0 && <InfoRow icon="layers" label={t("common.category")}><CategoryChips items={m.categories} /></InfoRow>}
-            <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={m.latitude} lng={m.longitude} placeId={m.googlePlaceId} googleLink /></InfoRow>
+            <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={m.latitude} lng={m.longitude} placeId={m.googlePlaceId} googleLink streetView name={m.name} /></InfoRow>
           </div>
           <div className="pp-actions">
             {viewer === "EXPLORER" && m.status === "ACTIVE" && (
@@ -341,7 +341,7 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
                 ))}
               </InfoRow>
             )}
-            <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={p.latitude} lng={p.longitude} placeId={p.googlePlaceId} googleLink /></InfoRow>
+            <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={p.latitude} lng={p.longitude} placeId={p.googlePlaceId} googleLink streetView name={p.name} /></InfoRow>
           </div>
 
           {/* Kunjungan & riwayat dalam tab agar pop-up tidak memanjang */}
@@ -536,7 +536,7 @@ export function PinPopup({
           </InfoRow>
         )}
         <InfoRow icon="pin" label={t("common.coordinates")}>
-          <Coords lat={sel.lat} lng={sel.lng} placeId={fromSearch ? sel.google!.googlePlaceId : geo?.placeId} googleLink />
+          <Coords lat={sel.lat} lng={sel.lng} placeId={fromSearch ? sel.google!.googlePlaceId : geo?.placeId} googleLink streetView name={placeName} />
         </InfoRow>
       </div>
       {viewer !== "GUEST" && (

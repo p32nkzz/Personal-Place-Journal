@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "~/components/Icon";
 import { Alert, Modal } from "~/components/ui";
 import { useT } from "~/lib/i18n";
+import { setSatellite, useSatellite } from "./mapType";
 import { readableOn } from "./colors";
 import { useMapSearchConfig } from "./useMapSearchConfig";
 
@@ -170,6 +171,7 @@ export function MapView({
   deviceLocation = null,
   className = "map-box",
   satelliteToggle = false,
+  streetView = false,
 }: {
   markers?: MapMarker[];
   lines?: MapLine[];
@@ -182,26 +184,14 @@ export function MapView({
   fit?: boolean;
   deviceLocation?: DeviceLocation;
   className?: string;
-  /** Tampilkan tombol ganti tampilan peta jalan ⇄ satelit. */
+  /** Tombol ganti jalan ⇄ satelit MELAYANG di dalam peta (hanya menu Peta). Peta lain memakai MapTypeSwitch di luar kotak peta. */
   satelliteToggle?: boolean;
+  /** Tampilkan kontrol Street View (pegman) pada peta. Bawaan mati: Street View dibuka dari tombol di detail tempat. */
+  streetView?: boolean;
 }) {
   const { t } = useT();
-  const [satellite, setSatellite] = useState(() => {
-    try {
-      return localStorage.getItem("ppj.map.satellite") === "1";
-    } catch {
-      return false;
-    }
-  });
-  const toggleSatellite = () =>
-    setSatellite((v) => {
-      try {
-        localStorage.setItem("ppj.map.satellite", v ? "0" : "1");
-      } catch {
-        // penyimpanan tidak tersedia
-      }
-      return !v;
-    });
+  const satellite = useSatellite();
+  const toggleSatellite = () => setSatellite(!satellite);
   if (!KEY) {
     return (
       <div className={className} style={{ display: "grid", placeItems: "center", padding: 24, textAlign: "center" }}>
@@ -214,13 +204,14 @@ export function MapView({
       <Map
         className={className}
         mapId="DEMO_MAP_ID"
-        mapTypeId={satelliteToggle && satellite ? "hybrid" : "roadmap"}
+        mapTypeId={satellite ? "hybrid" : "roadmap"}
         defaultCenter={{ lat: -2.5, lng: 118 }}
         defaultZoom={5}
         gestureHandling="greedy"
         disableDefaultUI={false}
         mapTypeControl={false}
-        streetViewControl={false}
+        streetViewControl={streetView}
+        streetViewControlOptions={{ position: ControlPosition.RIGHT_BOTTOM }}
         fullscreenControl={false}
         clickableIcons={false}
         onClick={(e) => {

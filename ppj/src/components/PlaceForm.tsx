@@ -11,6 +11,8 @@ import {
   useDeviceLocation,
   type GooglePlaceResult,
 } from "~/components/map/MapView";
+import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
+import { StreetViewDialog } from "~/components/PlaceInfo";
 import { useCategoryPageSize } from "~/components/useCategoryPageSize";
 import { useTagPageSize } from "~/components/useTagPageSize";
 import { GooglePhotoPreview } from "~/components/GooglePhotoPreview";
@@ -74,6 +76,7 @@ export function PlaceForm({
   const [showPhotos, setShowPhotos] = useState(true);
   const reqRef = useRef(0);
   // Section foto pantauan dapat dilipat; pilihan diingat per perangkat.
+  const [svOpen, setSvOpen] = useState(false);
   const [photosCollapsed, setPhotosCollapsed] = useState(false);
   useEffect(() => {
     try {
@@ -198,6 +201,7 @@ export function PlaceForm({
           <div className="pf-head">
             <h2 className="pf-title"><span className="pf-step">1</span>{t("place.formLocation")}</h2>
             <div className="pf-tools">
+              <MapTypeSwitch className="is-inline" />
               <button type="button" className="chip" aria-pressed={showPhotos} title={t("map.googlePhotosHint")} onClick={() => setShowPhotos((s) => !s)}>
                 <Icon name="image" /> {t("map.googlePhotos")}
               </button>
@@ -236,12 +240,29 @@ export function PlaceForm({
             <input id="lat" className="input mono" inputMode="decimal" value={v.latitude ?? ""} aria-invalid={!!coordError} aria-label={t("common.latitude")} onChange={coordInput("latitude")} />
             <label htmlFor="lng">Lng<span className="req" aria-hidden>*</span></label>
             <input id="lng" className="input mono" inputMode="decimal" value={v.longitude ?? ""} aria-invalid={!!coordError} aria-label={t("common.longitude")} onChange={coordInput("longitude")} />
+            {/* Street View: hanya bila titik sudah dipilih; panorama dibuka di dialog. */}
+            {hasCoord && (
+              <button
+                type="button"
+                className="pf-sv"
+                title={t("map.streetView")}
+                aria-label={t("map.streetView")}
+                onClick={() => setSvOpen(true)}
+              >
+                <Icon name="street-view" fixedWidth={false} />
+              </button>
+            )}
+          </div>
+          <div className="pf-hint-row">
             {resolving ? (
               <span className="pf-hint"><Icon name="refresh" spin fixedWidth={false} /> {t("place.resolving")}</span>
             ) : (
               <span className="pf-hint">{t("place.pinHint")}</span>
             )}
           </div>
+          {svOpen && hasCoord && (
+            <StreetViewDialog lat={v.latitude!} lng={v.longitude!} title={v.name || undefined} onClose={() => setSvOpen(false)} />
+          )}
           {coordError && (
             <div className="helper helper-error" role="alert" style={{ marginTop: -4 }}>
               <Icon name="warning" fixedWidth={false} /> {coordError}

@@ -60,6 +60,7 @@ import {
   faCamera,
   faCircleDot,
   faThumbtack,
+  faStreetView,
 } from "@fortawesome/free-solid-svg-icons";
 import { faCircle as faCircleRegular, faStar as faStarRegular } from "@fortawesome/free-regular-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -104,6 +105,7 @@ const ICONS = {
   unlink: faLinkSlash,
   pin: faLocationDot,
   thumbtack: faThumbtack,
+  "street-view": faStreetView,
   search: faMagnifyingGlass,
   map: faMap,
   "map-pin": faMapLocationDot,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
 import { ActiveChip, CategoryChips, RelationChip, VisitStatusChip } from "~/components/chips";
 import { MapView } from "~/components/map/MapView";
 import { useMapColors } from "~/components/map/useMapColors";
@@ -127,6 +128,7 @@ export default function CurationDetailPage() {
         </div>
 
         <div className="stack">
+          <MapTypeSwitch />
           <div className="map-box-md">
             <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: mapColors.mine, title: p.name }]} fit />
           </div>

@@ -889,7 +889,7 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
   .map-legend .legend { flex-wrap: nowrap; justify-content: flex-start; width: max-content; margin: 0 auto; }
   .map-legend .legend-static { border-left: 1px solid var(--color-border); margin-left: 4px; }
   .map-legend .legend-note { display: none; }
-  .map-type-btn { margin-bottom: 60px; }
+  .map-full .map-type-btn { margin-bottom: 60px; }
 }
 .map-legend .legend-btn, .map-legend .legend-static { white-space: nowrap; flex-shrink: 0; }
 
@@ -1133,3 +1133,32 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
 .pp-tip { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--color-text-subtle); }
 .pp-tip svg { margin-top: 2px; font-size: 11px; color: var(--color-text-subtle); }
 .pp > .alert, .pp > [role="alert"] { margin-bottom: 12px; }
+
+/* Ponsel: sisakan kolom kanan bawah untuk kontrol Google (zoom, Street View) agar tidak tertutup legenda */
+@media (max-width: 720px) { .map-full .map-legend { right: 72px; } }
+
+/* Tautan di bawah koordinat: Google Maps + Street View */
+.pp-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
+.pp-links .pp-gmaps { margin-top: 0; }
+.pp-svbtn { color: #0f766e; }
+/* Dialog Street View */
+.sv-wrap { position: relative; height: min(62vh, 520px); border-radius: 10px; overflow: hidden; background: #e2e8f0; }
+.sv-box { position: absolute; inset: 0; }
+.sv-msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--color-text-muted); font-size: 14px; }
+
+/* Pengganti mode peta di luar kotak peta (segmen Peta | Satelit) */
+.mt-switch { display: inline-flex; align-self: flex-end; padding: 3px; gap: 2px; border: 1px solid var(--color-border-input); border-radius: 999px; background: var(--color-surface); margin-bottom: 8px; }
+.mt-switch button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: var(--color-text-muted); font: 600 12px var(--font-body); cursor: pointer; white-space: nowrap; }
+.mt-switch button:hover { color: var(--color-primary); }
+.mt-switch button[aria-checked="true"] { background: var(--color-primary); color: #fff; }
+.pd-card > .mt-switch, .pf-card > .mt-switch, .stack > .mt-switch { margin-bottom: 0; }
+
+/* Form MY Place: mode peta di kepala (sebelah chip foto Google), Street View di samping koordinat */
+.mt-switch.is-inline { margin-bottom: 0; align-self: center; }
+.mt-switch.is-inline button { height: 24px; padding: 0 10px; font-size: 11.5px; }
+.pf-sv { display: inline-grid; place-items: center; width: 30px; height: 30px; margin-left: auto; border: 1px solid #99f6e4; border-radius: 50%; background: #f0fdfa; color: #0f766e; font-size: 13px; cursor: pointer; flex-shrink: 0; }
+.pf-sv:hover { background: #ccfbf1; border-color: #14b8a6; }
+.pf-sv:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.pf-hint-row { margin-top: -4px; }
+.pf-hint-row .pf-hint { display: block; flex: none; text-align: left; }
+@media (max-width: 560px) { .pf-coords { flex-wrap: nowrap; } .pf .pf-coords .input { flex: 1 1 60px; max-width: none; } .mt-switch.is-inline { order: -1; } }

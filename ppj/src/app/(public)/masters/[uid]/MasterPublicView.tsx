@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
 import { CategoryChip } from "~/components/chips";
 import { MapView } from "~/components/map/MapView";
 import { useMapColors } from "~/components/map/useMapColors";
@@ -112,6 +113,7 @@ export function MasterPublicView({
               <dd className="mono">{m.latitude.toFixed(6)}, {m.longitude.toFixed(6)}</dd>
             </dl>
           </div>
+          <MapTypeSwitch />
           <div className="map-box-md">
             <MapView
               markers={[{ id: "m", lat: m.latitude, lng: m.longitude, color: mapColors.master, glyph: "M", title: m.name }]}

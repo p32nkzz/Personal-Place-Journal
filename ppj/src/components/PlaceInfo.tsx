@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "~/components/Icon";
+import { Modal } from "~/components/ui";
 import { useT } from "~/lib/i18n";
 import { openPhotoPreview } from "~/lib/photoPreview";
 
@@ -38,21 +39,78 @@ export function ClampText({ text }: { text: string }) {
   );
 }
 
+/** Dialog Google Street View untuk sebuah titik; memberi tahu bila tidak ada cakupan di sekitarnya (±150 m). */
+export function StreetViewDialog({ lat, lng, title, onClose }: { lat: number; lng: number; title?: string; onClose: () => void }) {
+  const { t } = useT();
+  const box = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<"loading" | "ok" | "none">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      // Maps JS API dimuat oleh peta di halaman ini; tunggu sampai siap.
+      for (let i = 0; i < 50 && !(typeof google !== "undefined" && google.maps?.importLibrary); i++)
+        await new Promise((r) => setTimeout(r, 100));
+      if (cancelled || typeof google === "undefined" || !google.maps?.importLibrary) return setState("none");
+      const { StreetViewService, StreetViewPanorama } = (await google.maps.importLibrary("streetView")) as google.maps.StreetViewLibrary;
+      void new StreetViewService().getPanorama({ location: { lat, lng }, radius: 150 }, (data, status) => {
+        if (cancelled) return;
+        if ((status as string) !== "OK" || !data?.location?.latLng || !box.current) return setState("none");
+        // Hadapkan kamera ke titik yang dipilih (arah dari posisi panorama menuju titik itu).
+        const from = data.location.latLng;
+        const toRad = (d: number) => (d * Math.PI) / 180;
+        const y = Math.sin(toRad(lng - from.lng())) * Math.cos(toRad(lat));
+        const x = Math.cos(toRad(from.lat())) * Math.sin(toRad(lat)) - Math.sin(toRad(from.lat())) * Math.cos(toRad(lat)) * Math.cos(toRad(lng - from.lng()));
+        const heading = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+        new StreetViewPanorama(box.current, {
+          pano: data.location.pano,
+          pov: { heading, pitch: 0 },
+          zoom: 1,
+          addressControl: true,
+          fullscreenControl: true,
+          motionTracking: false,
+        });
+        setState("ok");
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lng]);
+
+  return (
+    <Modal title={title ? `${t("map.streetView")} — ${title}` : t("map.streetView")} large onClose={onClose} actions={<button type="button" className="btn btn-secondary" onClick={onClose}>{t("common.close")}</button>}>
+      <div className="sv-wrap">
+        <div ref={box} className="sv-box" style={{ visibility: state === "ok" ? "visible" : "hidden" }} />
+        {state === "loading" && <div className="sv-msg"><Icon name="refresh" spin fixedWidth={false} /> {t("common.processing")}</div>}
+        {state === "none" && <div className="sv-msg">{t("map.streetViewNone")}</div>}
+      </div>
+    </Modal>
+  );
+}
+
 /** Koordinat ringkas + tombol salin. */
 export function Coords({
   lat,
   lng,
   placeId,
   googleLink,
+  streetView,
+  name,
 }: {
   lat: number;
   lng: number;
   placeId?: string | null;
   /** Tampilkan tautan "Buka di Google Maps" di bawah koordinat. */
   googleLink?: boolean;
+  /** Tampilkan tombol Street View (panorama Google di dalam dialog); butuh Maps JS API termuat di halaman. */
+  streetView?: boolean;
+  /** Nama tempat untuk judul dialog Street View. */
+  name?: string;
 }) {
   const { t } = useT();
   const [copied, setCopied] = useState(false);
+  const [sv, setSv] = useState(false);
   const text = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   return (
     <>
@@ -71,17 +129,27 @@ export function Coords({
           <Icon name={copied ? "circle-check" : "copy"} fixedWidth={false} /> {copied ? t("common.copied") : t("common.copy")}
         </button>
       </span>
-      {googleLink && (
-        // Buka di Google Maps (tab baru); place id dipakai bila ada agar mengarah ke tempatnya.
-        <a
-          className="pp-link-btn pp-gmaps"
-          href={`https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query: `${lat},${lng}`, ...(placeId ? { query_place_id: placeId } : {}) }).toString()}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Icon name="map" fixedWidth={false} /> {t("map.openInGoogle")}
-        </a>
+      {(googleLink || streetView) && (
+        <span className="pp-links">
+          {googleLink && (
+            // Buka di Google Maps (tab baru); place id dipakai bila ada agar mengarah ke tempatnya.
+            <a
+              className="pp-link-btn pp-gmaps"
+              href={`https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query: `${lat},${lng}`, ...(placeId ? { query_place_id: placeId } : {}) }).toString()}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Icon name="map" fixedWidth={false} /> {t("map.openInGoogle")}
+            </a>
+          )}
+          {streetView && (
+            <button type="button" className="pp-link-btn pp-svbtn" onClick={() => setSv(true)}>
+              <Icon name="street-view" fixedWidth={false} /> {t("map.streetView")}
+            </button>
+          )}
+        </span>
       )}
+      {sv && <StreetViewDialog lat={lat} lng={lng} title={name} onClose={() => setSv(false)} />}
     </>
   );
 }
