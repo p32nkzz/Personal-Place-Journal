@@ -1128,3 +1128,8 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
 .btn-map { background: #f0fdfa; color: #0f766e; border: 1.5px solid #5eead4; }
 .btn-map:hover { background: #ccfbf1; border-color: #14b8a6; }
 .btn-map:active { background: #99f6e4; }
+
+/* Petunjuk kecil di pop-up pin baru */
+.pp-tip { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--color-text-subtle); }
+.pp-tip svg { margin-top: 2px; font-size: 11px; color: var(--color-text-subtle); }
+.pp > .alert, .pp > [role="alert"] { margin-bottom: 12px; }

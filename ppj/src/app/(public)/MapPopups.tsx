@@ -486,7 +486,7 @@ export function PinPopup({
 
   return (
     <div className="pp">
-      <PopHead kind={t("map.pin")} color={colors.newPin} onClose={onClose} />
+      <PopHead kind={t("map.pin")} color={colors.newPin} title={placeName ?? t("map.manualPin")} onClose={onClose} />
       {fromSearch && !!sel.google?.photos?.length && (
         <div className="stack-sm">
           <Photos
@@ -525,20 +525,22 @@ export function PinPopup({
           </div>
         </div>
       )}
-      <h2 className="t-subhead">{placeName ?? t("map.manualPin")}</h2>
-      {!fromSearch && nearPhotos && (
-        <div className="t-caption muted" style={{ marginTop: -4 }}>{t("map.nearestPlace", { d: nearPhotos.distance })}</div>
-      )}
-      <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
-        <dt>{t("common.address")}</dt>
-        <dd>
+      {/* Kartu info seperti detail MASTER, hanya baris yang relevan untuk titik baru (alamat, tempat terdekat, koordinat). */}
+      <div className="pp-info">
+        <InfoRow icon="map-pin" label={t("common.address")}>
           {address ?? (state === "loading" ? <Spinner label={t("map.findingAddress")} /> : <span className="muted">{t("map.addressUnknown")}</span>)}
-        </dd>
-        <dt>{t("common.coordinates")}</dt>
-        <dd className="mono">{sel.lat.toFixed(6)}, {sel.lng.toFixed(6)}</dd>
-      </dl>
+        </InfoRow>
+        {!fromSearch && nearPhotos && (
+          <InfoRow icon="circle-info" label={t("map.nearestPlaceLabel")}>
+            <span className="muted">{t("map.nearestPlace", { d: nearPhotos.distance })}</span>
+          </InfoRow>
+        )}
+        <InfoRow icon="pin" label={t("common.coordinates")}>
+          <Coords lat={sel.lat} lng={sel.lng} placeId={fromSearch ? sel.google!.googlePlaceId : geo?.placeId} googleLink />
+        </InfoRow>
+      </div>
       {viewer !== "GUEST" && (
-        <p className="helper" style={{ margin: 0 }}>
+        <p className="pp-tip">
           <Icon name="pin" fixedWidth={false} /> {t("map.dragHint")}
         </p>
       )}
