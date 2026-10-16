@@ -1480,3 +1480,34 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
 .pp-quote-wrap.is-side { display: flex; align-items: flex-end; gap: 8px; min-width: 0; }
 .pp-quote-wrap.is-side .pp-quote { flex: 1; min-width: 0; }
 .pp-quote-wrap.is-side .pp-link-btn { flex-shrink: 0; margin: 0; white-space: nowrap; }
+
+/* ---------- Detail MASTER (Admin): seragam dengan detail/ubah MY PLACE ---------- */
+.pd-alert { margin-bottom: 12px; }
+.md-tabs { margin-bottom: 14px; }
+.pd-meta button.vstat { padding: 0; cursor: pointer; background: none; }
+.pd-meta button.vstat:hover { filter: brightness(0.97); }
+.btn.btn-tone-del { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+.md-note { display: flex; gap: 6px; align-items: flex-start; margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--color-text-subtle); }
+.md-note svg { margin-top: 2px; font-size: 10.5px; flex-shrink: 0; }
+.md-ref-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.md-ref { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); color: inherit; text-decoration: none; transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease; }
+.md-ref:hover { border-color: var(--color-primary); background: var(--color-tint); box-shadow: var(--shadow-subtle); }
+.md-ref.is-off { opacity: 0.7; }
+.md-ref-ico { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #e0e7ff; color: #4f46e5; font-size: 12px; flex-shrink: 0; }
+.md-ref-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.md-ref-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--color-text); }
+.md-ref-owner { display: inline-flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--color-text-subtle); }
+.md-ref-owner svg { font-size: 9.5px; }
+.md-ref-go { font-size: 11px; color: var(--color-placeholder); transition: transform 140ms ease, color 140ms ease; }
+.md-ref:hover .md-ref-go { color: var(--color-primary); transform: translateX(2px); }
+/* Form MASTER di dalam modal (review): satu kolom, aksi tidak menempel */
+.modal .pf-grid { grid-template-columns: minmax(0, 1fr); }
+.modal .pf-title { margin: 0; font-size: 15px; }
+.modal .pf-actions { position: static; box-shadow: none; }
+@media (max-width: 760px) {
+  /* Tiga aksi (Detail MASTER): baris pertama penuh, dua aksi berikutnya berdampingan */
+  .pd-actions:has(> :nth-child(3)) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pd-actions:has(> :nth-child(3)) > :first-child { grid-column: 1 / -1; }
+  .pd-actions .btn { min-width: 0; padding-left: 10px; padding-right: 10px; }
+}
+@media (max-width: 420px) { .md-tabs { gap: 4px; } .md-tabs .mini-tab { padding: 0 9px; gap: 5px; font-size: 11.5px; } }

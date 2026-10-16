@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { ActiveChip, MasterStatusChip } from "~/components/chips";
+import { ActiveChip, CategoryChips, MasterStatusChip } from "~/components/chips";
 import { MasterForm, type MasterFormValues } from "~/components/MasterForm";
 import { PhotoGallery } from "~/components/PhotoGallery";
+import { Coords, DescQuote, InfoRow } from "~/components/PlaceInfo";
+import { PlaceThumb } from "~/components/PlaceThumb";
 import {
   Alert,
   ConfirmDialog,
@@ -14,13 +16,12 @@ import {
   Modal,
   Spinner,
   Stars,
-  Tabs,
   useErrorMessage,
   useToast,
 } from "~/components/ui";
 import { useFormat, useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
-import { Icon } from "~/components/Icon";
+import { Icon, type IconName } from "~/components/Icon";
 
 type Tab = "data" | "photos" | "refs";
 
@@ -76,51 +77,83 @@ export default function MasterEditPage() {
   if (!m || !initial) return <EmptyState title={t("master.notFound")} action={<Link href="/admin/masters" className="btn btn-primary">{t("nav.masters")}</Link>} />;
 
   const deleted = m.status === "DELETED";
+  const refCount = refs.data?.length ?? 0;
+  const TABS: { id: Tab; icon: IconName; label: string; n?: number }[] = [
+    { id: "data", icon: "pen", label: t("master.tabData") },
+    { id: "photos", icon: "image", label: t("master.tabPhotos"), n: m.photos.length },
+    { id: "refs", icon: "link", label: t("master.tabRefs"), n: refCount },
+  ];
 
   return (
-    <div className="container page">
-      <div className="page-head">
-        <div>
-          <p style={{ margin: 0 }}><Link href="/admin/masters" className="muted"><Icon name="arrow-left" /> {t("nav.masters")}</Link></p>
-          <h1>{m.name}</h1>
-          <div className="row" style={{ marginTop: 8 }}>
-            <MasterStatusChip status={m.status} />
-            <Stars value={m.rating.avg} count={m.rating.count} />
+    <div className="container page pd">
+      {/* ---------- Kepala: sampul + identitas + aksi (sama dengan detail MY PLACE) ---------- */}
+      <section className="pd-hero card">
+        <Link href="/admin/masters" className="pd-back">
+          <Icon name="arrow-left" fixedWidth={false} /> {t("nav.masters")}
+        </Link>
+        <div className="pd-hero-body">
+          <div className="pd-cover">
+            <PlaceThumb href={`/admin/masters/${uid}`} name={m.name} lat={m.latitude} lng={m.longitude} photos={m.photos} />
           </div>
-        </div>
-        {!deleted && (
-          <div className="row">
-            <Link className="btn btn-secondary" href={`/masters/${m.uid}`}>{t("master.publicView")}</Link>
-            {m.status === "ACTIVE" ? (
-              <button className="btn btn-secondary" onClick={() => setConfirm("toggle")}><Icon name="circle-xmark" /> {t("place.deactivate")}</button>
-            ) : (
-              <button className="btn btn-secondary" onClick={() => setActive.mutate({ uid, isActive: true })}><Icon name="circle-check" /> {t("place.activate")}</button>
+          <div className="pd-id">
+            {m.categories.length > 0 && (
+              <div className="pl-chips">
+                <CategoryChips items={m.categories} />
+              </div>
             )}
-            <button className="btn btn-danger-ghost" onClick={() => setConfirm("delete")}><Icon name="trash" /> {t("common.delete")}</button>
+            <h1 className="pd-title">{m.name}</h1>
+            <div className="pd-addr">
+              <Icon name="map-pin" fixedWidth={false} /> {m.address}
+            </div>
+            {m.description && <DescQuote text={m.description} side />}
+            <div className="pd-meta">
+              <MasterStatusChip status={m.status} />
+              <button type="button" className={`vstat ms-ref${refCount ? "" : " is-zero"}`} title={t("master.referencedBy")} onClick={() => setTab("refs")}>
+                <span className="vstat-n">
+                  <Icon name="link" fixedWidth={false} />
+                  <b>{refCount}</b>&nbsp;{t("master.referencedShort")}
+                </span>
+              </button>
+              <Stars value={m.rating.avg} count={m.rating.count} />
+            </div>
           </div>
-        )}
+          {!deleted && (
+            <div className="pd-actions">
+              <Link className="btn btn-secondary btn-sm" href={`/masters/${m.uid}`}>
+                <Icon name="eye" /> {t("master.publicView")}
+              </Link>
+              {m.status === "ACTIVE" ? (
+                <button className="btn btn-sm btn-tone btn-tone-off" onClick={() => setConfirm("toggle")}><Icon name="eye-slash" /> {t("place.deactivate")}</button>
+              ) : (
+                <button className="btn btn-sm btn-tone btn-tone-on" disabled={setActive.isPending} onClick={() => setActive.mutate({ uid, isActive: true })}><Icon name="eye" /> {t("place.activate")}</button>
+              )}
+              <button className="btn btn-sm btn-tone btn-tone-del" onClick={() => setConfirm("delete")}><Icon name="trash" /> {t("common.delete")}</button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {deleted && <div className="pd-alert"><Alert kind="error">{t("master.deletedNote")}</Alert></div>}
+      {m.status === "INACTIVE" && <div className="pd-alert"><Alert kind="warning">{t("master.inactiveAdminNote")}</Alert></div>}
+
+      <div className="mini-tabs md-tabs" role="tablist" aria-label={m.name}>
+        {TABS.map((x) => (
+          <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} className="mini-tab" onClick={() => setTab(x.id)}>
+            <Icon name={x.icon} fixedWidth={false} /> {x.label}
+            {x.n != null && <span className="mini-tab-n">{x.n}</span>}
+          </button>
+        ))}
       </div>
 
-      {deleted && <div style={{ marginBottom: 16 }}><Alert kind="error">{t("master.deletedNote")}</Alert></div>}
-      {m.status === "INACTIVE" && <div style={{ marginBottom: 16 }}><Alert kind="warning">{t("master.inactiveAdminNote")}</Alert></div>}
-
-      <Tabs
-        tabs={[
-          { id: "data", label: t("master.tabData") },
-          { id: "photos", label: `${t("master.tabPhotos")} (${m.photos.length})` },
-          { id: "refs", label: `${t("master.tabRefs")} (${refs.data?.length ?? 0})` },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
-
-      {tab === "data" && (
-        deleted ? (
-          <div className="card"><dl className="kv" style={{ margin: 0 }}>
-            <dt>{t("common.address")}</dt><dd>{m.address}</dd>
-            <dt>{t("common.description")}</dt><dd>{m.description ?? "—"}</dd>
-            <dt>{t("common.coordinates")}</dt><dd className="mono">{m.latitude.toFixed(6)}, {m.longitude.toFixed(6)}</dd>
-          </dl></div>
+      {tab === "data" &&
+        (deleted ? (
+          <section className="card pd-card">
+            <div className="pp-info">
+              <InfoRow icon="map-pin" label={t("common.address")}>{m.address}</InfoRow>
+              <InfoRow icon="circle-info" label={t("common.description")}>{m.description ?? "—"}</InfoRow>
+              <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={m.latitude} lng={m.longitude} placeId={m.googlePlaceId} googleLink streetView name={m.name} /></InfoRow>
+            </div>
+          </section>
         ) : (
           <MasterForm
             initial={initial}
@@ -134,16 +167,19 @@ export default function MasterEditPage() {
           >
             <Alert kind="info">{t("master.editNote")}</Alert>
           </MasterForm>
-        )
-      )}
+        ))}
 
       {tab === "photos" && (
-        <div className="card stack">
-          {error && <Alert kind="error">{error}</Alert>}
-          <div className="row-between">
-            <h2 className="card-title" style={{ margin: 0 }}>{t("master.tabPhotos")}</h2>
-            {!deleted && <button className="btn btn-secondary btn-sm" onClick={() => setPickOpen(true)}>{t("master.photoFromVisit")}</button>}
+        <section className="card pd-card">
+          <div className="pd-card-head">
+            <h2><Icon name="image" fixedWidth={false} /> {t("master.tabPhotos")} <span className="mini-tab-n">{m.photos.length}</span></h2>
+            {!deleted && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPickOpen(true)}>
+                <Icon name="plus" /> {t("master.photoFromVisit")}
+              </button>
+            )}
           </div>
+          {error && <Alert kind="error">{error}</Alert>}
           <PhotoGallery
             photos={m.photos.map((p) => ({ uid: p.uid, url: p.url, caption: p.caption, isPrimary: p.isPrimary, badge: p.originType === "VISIT" ? t("master.photoVisitOrigin") : p.originType === "MY_PLACE" ? t("master.photoMyPlaceOrigin") : undefined }))}
             canEdit={!deleted}
@@ -157,28 +193,38 @@ export default function MasterEditPage() {
             onCaption={(photoUid, caption) => capPhoto.mutateAsync({ photoUid, caption })}
             onAddUrl={(url, caption) => urlPhoto.mutateAsync({ masterUid: uid, url, caption })}
           />
-          <p className="helper" style={{ margin: 0 }}>{t("master.photoNote")}</p>
-        </div>
+          <p className="md-note"><Icon name="circle-info" fixedWidth={false} /> {t("master.photoNote")}</p>
+        </section>
       )}
 
       {tab === "refs" && (
-        <div className="card card-flush">
-          {!refs.data?.length ? (
+        <section className="card pd-card">
+          <div className="pd-card-head">
+            <h2><Icon name="link" fixedWidth={false} /> {t("master.tabRefs")} <span className="mini-tab-n">{refCount}</span></h2>
+          </div>
+          {refs.isLoading ? (
+            <Spinner />
+          ) : !refs.data?.length ? (
             <EmptyState title={t("master.noRefs")} />
           ) : (
-            <ul className="list">
+            <ul className="md-ref-list">
               {refs.data.map((r) => (
                 <li key={r.uid}>
-                  <Link href={`/admin/curation/${r.uid}`} className="list-item">
-                    <span className="grow"><span className="title">{r.name}</span><span className="sub" style={{ display: "block" }}>{r.ownerName}</span></span>
-                    <ActiveChip active={r.isActive} />
+                  <Link href={`/admin/curation/${r.uid}`} className={`md-ref${r.isActive ? "" : " is-off"}`}>
+                    <span className="md-ref-ico"><Icon name="pin" fixedWidth={false} /></span>
+                    <span className="md-ref-main">
+                      <span className="md-ref-name">{r.name}</span>
+                      <span className="md-ref-owner"><Icon name="user" fixedWidth={false} /> {r.ownerName}</span>
+                    </span>
+                    {!r.isActive && <ActiveChip active={false} />}
+                    <Icon name="angle-right" fixedWidth={false} className="md-ref-go" />
                   </Link>
                 </li>
               ))}
             </ul>
           )}
-          <p className="helper" style={{ padding: "0 16px 16px", margin: 0 }}>{t("master.refsNote")}</p>
-        </div>
+          <p className="md-note"><Icon name="circle-info" fixedWidth={false} /> {t("master.refsNote")}</p>
+        </section>
       )}
 
       {pickOpen && <VisitPhotoPicker masterUid={uid} onClose={() => setPickOpen(false)} onAdded={refresh} />}
