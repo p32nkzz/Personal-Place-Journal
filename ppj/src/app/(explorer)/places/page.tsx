@@ -66,20 +66,25 @@ function Places() {
           <h1>{t("nav.myPlaces")}</h1>
           <p>{t("place.listHint")}</p>
         </div>
-        <div className="row">
-          <Link href="/" className="btn btn-map"><Icon name="map-pin" /> {t("place.addFromMap")}</Link>
-          <Link href="/places/new" className="btn btn-primary"><Icon name="plus" /> {t("place.new")}</Link>
-        </div>
       </div>
 
       <div className="card card-flush">
         <div className="fl-bar">
-          {/* Baris 1: pencarian (lebih lebar) + toggle cepat */}
+          {/* Baris 1: pencarian + tombol tambah data */}
           <div className="fl-row">
             <div className="fl-search">
               <Icon name="search" fixedWidth={false} />
               <SearchInput className="input" placeholder={t("place.searchPlaceholder")} value={s.q} onChange={(q) => set({ q, page: "1" })} />
             </div>
+            {/* Tombol tambah data sebaris dengan pencarian (tata letak sama dengan daftar MASTER/Pengguna) */}
+            <div className="fl-btns">
+              <Link href="/" className="btn btn-map"><Icon name="map-pin" /> {t("place.addFromMap")}</Link>
+              <Link href="/places/new" className="btn btn-primary"><Icon name="plus" /> {t("place.new")}</Link>
+            </div>
+          </div>
+
+          {/* Baris 2: filter ringkas */}
+          <div className="fl-row fl-filters">
             <button type="button" className="fl-fav" aria-pressed={s.fav === "1"} title={t("place.favorite")} onClick={() => set({ fav: s.fav === "1" ? "" : "1", page: "1" })}>
               <Icon name={s.fav === "1" ? "star" : "star-regular"} fixedWidth={false} /> {t("place.favorite")}
             </button>
@@ -93,10 +98,6 @@ function Places() {
               <span className="fl-switch-track" aria-hidden><span className="fl-switch-thumb" /></span>
               {t("place.showInactive")}
             </button>
-          </div>
-
-          {/* Baris 2: filter ringkas */}
-          <div className="fl-row fl-filters">
             <div className="fl-seg" role="radiogroup" aria-label={t("place.visitStatus")}>
               {([["", t("common.all"), null], ["PLAN", t("place.plan"), "calendar"], ["VISITED", t("place.visited"), "map-pin"]] as const).map(([val, lbl, ic]) => (
                 <button key={val || "all"} type="button" role="radio" aria-checked={s.visit === val} data-v={val || undefined} onClick={() => set({ visit: val, page: "1" })}>
@@ -153,12 +154,27 @@ function Places() {
                       </div>
                     )}
                     <div className="row" style={{ gap: 8 }}>
-                      <span className="title">{p.isFavorite && <Icon name="star" style={{ color: "#f59e0b" }} />} {p.name}</span>
+                      <span className="title ms-title">{p.isFavorite && <Icon name="star" style={{ color: "#f59e0b" }} />} {p.name}</span>
                       {!p.isActive && <ActiveChip active={false} />}
                     </div>
                     <span className="sub">{p.address ?? "—"}</span>
                     <div className="row">
                       <VisitStatusChip status={p.visitStatus} />
+                      <RelationChip status={p.masterRelationStatus} />
+                    </div>
+                    {/* Layar sempit: rating ringkas, ringkasan kunjungan di bawahnya (kolom rating desktop disembunyikan). */}
+                    <div className="ms-rate ms-rate-m">
+                      <span className="pl-rating-m" title={p.rating.avg != null ? `${p.rating.avg.toFixed(1)} / 5` : t("common.noRating")}>
+                        <Icon name="star" fixedWidth={false} />
+                        {p.rating.avg != null ? (
+                          <>
+                            <b>{p.rating.avg.toFixed(1)}</b>
+                            <span>({p.rating.count})</span>
+                          </>
+                        ) : (
+                          <span>{t("common.noRating")}</span>
+                        )}
+                      </span>
                       {/* Ringkasan kunjungan: jumlah + kapan terakhir dalam satu pil dua bagian. */}
                       <span
                         className={`vstat${p.visitCount ? "" : " is-zero"}`}
@@ -174,22 +190,28 @@ function Places() {
                           </span>
                         )}
                       </span>
-                      <RelationChip status={p.masterRelationStatus} />
-                      {/* Layar sempit: rating ringkas ikut di baris status (kolom rating desktop disembunyikan). */}
-                      <span className="pl-rating-m" title={p.rating.avg != null ? `${p.rating.avg.toFixed(1)} / 5` : t("common.noRating")}>
-                        <Icon name="star" fixedWidth={false} />
-                        {p.rating.avg != null ? (
-                          <>
-                            <b>{p.rating.avg.toFixed(1)}</b>
-                            <span>({p.rating.count})</span>
-                          </>
-                        ) : (
-                          <span>{t("common.noRating")}</span>
+                    </div>
+                  </div>
+                  <div className="hide-mobile">
+                    <div className="ms-rate">
+                      <Stars value={p.rating.avg} count={p.rating.count} />
+                      {/* Ringkasan kunjungan: jumlah + kapan terakhir dalam satu pil dua bagian. */}
+                      <span
+                        className={`vstat${p.visitCount ? "" : " is-zero"}`}
+                        title={p.lastVisitedAt ? `${t("place.lastVisit")}: ${fmt.dateTime(p.lastVisitedAt)}` : t("visit.empty")}
+                      >
+                        <span className="vstat-n">
+                          <Icon name="map-pin" fixedWidth={false} />
+                          <b>{p.visitCount}</b>&nbsp;{t("place.visitsShort")}
+                        </span>
+                        {p.lastVisitedAt && (
+                          <span className="vstat-last">
+                            <Icon name="history" fixedWidth={false} /> {fmt.relative(p.lastVisitedAt)}
+                          </span>
                         )}
                       </span>
                     </div>
                   </div>
-                  <div className="hide-mobile"><Stars value={p.rating.avg} count={p.rating.count} /></div>
                 </Link>
                 <div className="pl-side">
                   <div className="place-meta" aria-label={`${t("common.createdAt")} / ${t("common.updatedAt")}`}>

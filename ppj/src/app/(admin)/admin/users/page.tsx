@@ -9,19 +9,16 @@ import {
   Field,
   Modal,
   Pagination,
-  SortHeader,
   Spinner,
-  StatusButton,
   StatusChip,
   StatusConfirm,
   useErrorMessage,
   useToast, PasswordInput, SearchInput } from "~/components/ui";
 import { useFormat, useT } from "~/lib/i18n";
 import { useUrlState } from "~/lib/useUrlState";
-import { Select } from "~/components/Select";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Avatar } from "~/components/Avatar";
-import { Icon } from "~/components/Icon";
+import { Icon, type IconName } from "~/components/Icon";
 
 type Row = RouterOutputs["users"]["list"]["rows"][number];
 type Dialog =
@@ -64,16 +61,23 @@ function Users() {
   const restore = api.users.restore.useMutation({ onSuccess: () => done(), onError: (e) => toast.push(errMsg(e), "error") });
   const del = api.users.softDelete.useMutation({ onSuccess: () => done(t("common.deleted")), onError });
 
-  const sortProps = {
-    sort: s.sort || null,
-    order: (s.order || null) as "asc" | "desc" | null,
-    onSort: (sort: string | null, order: "asc" | "desc" | null) => set({ sort: sort ?? "", order: order ?? "", page: "1" }),
-  };
-
   const open = (d: Dialog) => {
     setError(null);
     setDialog(d);
   };
+
+  const sortVal = s.sort || "createdAt";
+  const STATUSES: [string, string, IconName | null][] = [
+    ["ALL", t("common.all"), null],
+    ["ACTIVE", t("common.active"), "circle-check"],
+    ["INACTIVE", t("common.inactive"), "circle-regular"],
+    ["DELETED", t("user.deleted"), "trash"],
+  ];
+  const SORTS: [string, string][] = [
+    ["createdAt", t("common.newest")],
+    ["name", t("common.name")],
+    ["username", "Username"],
+  ];
 
   return (
     <div className="container page">
@@ -82,66 +86,93 @@ function Users() {
           <h1>{t("nav.users")}</h1>
           <p>{t("user.hint")}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => open({ kind: "create" })}><Icon name="plus" /> {t("user.new")}</button>
       </div>
 
       <div className="card card-flush">
-        <div className="toolbar">
-          <SearchInput style={{ flex: 1, minWidth: 220 }} placeholder={t("user.searchPlaceholder")} value={s.q} onChange={(q) => set({ q, page: "1" })} />
-          <Select className="select" value={s.status} onChange={(e) => set({ status: e.target.value, page: "1" })} aria-label={t("common.status")}>
-            <option value="ALL">{t("common.allStatus")}</option>
-            <option value="ACTIVE">{t("common.active")}</option>
-            <option value="INACTIVE">{t("common.inactive")}</option>
-            <option value="DELETED">{t("user.deleted")}</option>
-          </Select>
+        <div className="fl-bar">
+          <div className="fl-row">
+            <div className="fl-search">
+              <Icon name="search" fixedWidth={false} />
+              <SearchInput className="input" placeholder={t("user.searchPlaceholder")} value={s.q} onChange={(q) => set({ q, page: "1" })} />
+            </div>
+            <button className="btn btn-primary" onClick={() => open({ kind: "create" })}><Icon name="plus" /> {t("user.new")}</button>
+          </div>
+          <div className="fl-row fl-filters">
+            <div className="fl-seg" role="radiogroup" aria-label={t("common.status")}>
+              {STATUSES.map(([v, l, ic]) => (
+                <button key={v} type="button" role="radio" aria-checked={s.status === v} data-ms={v} onClick={() => set({ status: v, page: "1" })}>
+                  {ic && <Icon name={ic} fixedWidth={false} />} {l}
+                </button>
+              ))}
+            </div>
+            <div className="fl-seg fl-seg-sort" role="radiogroup" aria-label={t("common.sortBy")}>
+              <span className="fl-seg-label"><Icon name="sort" fixedWidth={false} /></span>
+              {SORTS.map(([v, l]) => (
+                <button key={v} type="button" role="radio" aria-checked={sortVal === v} onClick={() => set({ sort: v, order: v === "createdAt" ? "desc" : "asc", page: "1" })}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         {isLoading ? <Spinner /> : !data?.rows.length ? <EmptyState title={t("user.empty")} /> : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th className="col-no">{t("table.no")}</th>
-                  <th><SortHeader label={t("common.name")} field="name" {...sortProps} /></th>
-                  <th><SortHeader label="Username" field="username" {...sortProps} /></th>
-                  <th><SortHeader label="Email" field="email" {...sortProps} /></th>
-                  <th>{t("common.status")}</th>
-                  <th><SortHeader label={t("common.createdAt")} field="createdAt" {...sortProps} /></th>
-                  <th>{t("common.actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((u, i) => (
-                  <tr key={u.uid}>
-                    <td className="col-no">{(page - 1) * limit + i + 1}</td>
-                    <td><span className="row" style={{ gap: 8, flexWrap: "nowrap" }}><Avatar name={u.name} src={u.avatarUrl} /><b>{u.name}</b></span></td>
-                    <td className="mono">{u.username}</td>
-                    <td>{u.email}</td>
-                    <td>
-                      <div className="row" style={{ gap: 4 }}>
-                        {u.deletedAt ? <StatusChip tone="error">{t("user.deleted")}</StatusChip> : <StatusButton tone={u.isActive ? "success" : "neutral"} onClick={() => setStatusTarget(u)}>{u.isActive ? t("common.active") : t("common.inactive")}</StatusButton>}
+          <ul className="list">
+            {data.rows.map((u) => (
+              <li key={u.uid} className={`pl-row ct-row us-row${u.deletedAt ? " is-deleted" : ""}`}>
+                <div className="pl-thumb-cell">
+                  <Avatar name={u.name} src={u.avatarUrl} large />
+                </div>
+                <div className="list-item pl-main">
+                  <div className="grow stack-sm" style={{ gap: 4 }}>
+                    <span className="title">{u.name}</span>
+                    <span className="us-ids">
+                      <span className="mono">@{u.username}</span>
+                      <span className="us-dot" aria-hidden>·</span>
+                      <span className="us-mail">{u.email}</span>
+                    </span>
+                    {(u.deletedAt || u.mustChangePassword) && (
+                      <div className="row" style={{ gap: 6 }}>
+                        {u.deletedAt && <StatusChip tone="error">{t("user.deleted")}</StatusChip>}
                         {u.mustChangePassword && <StatusChip tone="warning">{t("user.mustChange")}</StatusChip>}
                       </div>
-                    </td>
-                    <td>{fmt.date(u.createdAt)}</td>
-                    <td>
-                      <div className="row" style={{ minWidth: 200 }}>
-                        {u.deletedAt ? (
-                          <button className="btn btn-secondary btn-sm" disabled={restore.isPending} onClick={() => restore.mutate({ uid: u.uid })}>{t("user.restore")}</button>
-                        ) : (
-                          <>
-                            <button className="btn btn-secondary btn-sm" onClick={() => open({ kind: "edit", row: u })}><Icon name="pen" /> {t("common.edit")}</button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => open({ kind: "email", row: u })}>Email</button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => open({ kind: "reset", row: u })}>{t("user.resetPassword")}</button>
-                            <button className="btn btn-danger-ghost btn-sm" onClick={() => open({ kind: "delete", row: u })}><Icon name="trash" /> {t("common.delete")}</button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    )}
+                  </div>
+                </div>
+                <div className="pl-side">
+                  <div className="place-meta" aria-label={t("common.createdAt")}>
+                    <span title={`${t("common.createdAt")}: ${fmt.dateTime(u.createdAt)}`}>
+                      <Icon name="plus" fixedWidth={false} /> {fmt.dateTime(u.createdAt)}
+                    </span>
+                  </div>
+                  <div className="pl-actions">
+                    {u.deletedAt ? (
+                      <button type="button" className="ph-btn ph-on" disabled={restore.isPending} title={t("user.restore")} aria-label={`${t("user.restore")}: ${u.name}`} onClick={() => restore.mutate({ uid: u.uid })}>
+                        <Icon name="restore" fixedWidth={false} />
+                      </button>
+                    ) : (
+                      <>
+                        <button type="button" className="ph-btn ph-edit" title={t("common.edit")} aria-label={`${t("common.edit")}: ${u.name}`} onClick={() => open({ kind: "edit", row: u })}>
+                          <Icon name="pen" fixedWidth={false} />
+                        </button>
+                        <button type="button" className="ph-btn ph-mail" title={t("user.changeEmail")} aria-label={`${t("user.changeEmail")}: ${u.name}`} onClick={() => open({ kind: "email", row: u })}>
+                          <Icon name="envelope" fixedWidth={false} />
+                        </button>
+                        <button type="button" className="ph-btn ph-key" title={t("user.resetPassword")} aria-label={`${t("user.resetPassword")}: ${u.name}`} onClick={() => open({ kind: "reset", row: u })}>
+                          <Icon name="key" fixedWidth={false} />
+                        </button>
+                        <button type="button" className={`ph-btn ${u.isActive ? "ph-off" : "ph-on"}`} title={u.isActive ? t("place.deactivate") : t("place.activate")} aria-label={`${u.isActive ? t("place.deactivate") : t("place.activate")}: ${u.name}`} onClick={() => setStatusTarget(u)}>
+                          <Icon name={u.isActive ? "eye-slash" : "eye"} fixedWidth={false} />
+                        </button>
+                        <button type="button" className="ph-btn ph-del" title={t("common.delete")} aria-label={`${t("common.delete")}: ${u.name}`} onClick={() => open({ kind: "delete", row: u })}>
+                          <Icon name="trash" fixedWidth={false} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
         {data && <Pagination page={page} limit={limit} total={data.total} onPage={(p) => set({ page: String(p) })} onLimit={(l) => set({ limit: String(l), page: "1" })} />}
       </div>

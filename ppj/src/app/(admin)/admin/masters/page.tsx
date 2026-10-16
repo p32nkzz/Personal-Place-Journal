@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 
 import { CategoryMultiSelect } from "~/components/CategoryMultiSelect";
-import { CategoryChips, MasterStatusChip } from "~/components/chips";
+import { CategoryChips } from "~/components/chips";
 import { Icon, type IconName } from "~/components/Icon";
 import { PlaceThumb } from "~/components/PlaceThumb";
 import {
@@ -71,10 +71,6 @@ function Masters() {
           <h1>{t("nav.masters")}</h1>
           <p>{t("master.listHint")}</p>
         </div>
-        <div className="row">
-          <Link href="/" className="btn btn-map"><Icon name="map-pin" /> {t("master.addFromMap")}</Link>
-          <Link href="/admin/masters/new" className="btn btn-primary"><Icon name="plus" /> {t("master.new")}</Link>
-        </div>
       </div>
       {error && <div style={{ marginBottom: 16 }}><Alert kind="error">{error}</Alert></div>}
 
@@ -85,6 +81,11 @@ function Masters() {
             <div className="fl-search">
               <Icon name="search" fixedWidth={false} />
               <SearchInput className="input" placeholder={t("master.searchPlaceholder")} value={s.q} onChange={(q) => set({ q, page: "1" })} />
+            </div>
+            {/* Tombol tambah data sebaris dengan pencarian (tata letak sama dengan halaman Pengguna) */}
+            <div className="fl-btns">
+              <Link href="/" className="btn btn-map"><Icon name="map-pin" /> {t("master.addFromMap")}</Link>
+              <Link href="/admin/masters/new" className="btn btn-primary"><Icon name="plus" /> {t("master.new")}</Link>
             </div>
           </div>
           {/* Baris 2: filter ringkas */}
@@ -123,17 +124,10 @@ function Masters() {
                         <CategoryChips items={m.categories} />
                       </div>
                     )}
-                    <span className="title">{m.name}</span>
+                    <span className="title ms-title">{m.name}</span>
                     {m.address && <span className="sub">{m.address}</span>}
-                    <div className="row">
-                      <MasterStatusChip status={m.status} />
-                      {/* Jumlah MY PLACE yang mereferensikan MASTER ini */}
-                      <span className={`vstat${m.referencedBy ? "" : " is-zero"}`} title={t("master.referencedBy")}>
-                        <span className="vstat-n">
-                          <Icon name="link" fixedWidth={false} />
-                          <b>{m.referencedBy}</b>&nbsp;{t("master.referencedShort")}
-                        </span>
-                      </span>
+                    {/* Mobile: rating lalu jumlah MY Place terhubung di bawahnya */}
+                    <div className="ms-rate ms-rate-m">
                       <span className="pl-rating-m" title={m.rating.avg != null ? `${m.rating.avg.toFixed(1)} / 5` : t("common.noRating")}>
                         <Icon name="star" fixedWidth={false} />
                         {m.rating.avg != null ? (
@@ -145,9 +139,26 @@ function Masters() {
                           <span>{t("common.noRating")}</span>
                         )}
                       </span>
+                      <span className={`vstat ms-ref${m.referencedBy ? "" : " is-zero"}`} title={t("master.referencedBy")}>
+                        <span className="vstat-n">
+                          <Icon name="link" fixedWidth={false} />
+                          <b>{m.referencedBy}</b>&nbsp;{t("master.referencedShort")}
+                        </span>
+                      </span>
                     </div>
                   </div>
-                  <div className="hide-mobile"><Stars value={m.rating.avg} count={m.rating.count} /></div>
+                  {/* Desktop: bintang rating, jumlah MY Place yang mereferensikan MASTER ini di bawahnya */}
+                  <div className="hide-mobile">
+                    <div className="ms-rate">
+                      <Stars value={m.rating.avg} count={m.rating.count} />
+                      <span className={`vstat ms-ref${m.referencedBy ? "" : " is-zero"}`} title={t("master.referencedBy")}>
+                        <span className="vstat-n">
+                          <Icon name="link" fixedWidth={false} />
+                          <b>{m.referencedBy}</b>&nbsp;{t("master.referencedShort")}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
                 </Link>
                 <div className="pl-side">
                   <div className="place-meta" aria-label={`${t("common.createdAt")} / ${t("common.updatedAt")}`}>

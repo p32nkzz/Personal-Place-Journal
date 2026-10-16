@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
 import {
   Alert,
@@ -10,6 +11,7 @@ import {
   Modal,
   Spinner,
   TagChip,
+  tagColor,
   useErrorMessage,
   useToast,
 } from "~/components/ui";
@@ -45,6 +47,17 @@ export default function TagsPage() {
     setEdit(e);
   };
 
+  // Daftar TAG milik sendiri relatif sedikit: pencarian & urutan dijalankan di sisi klien.
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<"name" | "usage">("name");
+  const rows = useMemo(() => {
+    const n = q.trim().toLowerCase();
+    const list = (tags.data ?? []).filter((x) => !n || x.name.toLowerCase().includes(n) || x.color.toLowerCase().includes(n));
+    return [...list].sort((x, y) =>
+      sort === "usage" ? y.usage - x.usage || x.name.localeCompare(y.name) : x.name.localeCompare(y.name, undefined, { sensitivity: "base" }),
+    );
+  }, [tags.data, q, sort]);
+
   return (
     <div className="container page">
       <div className="page-head">
@@ -52,24 +65,75 @@ export default function TagsPage() {
           <h1>{t("nav.tags")}</h1>
           <p>{t("tag.hint")}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => open({ name: "", color: "#64748B" })}><Icon name="plus" /> {t("tag.new")}</button>
       </div>
 
       {error && !edit && <div style={{ marginBottom: 16 }}><Alert kind="error">{error}</Alert></div>}
 
       <div className="card card-flush">
+        <div className="fl-bar">
+          <div className="fl-row">
+            <div className="fl-search">
+              <Icon name="search" fixedWidth={false} />
+              <input className="input" type="search" placeholder={t("tag.searchPlaceholder")} aria-label={t("tag.searchPlaceholder")} value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <div className="fl-btns">
+              <button className="btn btn-primary" onClick={() => open({ name: "", color: "#64748B" })}><Icon name="plus" /> {t("tag.new")}</button>
+            </div>
+          </div>
+          <div className="fl-row fl-filters">
+            <div className="fl-seg fl-seg-sort" role="radiogroup" aria-label={t("common.sortBy")}>
+              <span className="fl-seg-label"><Icon name="sort" fixedWidth={false} /></span>
+              <button type="button" role="radio" aria-checked={sort === "name"} onClick={() => setSort("name")}>{t("common.name")}</button>
+              <button type="button" role="radio" aria-checked={sort === "usage"} onClick={() => setSort("usage")}>{t("tag.mostUsed")}</button>
+            </div>
+            {tags.data && <span className="ct-count">{t("tag.count", { n: rows.length, total: tags.data.length })}</span>}
+          </div>
+        </div>
         {tags.isLoading ? (
           <Spinner />
         ) : !tags.data?.length ? (
           <EmptyState title={t("tag.empty")} text={t("tag.emptyHint")} />
+        ) : !rows.length ? (
+          <EmptyState title={t("select.noResults")} />
         ) : (
           <ul className="list">
-            {tags.data.map((x) => (
-              <li key={x.uid} className="list-item tag-row">
-                <TagChip name={x.name} color={x.color} />
-                <span className="grow muted t-small">{t("tag.usage", { n: x.usage })}</span>
-                <button className="btn btn-ghost btn-sm" onClick={() => open({ uid: x.uid, name: x.name, color: x.color })}><Icon name="pen" /> {t("common.edit")}</button>
-                <button className="btn btn-danger-ghost btn-sm" onClick={() => setDel(x)}><Icon name="trash" /> {t("common.delete")}</button>
+            {rows.map((x) => (
+              <li key={x.uid} className="pl-row ct-row tg-row">
+                <div className="pl-thumb-cell">
+                  <span className="ct-swatch tg-swatch" style={{ background: tagColor(x.color) }} title={x.color.toUpperCase()}>
+                    <Icon name="tags" fixedWidth={false} />
+                  </span>
+                </div>
+                <div className="list-item pl-main">
+                  <div className="grow stack-sm" style={{ gap: 6 }}>
+                    <span><TagChip name={x.name} color={x.color} /></span>
+                    <div className="row" style={{ gap: 6 }}>
+                      {/* Jumlah pemakaian; klik membuka daftar MY Place terfilter TAG ini */}
+                      <Link href={`/places?tag=${x.uid}`} className={`ct-usage tg-usage${x.usage ? "" : " is-zero"}`} title={t("tag.viewPlaces")}>
+                        <Icon name="map-pin" fixedWidth={false} /> {x.usage} {t("category.usedBy")}
+                      </Link>
+                      <button
+                        type="button"
+                        className="ct-slug ct-hex"
+                        title={t("common.copy")}
+                        aria-label={`${t("common.copy")}: ${x.color.toUpperCase()}`}
+                        onClick={() => void navigator.clipboard?.writeText(x.color.toUpperCase()).then(() => toast.push(`${t("common.copied")}: ${x.color.toUpperCase()}`, "success"))}
+                      >
+                        {x.color.toUpperCase()} <Icon name="copy" fixedWidth={false} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="pl-side">
+                  <div className="pl-actions">
+                    <button type="button" className="ph-btn ph-edit" title={t("common.edit")} aria-label={`${t("common.edit")}: ${x.name}`} onClick={() => open({ uid: x.uid, name: x.name, color: x.color })}>
+                      <Icon name="pen" fixedWidth={false} />
+                    </button>
+                    <button type="button" className="ph-btn ph-del" title={t("common.delete")} aria-label={`${t("common.delete")}: ${x.name}`} onClick={() => setDel(x)}>
+                      <Icon name="trash" fixedWidth={false} />
+                    </button>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
@@ -104,7 +168,7 @@ export default function TagsPage() {
             </Field>
             <div className="field">
               <span className="label">{t("tag.color")}</span>
-              <div className="row">
+              <div className="tg-palette">
                 {colors.data?.map((c) => (
                   <button
                     key={c.hexCode}
@@ -113,16 +177,11 @@ export default function TagsPage() {
                     aria-label={c.name}
                     aria-pressed={edit.color.toUpperCase() === c.hexCode}
                     onClick={() => setEdit({ ...edit, color: c.hexCode })}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      background: c.hexCode,
-                      border: edit.color.toUpperCase() === c.hexCode ? "3px solid var(--color-text)" : "2px solid #fff",
-                      boxShadow: "0 0 0 1px var(--color-border-input)",
-                      cursor: "pointer",
-                    }}
-                  />
+                    className="tg-color"
+                    style={{ background: c.hexCode }}
+                  >
+                    {edit.color.toUpperCase() === c.hexCode && <Icon name="circle-check" fixedWidth={false} />}
+                  </button>
                 ))}
               </div>
               <div className="row" style={{ marginTop: 8 }}>
