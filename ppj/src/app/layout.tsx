@@ -66,7 +66,9 @@ export default async function RootLayout({
       lang={lang === "ID" ? "id" : "en"}
       className={`${figtree.variable} ${openSans.variable} ${plexMono.variable}`}
     >
-      <body>
+      {/* Ekstensi browser (mis. ColorZilla: cz-shortcut-listen) menambah atribut di <body> sebelum React
+          hydrate; abaikan selisih atribut di elemen ini saja (anak-anaknya tetap diperiksa). */}
+      <body suppressHydrationWarning>
         <SessionProvider session={user ? session : null}>
           <TRPCReactProvider>
             <I18nProvider initialLang={lang} timezone={timezone}>

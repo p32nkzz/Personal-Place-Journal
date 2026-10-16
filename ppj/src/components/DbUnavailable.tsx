@@ -32,7 +32,9 @@ export function DbUnavailable({ lang, fonts }: { lang: "ID" | "EN"; fonts: strin
   const m = TEXT[lang];
   return (
     <html lang={lang === "ID" ? "id" : "en"} className={fonts}>
-      <body>
+      {/* Ekstensi browser (mis. ColorZilla: cz-shortcut-listen) menambah atribut di <body> sebelum React
+          hydrate; abaikan selisih atribut di elemen ini saja (anak-anaknya tetap diperiksa). */}
+      <body suppressHydrationWarning>
         <div className="auth-wrap">
           <div className="auth-card" role="alert" style={{ maxWidth: 520 }}>
             <div className="auth-brand">
