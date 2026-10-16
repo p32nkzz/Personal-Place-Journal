@@ -1,24 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import {
   ActiveChip,
   CategoryChips,
   RelationChip,
   TagList,
+  VisitContextChip,
   VisitStatusChip,
 } from "~/components/chips";
 import { MapView } from "~/components/map/MapView";
 import { useMapColors } from "~/components/map/useMapColors";
 import { MyPlacePhotos } from "~/components/MyPlacePhotos";
+import { ClampText, Coords, InfoRow } from "~/components/PlaceInfo";
+import { PlaceDeleteDialog } from "~/components/PlaceDeleteDialog";
+import { PlaceThumb } from "~/components/PlaceThumb";
 import { PhotoGallery } from "~/components/PhotoGallery";
 import {
   Alert,
   ConfirmDialog,
   EmptyState,
+  Pagination,
   Spinner,
   StatusChip,
   Stars,
@@ -35,20 +40,48 @@ export default function PlaceDetailPage() {
   const { t } = useT();
   const fmt = useFormat();
   const router = useRouter();
+  const fromMap = useSearchParams().get("from") === "map";
   const toast = useToast();
   const errMsg = useErrorMessage();
   const utils = api.useUtils();
   const { data: p, isLoading } = api.place.get.useQuery({ uid });
+  // Kunjungan dipaging di server; ukuran halaman dari Pengaturan (visit.page_size).
+  const [visitPage, setVisitPage] = useState(1);
+  const vq = api.place.visits.useQuery({ uid, page: visitPage }, { placeholderData: (prev) => prev });
   const rules = api.settings.photoRules.useQuery();
   const mapColors = useMapColors();
 
   const [visitModal, setVisitModal] = useState<null | { visit?: VisitInit }>(null);
   const [delVisit, setDelVisit] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<null | "submit" | "inactive" | "active" | "delete">(null);
-  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Galeri foto kunjungan yang sedang dibuka (satu per satu) agar halaman tetap ringkas.
+  const [openPhotos, setOpenPhotos] = useState<string | null>(null);
+  // Lipat/buka section; pilihan diingat per perangkat (localStorage, aman bila tidak tersedia).
+  const [col, setCol] = useState<{ visits: boolean; photos: boolean; relation: boolean }>({ visits: false, photos: false, relation: false });
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ppj.place.collapsed");
+      if (raw) setCol((c) => ({ ...c, ...(JSON.parse(raw) as object) }));
+    } catch {
+      // penyimpanan tidak tersedia: tampil terbuka
+    }
+  }, []);
+  const toggle = (k: "visits" | "photos" | "relation") =>
+    setCol((c) => {
+      const next = { ...c, [k]: !c[k] };
+      try {
+        localStorage.setItem("ppj.place.collapsed", JSON.stringify(next));
+      } catch {
+        // abaikan
+      }
+      return next;
+    });
 
-  const refresh = () => void utils.place.get.invalidate({ uid });
+  const refresh = () => {
+    void utils.place.get.invalidate({ uid });
+    void utils.place.visits.invalidate({ uid });
+  };
   const onError = (e: unknown) => {
     setError(errMsg(e));
     setConfirm(null);
@@ -71,15 +104,6 @@ export default function PlaceDetailPage() {
     },
     onError,
   });
-  const preview = api.place.deletePreview.useQuery({ uid }, { enabled: confirm === "delete" });
-  const del = api.place.delete.useMutation({
-    onSuccess: async () => {
-      await utils.place.list.invalidate();
-      toast.push(t("common.deleted"), "success");
-      router.push("/places");
-    },
-    onError,
-  });
   const delVisitMut = api.visit.delete.useMutation({
     onSuccess: () => {
       refresh();
@@ -90,7 +114,6 @@ export default function PlaceDetailPage() {
       setDelVisit(null);
     },
   });
-  const setPrimary = api.visit.setPrimaryPhoto.useMutation();
   const delPhoto = api.visit.deletePhoto.useMutation();
   const capPhoto = api.visit.updatePhotoCaption.useMutation();
   const urlPhoto = api.visit.addExternalPhoto.useMutation();
@@ -100,182 +123,267 @@ export default function PlaceDetailPage() {
 
   const lastRejected = p.history.find((h) => h.action === "REJECTED");
 
+  const visitTotal = vq.data?.total ?? p.visits.length;
+  const lastVisit = vq.data ? vq.data.lastVisitedAt : (p.visits[0]?.visitedAt ?? null);
+  const pageRows = vq.data?.rows ?? [];
+  const backHref = fromMap ? `/?${new URLSearchParams({ my: uid, lat: String(p.latitude), lng: String(p.longitude) })}` : "/places";
+
   return (
-    <div className="container page">
-      <div className="page-head">
-        <div>
-          <p style={{ margin: 0 }}><Link href="/places" className="muted"><Icon name="arrow-left" /> {t("nav.myPlaces")}</Link></p>
-          <h1>{p.isFavorite && <Icon name="star" style={{ color: "#f59e0b" }} />} {p.name}</h1>
-          <div className="row" style={{ marginTop: 8 }}>
-            <VisitStatusChip status={p.visitStatus} />
-            <RelationChip status={p.masterRelationStatus} />
-            <ActiveChip active={p.isActive} />
+    <div className="container page pd">
+      {/* ---------- Kepala: sampul + identitas + aksi ---------- */}
+      <section className="pd-hero card">
+        <Link href={backHref} className="pd-back">
+          <Icon name="arrow-left" fixedWidth={false} /> {fromMap ? t("nav.map") : t("nav.myPlaces")}
+        </Link>
+        <div className="pd-hero-body">
+          <div className="pd-cover">
+            <PlaceThumb href={`/places/${uid}`} name={p.name} lat={p.latitude} lng={p.longitude} photos={p.photos} />
           </div>
-        </div>
-        <div className="row">
-          <button className="btn btn-secondary" onClick={() => fav.mutate({ uid, isFavorite: !p.isFavorite })} disabled={fav.isPending} aria-pressed={p.isFavorite}>
-            <Icon name={p.isFavorite ? "star" : "star-regular"} /> {t("place.favorite")}
-          </button>
-          <Link className="btn btn-secondary" href={`/places/${uid}/edit`}><Icon name="pen" /> {t("common.edit")}</Link>
-          {p.isActive && (
-            <button className="btn btn-primary" onClick={() => setVisitModal({})}><Icon name="plus" /> {t("visit.add")}</button>
-          )}
-        </div>
-      </div>
-
-      {error && <div style={{ marginBottom: 16 }}><Alert kind="error">{error}</Alert></div>}
-      {!p.isActive && <div style={{ marginBottom: 16 }}><Alert kind="warning">{t("place.inactiveNote")}</Alert></div>}
-
-      <div className="split">
-        <div className="stack">
-          <div className="card stack-sm">
-            <h2 className="card-title">{t("place.formDetail")}</h2>
-            <dl className="kv" style={{ margin: 0 }}>
-              <dt>{t("common.address")}</dt>
-              <dd>{p.address ?? "—"}</dd>
-              <dt>{t("common.description")}</dt>
-              <dd style={{ whiteSpace: "pre-wrap" }}>{p.description ?? "—"}</dd>
-              <dt>{t("common.category")}</dt>
-              <dd>
-                <CategoryChips items={p.categories} />
-                {p.master && <div className="helper">{t("place.categoryFromMaster")}</div>}
-              </dd>
-              <dt>{t("nav.tags")}</dt>
-              <dd>{p.tags.length ? <TagList items={p.tags} /> : "—"}</dd>
-              <dt>{t("common.coordinates")}</dt>
-              <dd className="mono">{p.latitude.toFixed(6)}, {p.longitude.toFixed(6)}</dd>
-              <dt>{t("master.rating")}</dt>
-              <dd><Stars value={p.rating.avg} count={p.rating.count} /></dd>
-            </dl>
-          </div>
-
-          <div className="card stack-sm">
-            <h2 className="card-title">{t("place.reviewPhotos")} ({p.photos.length})</h2>
-            <MyPlacePhotos placeUid={uid} photos={p.photos} onChanged={refresh} />
-          </div>
-
-          <div className="card">
-            <div className="row-between" style={{ marginBottom: 12 }}>
-              <h2 className="card-title" style={{ margin: 0 }}>{t("visit.title")} ({p.visits.length})</h2>
-              {p.isActive && <button className="btn btn-secondary btn-sm" onClick={() => setVisitModal({})}><Icon name="plus" /> {t("visit.add")}</button>}
+          <div className="pd-id">
+            {(p.categories.length > 0 || p.tags.length > 0) && (
+              <div className="pl-chips">
+                {p.categories.length > 0 && <CategoryChips items={p.categories} />}
+                {p.tags.length > 0 && <TagList items={p.tags} />}
+              </div>
+            )}
+            <h1 className="pd-title">
+              {p.name}
+              <button
+                type="button"
+                className={`pd-fav${p.isFavorite ? " is-on" : ""}`}
+                onClick={() => fav.mutate({ uid, isFavorite: !p.isFavorite })}
+                disabled={fav.isPending}
+                aria-pressed={p.isFavorite}
+                title={t("place.favorite")}
+                aria-label={t("place.favorite")}
+              >
+                <Icon name={p.isFavorite ? "star" : "star-regular"} fixedWidth={false} />
+              </button>
+            </h1>
+            {p.address && (
+              <div className="pd-addr">
+                <Icon name="map-pin" fixedWidth={false} /> {p.address}
+              </div>
+            )}
+            <div className="pd-meta">
+              <VisitStatusChip status={p.visitStatus} />
+              <RelationChip status={p.masterRelationStatus} />
+              {!p.isActive && <ActiveChip active={false} />}
+              <Stars value={p.rating.avg} count={p.rating.count} />
             </div>
-            {!p.visits.length ? (
-              <EmptyState title={t("visit.empty")} text={t("visit.emptyHint")} />
+          </div>
+          <div className="pd-actions">
+            <Link className="btn btn-secondary btn-sm" href={`/places/${uid}/edit`}>
+              <Icon name="pen" /> {t("common.edit")}
+            </Link>
+            {p.isActive ? (
+              <button className="btn btn-secondary btn-sm" onClick={() => setConfirm("inactive")}><Icon name="eye-slash" /> {t("place.deactivate")}</button>
             ) : (
-              <ul className="timeline">
-                {p.visits.map((v) => (
-                  <li key={v.uid}>
-                    <div className="row-between">
-                      <div className="stack-sm" style={{ gap: 4 }}>
-                        <b>{fmt.dateTime(v.visitedAt)}</b>
-                        <div className="row">
-                          <Stars value={v.rating} />
-                          {v.context === "PLANNED" && <StatusChip tone="info">{t("visit.planned")}{v.itineraryName ? `: ${v.itineraryName}` : ""}</StatusChip>}
-                          {v.context === "UNEXPECTED" && <StatusChip tone="warning">{t("visit.unexpected")}{v.itineraryName ? `: ${v.itineraryName}` : ""}</StatusChip>}
-                        </div>
-                      </div>
-                      <div className="row">
-                        <button className="btn btn-ghost btn-sm" onClick={() => setVisitModal({ visit: v })}><Icon name="pen" /> {t("common.edit")}</button>
-                        <button className="btn btn-danger-ghost btn-sm" onClick={() => setDelVisit(v.uid)}><Icon name="trash" /> {t("common.delete")}</button>
-                      </div>
-                    </div>
-                    {v.note && <p style={{ margin: "6px 0", whiteSpace: "pre-wrap" }}>{v.note}</p>}
-                    <PhotoGallery
-                      photos={v.photos}
-                      canEdit
-                      uploadEndpoint="/api/upload/visit-photo"
-                      parentField="visitUid"
-                      parentUid={v.uid}
-                      max={rules.data?.maxPerVisit}
-                      onChanged={refresh}
-                      onSetPrimary={(photoUid) => setPrimary.mutateAsync({ photoUid })}
-                      onDelete={(photoUid) => delPhoto.mutateAsync({ photoUid })}
-                      onCaption={(photoUid, caption) => capPhoto.mutateAsync({ photoUid, caption })}
-                      onAddUrl={(url, caption) => urlPhoto.mutateAsync({ visitUid: v.uid, url, caption })}
-                    />
-                  </li>
-                ))}
-              </ul>
+              <button className="btn btn-secondary btn-sm" onClick={() => setConfirm("active")}><Icon name="eye" /> {t("place.activate")}</button>
             )}
           </div>
         </div>
+      </section>
 
-        <div className="stack">
-          <div className="map-box-md">
-            <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: p.isFavorite ? mapColors.favorite : mapColors.mine, glyph: p.isFavorite ? "★" : undefined, title: p.name }]} fit />
-          </div>
+      {error && <div style={{ marginBottom: 12 }}><Alert kind="error">{error}</Alert></div>}
+      {!p.isActive && <div style={{ marginBottom: 12 }}><Alert kind="warning">{t("place.inactiveNote")}</Alert></div>}
 
-          <div className="card stack-sm">
-            <h2 className="card-title">{t("relation.title")}</h2>
-            <div className="row"><RelationChip status={p.masterRelationStatus} /></div>
-            {p.master ? (
-              <div className="t-small">
-                {t("relation.referencing")}:{" "}
-                <Link href={`/masters/${p.master.uid}`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{p.master.name}</Link>{" "}
-                {p.master.status === "INACTIVE" && <StatusChip tone="neutral">{t("master.inactive")}</StatusChip>}
-              </div>
-            ) : (
-              <p className="helper" style={{ margin: 0 }}>{t(`relation.hint.${p.masterRelationStatus}`)}</p>
-            )}
-            {p.masterRelationStatus === "REJECTED" && lastRejected?.reason && (
-              <Alert kind="error">
-                <b>{t("relation.rejectReason")}:</b> {lastRejected.reason}
-              </Alert>
-            )}
-            {p.masterRelationStatus === "REVIEW" && <Alert kind="info">{t("relation.reviewNote")}</Alert>}
-            {p.canSubmit && (
-              <div>
-                <button className="btn btn-primary btn-sm" onClick={() => setConfirm("submit")}>
-                  {p.masterRelationStatus === "REJECTED" ? t("relation.resubmit") : t("relation.submit")}
-                </button>
-              </div>
-            )}
-            {!p.isActive && (p.masterRelationStatus === "UNREFERRED" || p.masterRelationStatus === "REJECTED") && (
-              <p className="helper" style={{ margin: 0 }}>{t("relation.inactiveCannotSubmit")}</p>
-            )}
-
-            {p.history.length > 0 && (
-              <>
-                <hr className="divider" />
-                <h3 className="t-overline muted">{t("relation.history")}</h3>
-                <ul className="timeline">
-                  {p.history.map((h) => (
-                    <li key={h.uid}>
-                      <div><b>{t(`history.${h.action}`)}</b> <span className="muted t-caption">{fmt.dateTime(h.performedAt)}</span></div>
-                      {(h.fromName ?? h.toName) && (
-                        <div className="t-small muted">{h.fromName ?? "—"} → {h.toName ?? "—"}</div>
+      <div className="pd-grid">
+        <div className="pd-main">
+          {/* ---------- Kunjungan (timeline) ---------- */}
+          <section className="card pd-card">
+            <div className="pd-card-head">
+              <h2>
+                <Icon name="calendar" fixedWidth={false} /> {t("visit.title")}
+                <span className={`vstat${visitTotal ? "" : " is-zero"}`} title={lastVisit ? `${t("place.lastVisit")}: ${fmt.dateTime(lastVisit)}` : t("visit.empty")}>
+                  <span className="vstat-n">
+                    <Icon name="map-pin" fixedWidth={false} />
+                    <b>{visitTotal}</b>&nbsp;{t("place.visitsShort")}
+                  </span>
+                  {lastVisit && (
+                    <span className="vstat-last">
+                      <Icon name="history" fixedWidth={false} /> {t("place.lastVisitShort")} {fmt.relative(lastVisit)}
+                    </span>
+                  )}
+                </span>
+              </h2>
+              {p.isActive && (
+                <button className="btn btn-secondary btn-sm" onClick={() => setVisitModal({})}><Icon name="plus" /> {t("visit.add")}</button>
+              )}
+              <button type="button" className="pd-toggle" aria-expanded={!col.visits} onClick={() => toggle("visits")} title={col.visits ? t("common.expand") : t("common.collapse")} aria-label={col.visits ? t("common.expand") : t("common.collapse")}>
+                <Icon name={col.visits ? "chevron-down" : "chevron-up"} fixedWidth={false} />
+              </button>
+            </div>
+            <div className="pd-body" hidden={col.visits}>
+              {!visitTotal ? (
+                <EmptyState title={t("visit.empty")} text={t("visit.emptyHint")} />
+              ) : (
+                <ul className="pp-visits pp-timeline pd-timeline">
+                  {pageRows.map((v, i) => (
+                    <li key={v.uid} className={`pp-tl-${v.context.toLowerCase()}${i === 0 && (vq.data?.page ?? 1) === 1 ? " is-latest" : ""}`}>
+                      <div className="pd-visit-top">
+                        <div className="pp-visit-top">
+                          <b>{fmt.dateTime(v.visitedAt)}</b>
+                          <Stars value={v.rating} />
+                          {v.context !== "STANDALONE" && <VisitContextChip context={v.context} itineraryName={v.itineraryName} />}
+                        </div>
+                        <span className="pd-visit-actions">
+                          <button type="button" className="pp-icon-btn" title={t("common.edit")} aria-label={t("common.edit")} onClick={() => setVisitModal({ visit: v })}>
+                            <Icon name="pen" fixedWidth={false} />
+                          </button>
+                          <button type="button" className="pp-icon-btn is-danger" title={t("common.delete")} aria-label={t("common.delete")} onClick={() => setDelVisit(v.uid)}>
+                            <Icon name="trash" fixedWidth={false} />
+                          </button>
+                        </span>
+                      </div>
+                      {v.note && <div className="pp-note pd-note">{v.note}</div>}
+                      {openPhotos === v.uid ? (
+                        <div className="pd-photos">
+                          <PhotoGallery
+                            fancy
+                            kind="visit"
+                            photos={v.photos}
+                            canEdit
+                            uploadEndpoint="/api/upload/visit-photo"
+                            parentField="visitUid"
+                            parentUid={v.uid}
+                            max={rules.data?.maxPerVisit}
+                            onChanged={refresh}
+                            onDelete={(photoUid) => delPhoto.mutateAsync({ photoUid })}
+                            onCaption={(photoUid, caption) => capPhoto.mutateAsync({ photoUid, caption })}
+                            onAddUrl={(url, caption) => urlPhoto.mutateAsync({ visitUid: v.uid, url, caption })}
+                          />
+                        </div>
+                      ) : (
+                        <PhotoGallery
+                          fancy
+                          compact
+                          kind="visit"
+                          photos={v.photos}
+                          canEdit
+                          onChanged={refresh}
+                          onDelete={(photoUid) => delPhoto.mutateAsync({ photoUid })}
+                          onCaption={(photoUid, caption) => capPhoto.mutateAsync({ photoUid, caption })}
+                        />
                       )}
-                      {h.reason && <div className="t-small">{h.reason}</div>}
+                      <button type="button" className="pp-link-btn pd-photo-toggle" onClick={() => setOpenPhotos(openPhotos === v.uid ? null : v.uid)}>
+                        <Icon name={openPhotos === v.uid ? "chevron-up" : "camera"} fixedWidth={false} />{" "}
+                        {openPhotos === v.uid ? t("place.closePhotos") : t("place.manageVisitPhotos", { n: v.photos.length })}
+                      </button>
                     </li>
                   ))}
                 </ul>
-              </>
-            )}
-          </div>
-
-          {p.itineraries.length > 0 && (
-            <div className="card stack-sm">
-              <h2 className="card-title">{t("nav.itineraries")}</h2>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                {p.itineraries.map((i) => (
-                  <li key={i.uid}><Link href={`/itineraries/${i.uid}`} style={{ color: "var(--color-primary)" }}>{i.name}</Link></li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="card stack-sm">
-            <h2 className="card-title">{t("place.manage")}</h2>
-            <div className="row">
-              {p.isActive ? (
-                <button className="btn btn-secondary btn-sm" onClick={() => setConfirm("inactive")}><Icon name="circle-xmark" /> {t("place.deactivate")}</button>
-              ) : (
-                <button className="btn btn-secondary btn-sm" onClick={() => setConfirm("active")}><Icon name="circle-check" /> {t("place.activate")}</button>
               )}
-              <button className="btn btn-danger-ghost btn-sm" onClick={() => { setConsent(false); setConfirm("delete"); }}><Icon name="trash" /> {t("common.delete")}</button>
+              {vq.data && vq.data.total > vq.data.pageSize && (
+                <div className="pd-pager">
+                  <Pagination
+                    page={vq.data.page}
+                    limit={vq.data.pageSize}
+                    total={vq.data.total}
+                    onPage={(n) => {
+                      setVisitPage(n);
+                      setOpenPhotos(null);
+                    }}
+                  />
+                </div>
+              )}
             </div>
-          </div>
+          </section>
+
+          {/* ---------- Foto pantauan ---------- */}
+          <section className="card pd-card">
+            <div className="pd-card-head">
+              <h2><Icon name="image" fixedWidth={false} /> {t("place.reviewPhotos")} <span className="mini-tab-n">{p.photos.length}</span></h2>
+              <button type="button" className="pd-toggle" aria-expanded={!col.photos} onClick={() => toggle("photos")} title={col.photos ? t("common.expand") : t("common.collapse")} aria-label={col.photos ? t("common.expand") : t("common.collapse")}>
+                <Icon name={col.photos ? "chevron-down" : "chevron-up"} fixedWidth={false} />
+              </button>
+            </div>
+            <div className="pd-body" hidden={col.photos}>
+              <MyPlacePhotos placeUid={uid} photos={p.photos} onChanged={refresh} />
+            </div>
+          </section>
         </div>
+
+        <aside className="pd-side">
+          {/* ---------- Info & lokasi ---------- */}
+          <section className="card pd-card">
+            <div className="map-box-sm pd-map">
+              <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: p.isFavorite ? mapColors.favorite : mapColors.mine, glyph: p.isFavorite ? "★" : undefined, title: p.name }]} fit />
+            </div>
+            <div className="pp-info">
+              {p.description && <InfoRow icon="circle-info" label={t("common.description")}><ClampText text={p.description} /></InfoRow>}
+              <InfoRow icon="layers" label={t("common.category")}>
+                <CategoryChips items={p.categories} />
+                {p.master && <div className="helper" style={{ marginTop: 2 }}>{t("place.categoryFromMaster")}</div>}
+              </InfoRow>
+              <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={p.latitude} lng={p.longitude} placeId={p.googlePlaceId} googleLink /></InfoRow>
+              {p.itineraries.length > 0 && (
+                <InfoRow icon="route" label={t("nav.itineraries")}>
+                  {p.itineraries.map((i, n) => (
+                    <span key={i.uid}>
+                      {n > 0 && ", "}
+                      <Link href={`/itineraries/${i.uid}`} className="pp-a">{i.name}</Link>
+                    </span>
+                  ))}
+                </InfoRow>
+              )}
+            </div>
+          </section>
+
+          {/* ---------- Relasi MASTER ---------- */}
+          <section className="card pd-card">
+            <div className="pd-card-head">
+              <h2><Icon name="link" fixedWidth={false} /> {t("relation.title")}</h2>
+              <RelationChip status={p.masterRelationStatus} />
+              <button type="button" className="pd-toggle" aria-expanded={!col.relation} onClick={() => toggle("relation")} title={col.relation ? t("common.expand") : t("common.collapse")} aria-label={col.relation ? t("common.expand") : t("common.collapse")}>
+                <Icon name={col.relation ? "chevron-down" : "chevron-up"} fixedWidth={false} />
+              </button>
+            </div>
+            <div className="pd-body" hidden={col.relation}>
+              {p.master ? (
+                <div className="t-small">
+                  {t("relation.referencing")}:{" "}
+                  <Link href={`/masters/${p.master.uid}`} className="pp-a">{p.master.name}</Link>{" "}
+                  {p.master.status === "INACTIVE" && <StatusChip tone="neutral">{t("master.inactive")}</StatusChip>}
+                </div>
+              ) : (
+                <p className="helper" style={{ margin: 0 }}>{t(`relation.hint.${p.masterRelationStatus}`)}</p>
+              )}
+              {p.masterRelationStatus === "REJECTED" && lastRejected?.reason && (
+                <Alert kind="error">
+                  <b>{t("relation.rejectReason")}:</b> {lastRejected.reason}
+                </Alert>
+              )}
+              {p.masterRelationStatus === "REVIEW" && <Alert kind="info">{t("relation.reviewNote")}</Alert>}
+              {p.canSubmit && (
+                <div>
+                  <button className="btn btn-primary btn-sm" onClick={() => setConfirm("submit")}>
+                    {p.masterRelationStatus === "REJECTED" ? t("relation.resubmit") : t("relation.submit")}
+                  </button>
+                </div>
+              )}
+              {!p.isActive && (p.masterRelationStatus === "UNREFERRED" || p.masterRelationStatus === "REJECTED") && (
+                <p className="helper" style={{ margin: 0 }}>{t("relation.inactiveCannotSubmit")}</p>
+              )}
+              {p.history.length > 0 && (
+                <ul className="pp-history pd-history">
+                  {p.history.map((h) => (
+                    <li key={h.uid}>
+                      <b>{t(`history.${h.action}`)}</b> <span className="muted t-caption">{fmt.dateTime(h.performedAt)}</span>
+                      {(h.fromName ?? h.toName) && <div className="t-small muted">{h.fromName ?? "—"} → {h.toName ?? "—"}</div>}
+                      {h.reason && <div className="pp-note">{h.reason}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+
+          {/* Hapus di bagian paling bawah agar tidak mudah salah klik */}
+          <section className="pd-manage">
+            <button className="btn btn-danger btn-sm" onClick={() => setConfirm("delete")}><Icon name="trash" /> {t("place.deleteThis")}</button>
+          </section>
+        </aside>
       </div>
 
       {visitModal && (
@@ -327,51 +435,12 @@ export default function PlaceDetailPage() {
       )}
 
       {confirm === "delete" && (
-        <ConfirmDialog
-          title={t("place.deleteTitle")}
-          danger
-          confirmLabel={t("common.delete")}
-          busy={del.isPending}
-          disabled={!preview.data || (preview.data.needsConsent && !consent)}
+        <PlaceDeleteDialog
+          uid={uid}
+          isActive={p.isActive}
           onClose={() => setConfirm(null)}
-          onConfirm={() => del.mutate({ uid, consent })}
-          message={
-            !preview.data ? (
-              <Spinner />
-            ) : (
-              <>
-                <p style={{ margin: 0 }}>{t("place.deleteText", { visits: preview.data.visits, photos: preview.data.visitPhotos })}</p>
-                {preview.data.myPlacePhotos > 0 && <p style={{ margin: 0 }}>{t("place.deleteMyPhotos", { n: preview.data.myPlacePhotos })}</p>}
-                {preview.data.needsConsent && (
-                  <>
-                    <Alert kind="warning">
-                      <div>{t("place.deleteConsentWhy")}</div>
-                      <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                        <li>{t("place.deleteVisits", { n: preview.data.visits })}</li>
-                        <li>{t("place.deletePhotos", { n: preview.data.visitPhotos })}</li>
-                        <li>{t("place.deleteHistories", { n: preview.data.histories })}</li>
-                        {preview.data.itineraryPlaces.length > 0 && (
-                          <li>{t("place.deleteItineraries", { names: preview.data.itineraryPlaces.join(", ") })}</li>
-                        )}
-                      </ul>
-                    </Alert>
-                    <label className="check">
-                      <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-                      <span>{t("place.deleteConsent")}</span>
-                    </label>
-                    {!consent && (
-                      <div className="helper">
-                        {t("place.deleteSuggestInactive")}{" "}
-                        {p.isActive && (
-                          <button className="btn btn-ghost btn-sm" onClick={() => setConfirm("inactive")}><Icon name="circle-xmark" /> {t("place.deactivate")}</button>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )
-          }
+          onDeleted={() => router.push("/places")}
+          onSuggestDeactivate={() => setConfirm("inactive")}
         />
       )}
     </div>
