@@ -187,7 +187,8 @@ export const masterRouter = createTRPCRouter({
       z.object({
         q: z.string().trim().max(100).optional(),
         status: z.enum(["ALL", "ACTIVE", "INACTIVE", "DELETED"]).default("ALL"),
-        sort: z.enum(["name", "createdAt", "updatedAt"]).default("createdAt"),
+        categoryUids: z.array(uidSchema).max(100).optional(),
+        sort: z.enum(["name", "createdAt", "updatedAt"]).default("updatedAt"),
         order: z.enum(["asc", "desc"]).default("desc"),
         page: z.number().int().min(1).default(1),
         limit: z.number().int().min(1).max(100).default(10),
@@ -203,6 +204,11 @@ export const masterRouter = createTRPCRouter({
       if (input.status === "INACTIVE")
         conds.push(eq(masterPlaces.isActive, false), isNull(masterPlaces.deletedAt));
       if (input.status === "DELETED") conds.push(isNotNull(masterPlaces.deletedAt));
+      if (input.categoryUids?.length)
+        // Pilihan ganda kategori: MASTER yang memiliki salah satu kategori terpilih.
+        conds.push(
+          sql`${masterPlaces.id} in (select mpc.master_place_id from master_place_categories mpc inner join categories c on c.id = mpc.category_id where c.uid in (${sql.join(input.categoryUids.map((u) => sql`${u}`), sql`, `)}))`,
+        );
       const where = conds.length ? and(...conds) : undefined;
       const col = masterPlaces[input.sort];
       const [totalRow] = await ctx.db
@@ -217,7 +223,7 @@ export const masterRouter = createTRPCRouter({
         .limit(input.limit)
         .offset((input.page - 1) * input.limit);
       const ids = rows.map((r) => r.id);
-      const [ratings, cats, refCounts] = await Promise.all([
+      const [ratings, cats, refCounts, photoRows] = await Promise.all([
         masterRatings(ids),
         categoriesForMasters(ids),
         ids.length
@@ -229,6 +235,14 @@ export const masterRouter = createTRPCRouter({
               .from(myPlaces)
               .where(inArray(myPlaces.masterPlaceId, ids))
               .groupBy(myPlaces.masterPlaceId)
+          : Promise.resolve([]),
+        // Foto MASTER untuk thumbnail & pratinjau di daftar (utama dulu).
+        ids.length
+          ? ctx.db
+              .select()
+              .from(masterPlacePhotos)
+              .where(inArray(masterPlacePhotos.masterPlaceId, ids))
+              .orderBy(desc(masterPlacePhotos.isPrimary), asc(masterPlacePhotos.sortOrder), asc(masterPlacePhotos.id))
           : Promise.resolve([]),
       ]);
       const refMap = new Map(refCounts.map((r) => [r.id, Number(r.n)]));
@@ -242,7 +256,13 @@ export const masterRouter = createTRPCRouter({
           categories: cats.get(r.id) ?? [],
           rating: ratings.get(r.id) ?? { avg: null, count: 0 },
           referencedBy: refMap.get(r.id) ?? 0,
+          latitude: r.latitude,
+          longitude: r.longitude,
           createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+          photos: photoRows
+            .filter((ph) => ph.masterPlaceId === r.id)
+            .map((ph) => ({ uid: ph.uid, url: masterPhotoUrl(ph), caption: ph.caption, isPrimary: ph.isPrimary })),
         })),
       };
     }),

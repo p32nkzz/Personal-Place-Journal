@@ -1162,3 +1162,11 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
 .pf-hint-row { margin-top: -4px; }
 .pf-hint-row .pf-hint { display: block; flex: none; text-align: left; }
 @media (max-width: 560px) { .pf-coords { flex-wrap: nowrap; } .pf .pf-coords .input { flex: 1 1 60px; max-width: none; } .mt-switch.is-inline { order: -1; } }
+
+/* Segmen status MASTER: warna aktif mengikuti arti status */
+.fl-seg button[data-ms="ACTIVE"][aria-checked="true"] { background: #047857; }
+.fl-seg button[data-ms="INACTIVE"][aria-checked="true"] { background: #475569; }
+.fl-seg button[data-ms="DELETED"][aria-checked="true"] { background: #b91c1c; }
+.fl-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.fl-seg::-webkit-scrollbar { display: none; }
+@media (max-width: 420px) { .fl-seg button { padding: 0 9px; } .fl-seg button svg { display: none; } }
