@@ -65,7 +65,7 @@ export function HomeMap({
     initialMy ? { kind: "my", uid: initialMy.uid } : initialPin ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng } : null,
   );
   const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(
-    initialMy ? { lat: initialMy.lat, lng: initialMy.lng, zoom: 16 } : initialPin ? { ...initialPin, zoom: 16 } : null,
+    initialMy ? { lat: initialMy.lat, lng: initialMy.lng } : initialPin ? { ...initialPin } : null,
   );
 
   const cats = api.categories.listActive.useQuery();
@@ -140,7 +140,7 @@ export function HomeMap({
 
   const select = (s: Selection, lat: number, lng: number) => {
     setSel(s);
-    setFocus({ lat, lng, zoom: 16 });
+    setFocus({ lat, lng });
   };
 
   const onMarkerClick = (id: string) => {

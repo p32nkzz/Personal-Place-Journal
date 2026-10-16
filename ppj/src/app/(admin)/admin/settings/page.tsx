@@ -165,6 +165,10 @@ const CATEGORY_KEYS = [
   { key: "category.page_size", def: "4", label: "settings.categoryPageSize", hint: "settings.categoryPageSizeHint", type: "number" },
 ] as const;
 
+const MAP_VIEW_KEYS = [
+  { key: "map.default_zoom", def: "15", label: "settings.mapZoom", hint: "settings.mapZoomHint", type: "number" },
+] as const;
+
 const VISIT_KEYS = [
   { key: "visit.page_size", def: "5", label: "settings.visitPageSize", hint: "settings.visitPageSizeHint", type: "number" },
 ] as const;
@@ -239,7 +243,10 @@ function MapSettings() {
 
   return (
     <div>
-      <h2 className="settings-title">{t("settings.groupSearch")}</h2>
+      <h2 className="settings-title">{t("settings.groupMapView")}</h2>
+      <KeyRows keys={MAP_VIEW_KEYS} />
+
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupSearch")}</h2>
       <form
         onSubmit={(e) => {
           e.preventDefault();

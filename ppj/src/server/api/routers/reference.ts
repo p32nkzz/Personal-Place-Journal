@@ -327,7 +327,9 @@ export const settingsRouter = createTRPCRouter({
           key: input.key,
           value: normalized,
           description:
-            input.key === "map.recent_page_size"
+            input.key === "map.default_zoom"
+              ? "Zoom bawaan peta (1-20)"
+              : input.key === "map.recent_page_size"
               ? "Jumlah data awal & per muat pada filter tempat (peta)"
               : input.key === "category.page_size"
                 ? "Jumlah kategori per muat pada filter & pemilih kategori"

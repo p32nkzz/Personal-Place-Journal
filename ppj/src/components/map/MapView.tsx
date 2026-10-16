@@ -16,6 +16,7 @@ import { Icon } from "~/components/Icon";
 import { Alert, Modal } from "~/components/ui";
 import { useT } from "~/lib/i18n";
 import { readableOn } from "./colors";
+import { useMapSearchConfig } from "./useMapSearchConfig";
 
 const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -113,22 +114,27 @@ function Controller({
 }) {
   const map = useMap();
   const fitted = useRef("");
-  const centeredOnDevice = useRef(false);
+  const centeredOnDevice = useRef<number | false>(false);
+  // Zoom bawaan dari Pengaturan. Bila nilainya baru selesai dimuat setelah peta tampil, efek di bawah
+  // dijalankan ulang sekali agar zoom akhir sesuai pengaturan.
+  const { defaultZoom } = useMapSearchConfig();
+  const zoomRef = useRef(defaultZoom);
+  zoomRef.current = defaultZoom;
 
   useEffect(() => {
     if (!map || !focus) return;
     map.panTo({ lat: focus.lat, lng: focus.lng });
-    if (focus.zoom) map.setZoom(focus.zoom);
-  }, [map, focus]);
+    map.setZoom(focus.zoom ?? zoomRef.current);
+  }, [map, focus, defaultZoom]);
 
   useEffect(() => {
     if (!map || !fit || !markers.length) return;
-    const sig = markers.map((m) => `${m.id}:${m.lat}:${m.lng}`).join("|");
+    const sig = markers.map((m) => `${m.id}:${m.lat}:${m.lng}`).join("|") + `@${defaultZoom}`;
     if (fitted.current === sig) return;
     fitted.current = sig;
     if (markers.length === 1) {
       map.setCenter({ lat: markers[0]!.lat, lng: markers[0]!.lng });
-      map.setZoom(15);
+      map.setZoom(zoomRef.current);
       return;
     }
     const b = new google.maps.LatLngBounds();
@@ -136,17 +142,18 @@ function Controller({
     map.fitBounds(b, 60);
     // Titik yang berhimpitan/berdekatan tidak boleh memicu zoom berlebihan.
     google.maps.event.addListenerOnce(map, "idle", () => {
-      if ((map.getZoom() ?? 0) > 16) map.setZoom(16);
+      const cap = Math.min(21, zoomRef.current + 1);
+      if ((map.getZoom() ?? 0) > cap) map.setZoom(cap);
     });
-  }, [map, markers, fit]);
+  }, [map, markers, fit, defaultZoom]);
 
   useEffect(() => {
     // Titik tengah awal = lokasi perangkat bila izin diberikan (K-20).
-    if (!map || !deviceLocation || centeredOnDevice.current || focus || fit) return;
-    centeredOnDevice.current = true;
+    if (!map || !deviceLocation || centeredOnDevice.current === defaultZoom || focus || fit) return;
+    centeredOnDevice.current = defaultZoom;
     map.setCenter(deviceLocation);
-    map.setZoom(14);
-  }, [map, deviceLocation, focus, fit]);
+    map.setZoom(zoomRef.current);
+  }, [map, deviceLocation, focus, fit, defaultZoom]);
 
   return null;
 }

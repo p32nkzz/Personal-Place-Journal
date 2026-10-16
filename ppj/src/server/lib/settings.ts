@@ -82,6 +82,10 @@ export function validateSetting(key: string, value: string): string | null {
     case "category.page_size":
     case "visit.page_size":
     case "tag.page_size":
+    case "map.default_zoom": {
+      const n = Number(value);
+      return value.trim() !== "" && Number.isInteger(n) && n >= 1 && n <= 20 ? null : "SETTING_ZOOM";
+    }
     case "map.recent_page_size": {
       const n = Number(value);
       return Number.isInteger(n) && n >= 1 && n <= 50 ? null : "SETTING_PAGE_SIZE";
@@ -125,6 +129,7 @@ export const RECENT_PAGE_SIZE_DEFAULT = 3;
 export const SETTING_DEFAULTS: Record<string, string> = {
   ...MAP_COLOR_DEFAULTS,
   "map.recent_page_size": String(RECENT_PAGE_SIZE_DEFAULT),
+  "map.default_zoom": "15",
   "app.timezone": "Asia/Jakarta",
   "category.page_size": "4",
   "tag.page_size": "4",
@@ -172,9 +177,13 @@ export async function getCategoryPageSize() {
 
 /** Jumlah data awal & per pemuatan pada daftar filter tempat (menu Peta). */
 export async function getMapSearchConfig() {
-  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, "map.recent_page_size"));
-  const n = Number(row?.value);
+  const rows = await db.select().from(appSettings).where(like(appSettings.key, "map.%"));
+  const m = new Map(rows.map((r) => [r.key, Number(r.value)]));
+  const n = m.get("map.recent_page_size");
+  const z = m.get("map.default_zoom");
   return {
-    recentPageSize: Number.isInteger(n) && n >= 1 && n <= 50 ? n : RECENT_PAGE_SIZE_DEFAULT,
+    recentPageSize: n != null && Number.isInteger(n) && n >= 1 && n <= 50 ? n : RECENT_PAGE_SIZE_DEFAULT,
+    // Zoom bawaan peta (1–20): dipakai saat memfokuskan tempat, pin, lokasi perangkat, dan titik tunggal.
+    defaultZoom: z != null && Number.isInteger(z) && z >= 1 && z <= 20 ? z : 15,
   };
 }
