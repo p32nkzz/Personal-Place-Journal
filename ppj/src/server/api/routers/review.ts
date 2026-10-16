@@ -1,12 +1,14 @@
-import { and, asc, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, like, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 
 import { adminProcedure, createTRPCRouter } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import {
+  backupLogs,
   categories,
   itineraryPlaces,
+  masterPlaceCategories,
   masterPlaces,
   myPlaceMasterHistories,
   myPlaces,
@@ -16,6 +18,7 @@ import {
   type SnapshotData,
 } from "~/server/db/schema";
 import { fail, notFound } from "~/server/lib/errors";
+import { getTimezone } from "~/server/lib/settings";
 import {
   addHistory,
   buildSnapshot,
@@ -77,6 +80,128 @@ export const reviewRouter = createTRPCRouter({
       ]);
     return { masterActive, masterInactive, queue, explorers, places, visitCount };
   }),
+
+  /**
+   * Rekap dashboard Admin untuk rentang N hari terakhir: total, tren vs periode sebelumnya,
+   * deret aktivitas harian (dikelompokkan per tanggal di zona waktu aplikasi), komposisi status,
+   * kategori teratas, cuplikan antrean review, dan Explorer paling aktif.
+   */
+  dashboard: adminProcedure
+    .input(z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const tz = await getTimezone();
+      const DAY = 86_400_000;
+      const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+      const now = Date.now();
+      // Deret hari (tanggal lokal) dari terlama ke hari ini.
+      const keys = Array.from({ length: input.days }, (_, i) => ymd.format(new Date(now - (input.days - 1 - i) * DAY)));
+      const first = keys[0]!;
+      // Ambil data sejak dua periode lalu (+1 hari cadangan selisih zona waktu) untuk tren.
+      const since = new Date(now - (input.days * 2 + 1) * DAY);
+      const prevFirst = ymd.format(new Date(now - (input.days * 2 - 1) * DAY));
+
+      const count = async (q: Promise<{ n: number }[]>) => Number((await q)[0]?.n ?? 0);
+      const [
+        masterActive, masterInactive, queue, explorers, explorersInactive, places, visitCount, categoryCount,
+        masterTs, placeTs, visitTs, userTs, relRows, visRows, catRows, queueRows, topRows, lastBackup,
+      ] = await Promise.all([
+        count(ctx.db.select({ n: sql<number>`count(*)` }).from(masterPlaces).where(activeMasterCond)),
+        count(ctx.db.select({ n: sql<number>`count(*)` }).from(masterPlaces).where(and(eq(masterPlaces.isActive, false), isNull(masterPlaces.deletedAt)))),
+        count(ctx.db.select({ n: sql<number>`count(*)` }).from(myPlaces).innerJoin(users, eq(users.id, myPlaces.userId)).where(and(eq(myPlaces.masterRelationStatus, "REVIEW"), ownerOk))),
+        count(ctx.db.select({ n: sql<number>`count(*)` }).from(users).where(and(eq(users.role, "EXPLORER"), isNull(users.deletedAt), eq(users.isActive, true)))),
+        count(ctx.db.select({ n: sql<number>`count(*)` }).from(users).where(and(eq(users.role, "EXPLORER"), isNull(users.deletedAt), eq(users.isActive, false)))),
+        count(ctx.db.select({ n: sql<number>`count(*)` }).from(myPlaces).innerJoin(users, eq(users.id, myPlaces.userId)).where(ownerOk)),
+        count(ctx.db.select({ n: sql<number>`count(*)` }).from(visits).innerJoin(myPlaces, eq(myPlaces.id, visits.myPlaceId)).innerJoin(users, eq(users.id, myPlaces.userId)).where(ownerOk)),
+        count(ctx.db.select({ n: sql<number>`count(*)` }).from(categories).where(eq(categories.isActive, true))),
+        ctx.db.select({ at: masterPlaces.createdAt }).from(masterPlaces).where(and(isNull(masterPlaces.deletedAt), gte(masterPlaces.createdAt, since))),
+        ctx.db.select({ at: myPlaces.createdAt }).from(myPlaces).innerJoin(users, eq(users.id, myPlaces.userId)).where(and(ownerOk, gte(myPlaces.createdAt, since))),
+        ctx.db.select({ at: visits.visitedAt }).from(visits).innerJoin(myPlaces, eq(myPlaces.id, visits.myPlaceId)).innerJoin(users, eq(users.id, myPlaces.userId)).where(and(ownerOk, gte(visits.visitedAt, since))),
+        ctx.db.select({ at: users.createdAt }).from(users).where(and(eq(users.role, "EXPLORER"), isNull(users.deletedAt), gte(users.createdAt, since))),
+        ctx.db.select({ k: myPlaces.masterRelationStatus, n: sql<number>`count(*)` }).from(myPlaces).innerJoin(users, eq(users.id, myPlaces.userId)).where(ownerOk).groupBy(myPlaces.masterRelationStatus),
+        ctx.db.select({ k: myPlaces.visitStatus, n: sql<number>`count(*)` }).from(myPlaces).innerJoin(users, eq(users.id, myPlaces.userId)).where(ownerOk).groupBy(myPlaces.visitStatus),
+        ctx.db
+          .select({ uid: categories.uid, name: categories.name, n: sql<number>`count(*)` })
+          .from(masterPlaceCategories)
+          .innerJoin(categories, eq(categories.id, masterPlaceCategories.categoryId))
+          .innerJoin(masterPlaces, eq(masterPlaces.id, masterPlaceCategories.masterPlaceId))
+          .where(activeMasterCond)
+          .groupBy(categories.id, categories.uid, categories.name)
+          .orderBy(desc(sql`count(*)`), asc(categories.name))
+          .limit(5),
+        ctx.db
+          .select({ uid: myPlaces.uid, name: myPlaces.name, ownerName: users.name, at: myPlaces.updatedAt })
+          .from(myPlaces)
+          .innerJoin(users, eq(users.id, myPlaces.userId))
+          .where(and(eq(myPlaces.masterRelationStatus, "REVIEW"), ownerOk))
+          .orderBy(asc(myPlaces.updatedAt))
+          .limit(4),
+        ctx.db
+          .select({ uid: users.uid, name: users.name, username: users.username, avatar: users.avatarFilePath, updatedAt: users.updatedAt, n: sql<number>`count(*)` })
+          .from(myPlaces)
+          .innerJoin(users, eq(users.id, myPlaces.userId))
+          .where(ownerOk)
+          .groupBy(users.id, users.uid, users.name, users.username, users.avatarFilePath, users.updatedAt)
+          .orderBy(desc(sql`count(*)`), asc(users.name))
+          .limit(5),
+        ctx.db.select({ at: backupLogs.startedAt, status: backupLogs.status }).from(backupLogs).orderBy(desc(backupLogs.startedAt)).limit(1),
+      ]);
+
+      // Kelompokkan cap waktu ke tanggal lokal; hitung juga total periode ini vs periode sebelumnya.
+      const bucket = (rows: { at: Date | null }[]) => {
+        const per = new Map<string, number>();
+        let cur = 0;
+        let prev = 0;
+        for (const r of rows) {
+          if (!r.at) continue;
+          const k = ymd.format(r.at);
+          if (k >= first) {
+            cur++;
+            per.set(k, (per.get(k) ?? 0) + 1);
+          } else if (k >= prevFirst) prev++;
+        }
+        return { per, cur, prev };
+      };
+      const bm = bucket(masterTs);
+      const bp = bucket(placeTs);
+      const bv = bucket(visitTs);
+      const bu = bucket(userTs);
+
+      const visitTop = topRows.length
+        ? await ctx.db
+            .select({ uid: users.uid, n: sql<number>`count(*)` })
+            .from(visits)
+            .innerJoin(myPlaces, eq(myPlaces.id, visits.myPlaceId))
+            .innerJoin(users, eq(users.id, myPlaces.userId))
+            .where(inArray(users.uid, topRows.map((r) => r.uid)))
+            .groupBy(users.uid)
+        : [];
+      const visitsBy = new Map(visitTop.map((r) => [r.uid, Number(r.n)]));
+
+      return {
+        timezone: tz,
+        totals: { masterActive, masterInactive, queue, explorers, explorersInactive, places, visitCount, categoryCount },
+        period: {
+          masters: { cur: bm.cur, prev: bm.prev },
+          places: { cur: bp.cur, prev: bp.prev },
+          visits: { cur: bv.cur, prev: bv.prev },
+          explorers: { cur: bu.cur, prev: bu.prev },
+        },
+        series: keys.map((d) => ({ d, visits: bv.per.get(d) ?? 0, places: bp.per.get(d) ?? 0, masters: bm.per.get(d) ?? 0 })),
+        relation: Object.fromEntries(relRows.map((r) => [r.k, Number(r.n)])) as Record<string, number>,
+        visitStatus: Object.fromEntries(visRows.map((r) => [r.k, Number(r.n)])) as Record<string, number>,
+        topCategories: catRows.map((r) => ({ uid: r.uid, name: r.name, n: Number(r.n) })),
+        queuePreview: queueRows,
+        topExplorers: topRows.map((r) => ({
+          uid: r.uid,
+          name: r.name,
+          username: r.username,
+          avatarUrl: r.avatar ? `/api/files/avatar/${r.uid}?v=${r.updatedAt.getTime()}` : null,
+          n: Number(r.n),
+          visits: visitsBy.get(r.uid) ?? 0,
+        })),
+        lastBackup: lastBackup[0] ?? null,
+      };
+    }),
 
   /** 24.6 — antrean review beserta snapshot pengajuan. */
   queue: adminProcedure.query(async ({ ctx }) => {
