@@ -60,7 +60,7 @@ function NewPlace() {
     onSuccess: async (r) => {
       toast.push(t("common.saved"), "success");
       if (files.length) {
-        // Foto tinjauan diunggah setelah MY PLACE tersimpan; kegagalan tidak membatalkan penyimpanan.
+        // Foto pantauan diunggah setelah MY PLACE tersimpan; kegagalan tidak membatalkan penyimpanan.
         try {
           await uploadPhotos("/api/upload/my-place-photo", "placeUid", r.uid, files);
         } catch (e) {

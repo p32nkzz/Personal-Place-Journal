@@ -11,8 +11,11 @@ import {
   useDeviceLocation,
   type GooglePlaceResult,
 } from "~/components/map/MapView";
+import { useCategoryPageSize } from "~/components/useCategoryPageSize";
+import { useTagPageSize } from "~/components/useTagPageSize";
 import { GooglePhotoPreview } from "~/components/GooglePhotoPreview";
 import { useMapColors } from "~/components/map/useMapColors";
+import { tagColor } from "~/components/ui";
 import { Alert, Field } from "~/components/ui";
 import { useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
@@ -56,9 +59,9 @@ export function PlaceForm({
   /** Tujuan tombol Batal; boleh fungsi dari nilai form saat ini. */
   cancelHref: string | ((v: PlaceFormValues) => string);
   showFavorite?: boolean;
-  /** Konten foto tinjauan (galeri saat ubah, pemilih berkas saat buat). */
+  /** Konten foto pantauan (galeri saat ubah, pemilih berkas saat buat). */
   photoSlot?: React.ReactNode;
-  /** Memilih foto Google Maps sebagai foto tinjauan (disimpan sebagai link eksternal). */
+  /** Memilih foto Google Maps sebagai foto pantauan (disimpan sebagai link eksternal). */
   onPickGooglePhoto?: (url: string) => void;
   pickedGoogleUrls?: string[];
 }) {
@@ -70,10 +73,33 @@ export function PlaceForm({
   const [resolving, setResolving] = useState(false);
   const [showPhotos, setShowPhotos] = useState(true);
   const reqRef = useRef(0);
+  // Section foto pantauan dapat dilipat; pilihan diingat per perangkat.
+  const [photosCollapsed, setPhotosCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setPhotosCollapsed(localStorage.getItem("ppj.place.form.photosCollapsed") === "1");
+    } catch {
+      // penyimpanan tidak tersedia: tampil terbuka
+    }
+  }, []);
+  const togglePhotos = () =>
+    setPhotosCollapsed((c) => {
+      try {
+        localStorage.setItem("ppj.place.form.photosCollapsed", c ? "0" : "1");
+      } catch {
+        // abaikan
+      }
+      return !c;
+    });
   const { location } = useDeviceLocation(initial.latitude == null);
   const cats = api.categories.listActive.useQuery();
   const mapColors = useMapColors();
   const tags = api.tag.list.useQuery();
+  // Chip kategori & TAG dimuat bertahap (jumlah awal/per muat dari Pengaturan, terpisah untuk keduanya).
+  const catPage = useCategoryPageSize();
+  const tagPage = useTagPageSize();
+  const [catShown, setCatShown] = useState(0);
+  const [tagShown, setTagShown] = useState(0);
 
   // Reset hanya saat nilai awal benar-benar berubah (bukan saat foto di-refetch).
   const initialKey = JSON.stringify(initial);
@@ -133,6 +159,21 @@ export function PlaceForm({
 
   // Kategori nonaktif yang sudah melekat tetap ditampilkan agar tidak hilang diam-diam.
   const selectableCats = cats.data ?? [];
+  // Item terpilih selalu tampil walau di luar jumlah termuat, agar pilihan tidak "hilang".
+  const windowed = <T extends { uid: string }>(items: T[], shown: number, page: number, picked: string[]) => {
+    const limit = Math.max(shown, page);
+    const visible = items.filter((x, i) => i < limit || picked.includes(x.uid));
+    return { visible, hidden: items.length - visible.length };
+  };
+  const catWin = windowed(selectableCats, catShown, catPage, v.categoryUids);
+  const tagWin = windowed(tags.data ?? [], tagShown, tagPage, v.tagUids);
+  const more = (hidden: number, page: number, onMore: () => void) =>
+    hidden > 0 && (
+      <button type="button" className="chip pf-more" onClick={onMore} title={t("place.loadMoreInfo", { n: hidden })}>
+        <Icon name="plus" fixedWidth={false} /> {t("place.loadMore", { n: Math.min(page, hidden) })}
+        <span className="pf-more-n">{t("place.remaining", { n: hidden })}</span>
+      </button>
+    );
 
   const coordInput = (k: "latitude" | "longitude") => (e: React.ChangeEvent<HTMLInputElement>) =>
     set(k, e.target.value === "" || Number.isNaN(Number(e.target.value)) ? null : Number(e.target.value));
@@ -157,17 +198,6 @@ export function PlaceForm({
           <div className="pf-head">
             <h2 className="pf-title"><span className="pf-step">1</span>{t("place.formLocation")}</h2>
             <div className="pf-tools">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={follow}
-                className="switch-btn"
-                title={t("place.followMapHint")}
-                onClick={() => setFollow((f) => !f)}
-              >
-                <span className="switch-track" aria-hidden><span className="switch-thumb" /></span>
-                {t("place.followMap")}
-              </button>
               <button type="button" className="chip" aria-pressed={showPhotos} title={t("map.googlePhotosHint")} onClick={() => setShowPhotos((s) => !s)}>
                 <Icon name="image" /> {t("map.googlePhotos")}
               </button>
@@ -243,17 +273,30 @@ export function PlaceForm({
           <section className="card pf-card">
             <div className="pf-head">
               <h2 className="pf-title"><span className="pf-step">2</span>{t("place.formDetail")}</h2>
-              {showFavorite && (
+              <div className="pf-tools">
                 <button
                   type="button"
-                  className="pf-fav"
-                  aria-pressed={v.isFavorite}
-                  title={t("place.markFavorite")}
-                  onClick={() => set("isFavorite", !v.isFavorite)}
+                  role="switch"
+                  aria-checked={follow}
+                  className="switch-btn"
+                  title={t("place.followMapHint")}
+                  onClick={() => setFollow((f) => !f)}
                 >
-                  <Icon name={v.isFavorite ? "star" : "star-regular"} fixedWidth={false} /> {t("place.favorite")}
+                  <span className="switch-track" aria-hidden><span className="switch-thumb" /></span>
+                  {t("place.followMap")}
                 </button>
-              )}
+                {showFavorite && (
+                  <button
+                    type="button"
+                    className="pf-fav"
+                    aria-pressed={v.isFavorite}
+                    title={t("place.markFavorite")}
+                    onClick={() => set("isFavorite", !v.isFavorite)}
+                  >
+                    <Icon name={v.isFavorite ? "star" : "star-regular"} fixedWidth={false} /> {t("place.favorite")}
+                  </button>
+                )}
+              </div>
             </div>
 
             <Field label={t("common.name")} required htmlFor="name" error={nameError}>
@@ -269,11 +312,13 @@ export function PlaceForm({
             <div className="field">
               <span className="label">{t("common.category")}</span>
               <div className="pf-chips">
-                {selectableCats.map((c) => (
-                  <button type="button" key={c.uid} className="chip" aria-pressed={v.categoryUids.includes(c.uid)} onClick={() => toggle("categoryUids", c.uid)}>
+                {catWin.visible.map((c) => (
+                  <button type="button" key={c.uid} className="cat pick" aria-pressed={v.categoryUids.includes(c.uid)} onClick={() => toggle("categoryUids", c.uid)}>
+                    <Icon name={v.categoryUids.includes(c.uid) ? "circle-check" : "layers"} fixedWidth={false} />
                     {c.name}
                   </button>
                 ))}
+                {more(catWin.hidden, catPage, () => setCatShown(Math.max(catShown, catPage) + catPage))}
                 {!selectableCats.length && <span className="muted t-small">—</span>}
               </div>
               {masterUid && <div className="helper">{t("place.categoryMasterHint")}</div>}
@@ -282,12 +327,20 @@ export function PlaceForm({
             <div className="field">
               <span className="label">{t("nav.tags")}</span>
               <div className="pf-chips">
-                {tags.data?.map((tg) => (
-                  <button type="button" key={tg.uid} className="chip" aria-pressed={v.tagUids.includes(tg.uid)} onClick={() => toggle("tagUids", tg.uid)}>
-                    <span className="tag-dot" style={{ background: tg.color }} />
+                {tagWin.visible.map((tg) => (
+                  <button
+                    type="button"
+                    key={tg.uid}
+                    className="tag pick"
+                    style={{ ["--tc" as string]: tagColor(tg.color) }}
+                    aria-pressed={v.tagUids.includes(tg.uid)}
+                    onClick={() => toggle("tagUids", tg.uid)}
+                  >
+                    {v.tagUids.includes(tg.uid) && <Icon name="circle-check" fixedWidth={false} />}
                     {tg.name}
                   </button>
                 ))}
+                {more(tagWin.hidden, tagPage, () => setTagShown(Math.max(tagShown, tagPage) + tagPage))}
                 {tags.data && !tags.data.length && (
                   <span className="muted t-small">
                     {t("place.noTags")} <Link href="/tags" style={{ color: "var(--color-primary)", fontWeight: 600 }}>{t("tag.manage")}</Link>
@@ -297,14 +350,26 @@ export function PlaceForm({
             </div>
           </section>
 
-          {/* 3 — Foto tinjauan */}
+          {/* 3 — Foto pantauan */}
           {photoSlot && (
             <section className="card pf-card">
-              <div className="pf-head">
+              <div className="pf-head pf-head-collapsible">
                 <h2 className="pf-title"><span className="pf-step">3</span>{t("place.reviewPhotos")}</h2>
                 <span className="pf-badge">{t("common.optional")}</span>
+                <button
+                  type="button"
+                  className="pd-toggle"
+                  aria-expanded={!photosCollapsed}
+                  title={photosCollapsed ? t("common.expand") : t("common.collapse")}
+                  aria-label={photosCollapsed ? t("common.expand") : t("common.collapse")}
+                  onClick={togglePhotos}
+                >
+                  <Icon name={photosCollapsed ? "chevron-down" : "chevron-up"} fixedWidth={false} />
+                </button>
               </div>
-              {photoSlot}
+              <div className="pd-body" hidden={photosCollapsed}>
+                {photoSlot}
+              </div>
             </section>
           )}
         </div>

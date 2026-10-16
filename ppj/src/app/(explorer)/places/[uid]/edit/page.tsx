@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { MyPlacePhotos } from "~/components/MyPlacePhotos";
@@ -13,6 +13,7 @@ export default function EditPlacePage() {
   const { uid } = useParams<{ uid: string }>();
   const { t } = useT();
   const router = useRouter();
+  const fromMap = useSearchParams().get("from") === "map";
   const toast = useToast();
   const errMsg = useErrorMessage();
   const utils = api.useUtils();
@@ -72,7 +73,8 @@ export default function EditPlacePage() {
         submitLabel={t("common.save")}
         busy={update.isPending}
         error={error}
-        cancelHref={`/places/${uid}`}
+        // Dari Peta: Batal kembali ke Peta dengan pop-up tempat ini terbuka; selain itu ke halaman detail.
+        cancelHref={fromMap ? `/?${new URLSearchParams({ my: uid, lat: String(p.latitude), lng: String(p.longitude) })}` : `/places/${uid}`}
         showFavorite
         pickedGoogleUrls={p.photos.map((x) => x.url)}
         onPickGooglePhoto={(url) => addPhotoUrl.mutate({ placeUid: uid, url })}
