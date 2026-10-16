@@ -17,7 +17,7 @@ export const isHttpUrl = (s: string) => {
 };
 
 /**
- * Foto tinjauan sebelum MY PLACE tersimpan: kombinasi berkas unggahan dan link eksternal
+ * Foto pantauan sebelum MY PLACE tersimpan: kombinasi berkas unggahan dan link eksternal
  * (termasuk foto Google Maps yang dipilih). Diproses setelah record dibuat.
  */
 export function PendingPhotoPicker({

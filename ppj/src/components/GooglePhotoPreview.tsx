@@ -23,7 +23,7 @@ export function GooglePhotoPreview({
   lat: number;
   lng: number;
   fallbackName: string;
-  /** Bila diisi, tiap foto punya tombol untuk memilihnya sebagai foto tinjauan. */
+  /** Bila diisi, tiap foto punya tombol untuk memilihnya sebagai foto pantauan. */
   onPick?: (url: string) => void;
   picked?: string[];
 }) {

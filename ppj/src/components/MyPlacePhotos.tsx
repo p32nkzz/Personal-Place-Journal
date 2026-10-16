@@ -3,7 +3,7 @@
 import { PhotoGallery, type GalleryPhoto } from "~/components/PhotoGallery";
 import { api } from "~/trpc/react";
 
-/** Galeri foto tinjauan MY PLACE (upload / URL / utama / caption / hapus). */
+/** Galeri foto pantauan MY PLACE (upload / URL / utama / caption / hapus). */
 export function MyPlacePhotos({
   placeUid,
   photos,
@@ -20,6 +20,8 @@ export function MyPlacePhotos({
   const urlPhoto = api.place.addExternalPhoto.useMutation();
   return (
     <PhotoGallery
+      fancy
+      kind="my"
       photos={photos}
       canEdit
       uploadEndpoint="/api/upload/my-place-photo"

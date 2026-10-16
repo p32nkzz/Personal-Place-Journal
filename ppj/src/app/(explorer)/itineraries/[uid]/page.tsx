@@ -21,6 +21,7 @@ import {
 import { VisitFormModal } from "~/components/VisitFormModal";
 import { useFormat, useT } from "~/lib/i18n";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { VisitContextChip, VisitStatusChip } from "~/components/chips";
 import { Icon } from "~/components/Icon";
 
 const C_PLANNED = "#0077B6";
@@ -147,7 +148,7 @@ export default function ItineraryDetailPage() {
                     </span>
                     {s.note && <span className="t-small" style={{ whiteSpace: "pre-wrap" }}>{s.note}</span>}
                     <div className="row">
-                      {s.visitCount > 0 ? <StatusChip tone="success">{t("itinerary.visitedCount", { n: s.visitCount })}</StatusChip> : <StatusChip tone="info">{t("place.plan")}</StatusChip>}
+                      {s.visitCount > 0 ? <span className="vis vis-visited"><Icon name="map-pin" fixedWidth={false} />{t("itinerary.visitedCount", { n: s.visitCount })}</span> : <VisitStatusChip status="PLAN" />}
                       {!s.place.isActive && <StatusChip tone="neutral">{t("common.inactive")}</StatusChip>}
                     </div>
                     <div className="row">
@@ -183,7 +184,7 @@ export default function ItineraryDetailPage() {
                     <span className="sub">{fmt.dateTime(a.visitedAt)}</span>
                     <div className="row">
                       <Stars value={a.rating} />
-                      <StatusChip tone={a.kind === "PLANNED" ? "info" : "warning"}>{a.kind === "PLANNED" ? t("visit.planned") : t("visit.unexpected")}</StatusChip>
+                      <VisitContextChip context={a.kind === "PLANNED" ? "PLANNED" : "UNEXPECTED"} />
                     </div>
                     {a.note && <span className="t-small" style={{ whiteSpace: "pre-wrap" }}>{a.note}</span>}
                   </div>

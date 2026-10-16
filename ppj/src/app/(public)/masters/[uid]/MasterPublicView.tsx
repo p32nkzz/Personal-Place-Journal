@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { CategoryChip } from "~/components/chips";
 import { MapView } from "~/components/map/MapView";
 import { useMapColors } from "~/components/map/useMapColors";
 import { Alert, EmptyState, Spinner, StatusChip, Stars } from "~/components/ui";
@@ -105,7 +106,7 @@ export function MasterPublicView({
               <dd><Stars value={m.rating.avg} count={m.rating.count} /></dd>
               <dt>{t("common.category")}</dt>
               <dd className="row">
-                {m.categories.length ? m.categories.map((c) => <span key={c.uid} className="cat">{c.name}</span>) : "—"}
+                {m.categories.length ? m.categories.map((c) => <CategoryChip key={c.uid} name={c.name} />) : "—"}
               </dd>
               <dt>{t("common.coordinates")}</dt>
               <dd className="mono">{m.latitude.toFixed(6)}, {m.longitude.toFixed(6)}</dd>

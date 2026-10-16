@@ -109,6 +109,32 @@ export function useFormat() {
           timeZone: TZ,
         }).format(new Date(d));
       },
+      /**
+       * Waktu relatif ("hari ini", "kemarin", "3 hari lalu", "2 minggu lalu", ...) dihitung per HARI KALENDER
+       * pada zona waktu aplikasi aktif — bukan selisih 24 jam — sehingga "kemarin" tepat pada pergantian
+       * tengah malam zona tersebut.
+       */
+      relative: (d: Date | string | null | undefined, now: Date = new Date()) => {
+        if (!d) return "—";
+        const ymd = (x: Date) => {
+          const p = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(x);
+          const g = (t: string) => Number(p.find((q) => q.type === t)?.value);
+          return { y: g("year"), m: g("month"), d: g("day") };
+        };
+        const a = ymd(new Date(d));
+        const b = ymd(now);
+        const days = Math.round((Date.UTC(a.y, a.m - 1, a.d) - Date.UTC(b.y, b.m - 1, b.d)) / 86400000);
+        const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+        const abs = Math.abs(days);
+        if (abs < 7) return rtf.format(days, "day");
+        if (abs < 30) return rtf.format(Math.trunc(days / 7), "week");
+        // Bulan/tahun: selisih bulan kalender (dikurangi 1 bila tanggalnya belum genap sebulan).
+        let months = (a.y - b.y) * 12 + (a.m - b.m);
+        if (months > 0 && a.d < b.d) months -= 1;
+        if (months < 0 && a.d > b.d) months += 1;
+        if (Math.abs(months) < 12) return rtf.format(months || Math.sign(days), "month");
+        return rtf.format(Math.trunc(months / 12), "year");
+      },
       number: (n: number, digits = 1) =>
         new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(n),
     }),

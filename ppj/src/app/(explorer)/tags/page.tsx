@@ -65,7 +65,7 @@ export default function TagsPage() {
         ) : (
           <ul className="list">
             {tags.data.map((x) => (
-              <li key={x.uid} className="list-item">
+              <li key={x.uid} className="list-item tag-row">
                 <TagChip name={x.name} color={x.color} />
                 <span className="grow muted t-small">{t("tag.usage", { n: x.usage })}</span>
                 <button className="btn btn-ghost btn-sm" onClick={() => open({ uid: x.uid, name: x.name, color: x.color })}><Icon name="pen" /> {t("common.edit")}</button>

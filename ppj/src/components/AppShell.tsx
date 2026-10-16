@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Avatar } from "~/components/Avatar";
 import { Icon } from "~/components/Icon";
+import { TableLabels } from "~/components/TableLabels";
 import { ModeSwitchOverlay } from "~/components/ModeSwitchOverlay";
 import { useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
@@ -270,6 +271,7 @@ export function AppShell({
       {switching && <ModeSwitchOverlay to={switching} />}
 
       <main className="shell-main">{children}</main>
+      <TableLabels />
 
       {pathname !== "/" && (
         <footer className="site-footer">
