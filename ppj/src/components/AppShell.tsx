@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { Avatar } from "~/components/Avatar";
 import { Icon } from "~/components/Icon";
 import { TableLabels } from "~/components/TableLabels";
+import { TooltipLayer } from "~/components/Tooltip";
 import { ModeSwitchOverlay } from "~/components/ModeSwitchOverlay";
 import { useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
@@ -272,6 +273,7 @@ export function AppShell({
 
       <main className="shell-main">{children}</main>
       <TableLabels />
+      <TooltipLayer />
 
       {pathname !== "/" && (
         <footer className="site-footer">

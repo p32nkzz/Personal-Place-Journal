@@ -1170,3 +1170,11 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
 .fl-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .fl-seg::-webkit-scrollbar { display: none; }
 @media (max-width: 420px) { .fl-seg button { padding: 0 9px; } .fl-seg button svg { display: none; } }
+
+/* ---------- Tooltip global (ringkas & elegan) ---------- */
+.ui-tip { position: fixed; z-index: 2000; max-width: 260px; padding: 5px 9px; border-radius: 6px; background: rgb(15 23 42 / 0.94); color: #f8fafc; font: 500 11.5px/1.4 var(--font-body); letter-spacing: 0.01em; text-align: center; white-space: pre-line; overflow-wrap: anywhere; pointer-events: none; box-shadow: 0 6px 18px rgb(15 23 42 / 0.25); transform: translate(calc(-50% + var(--tip-shift, 0px)), -100%); animation: ui-tip-in 120ms ease-out; }
+.ui-tip::after { content: ""; position: absolute; left: calc(50% - var(--tip-shift, 0px)); top: 100%; margin-left: -5px; border: 5px solid transparent; border-top-color: rgb(15 23 42 / 0.94); }
+.ui-tip.is-below { transform: translate(calc(-50% + var(--tip-shift, 0px)), 0); }
+.ui-tip.is-below::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: rgb(15 23 42 / 0.94); }
+@keyframes ui-tip-in { from { opacity: 0; margin-top: 3px; } to { opacity: 1; margin-top: 0; } }
+@media (prefers-reduced-motion: reduce) { .ui-tip { animation: none; } }
