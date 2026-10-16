@@ -22,16 +22,16 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
 ];
 
 const PHOTO_KEYS = [
-  { key: "photo.allowed_types", label: "settings.allowedTypes", hint: "settings.allowedTypesHint", type: "text" },
-  { key: "photo.max_size_mb", label: "settings.maxSize", hint: "settings.maxSizeHint", type: "number" },
-  { key: "photo.max_per_visit", label: "settings.maxPerVisit", hint: "settings.maxPerVisitHint", type: "number" },
-  { key: "photo.max_per_my_place", label: "settings.maxPerMyPlace", hint: "settings.maxPerMyPlaceHint", type: "number" },
-  { key: "photo.max_per_master_place", label: "settings.maxPerMaster", hint: "settings.maxPerMasterHint", type: "number" },
+  { key: "photo.allowed_types", def: "jpg,png,webp", label: "settings.allowedTypes", hint: "settings.allowedTypesHint", type: "text" },
+  { key: "photo.max_size_mb", def: "5", label: "settings.maxSize", hint: "settings.maxSizeHint", type: "number" },
+  { key: "photo.max_per_visit", def: "10", label: "settings.maxPerVisit", hint: "settings.maxPerVisitHint", type: "number" },
+  { key: "photo.max_per_my_place", def: "10", label: "settings.maxPerMyPlace", hint: "settings.maxPerMyPlaceHint", type: "number" },
+  { key: "photo.max_per_master_place", def: "20", label: "settings.maxPerMaster", hint: "settings.maxPerMasterHint", type: "number" },
 ] as const;
 
 const AVATAR_KEYS = [
-  { key: "avatar.allowed_types", label: "settings.avatarTypes", hint: "settings.avatarTypesHint", type: "text" },
-  { key: "avatar.max_size_mb", label: "settings.avatarMaxSize", hint: "settings.avatarMaxSizeHint", type: "number" },
+  { key: "avatar.allowed_types", def: "jpg,png,webp", label: "settings.avatarTypes", hint: "settings.avatarTypesHint", type: "text" },
+  { key: "avatar.max_size_mb", def: "5", label: "settings.avatarMaxSize", hint: "settings.avatarMaxSizeHint", type: "number" },
 ] as const;
 
 function Settings() {
@@ -61,7 +61,16 @@ function Settings() {
   );
 }
 
-function PhotoSettings() {
+type KeyDef = { key: string; def: string; label: string; hint: string; type: "text" | "number" };
+
+/** Field angka: tidak boleh negatif (blokir tombol minus/notasi eksponen dan bersihkan hasil tempel). */
+const blockNegative = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === "-" || e.key === "+" || e.key === "e" || e.key === "E") e.preventDefault();
+};
+const cleanNumber = (s: string) => s.replace(/[^0-9.]/g, "");
+
+/** Baris-baris pengaturan numerik/teks sederhana (satu form per key). */
+function KeyRows({ keys }: { keys: readonly KeyDef[] }) {
   const { t } = useT();
   const fmt = useFormat();
   const toast = useToast();
@@ -86,7 +95,7 @@ function PhotoSettings() {
 
   if (isLoading) return <Spinner />;
 
-  const renderRow = (k: { key: string; label: string; hint: string; type: "text" | "number" }) => {
+  const renderRow = (k: KeyDef) => {
         const row = data?.find((d) => d.key === k.key);
         if (!row) return null;
         const dirty = values[k.key] !== row.value;
@@ -104,12 +113,24 @@ function PhotoSettings() {
                 className="input"
                 style={{ width: k.type === "text" ? 180 : 110 }}
                 type={k.type}
-                step={k.type === "number" ? "any" : undefined}
+                min={k.type === "number" ? 0 : undefined}
+                step={k.type === "number" ? (k.key.endsWith("_mb") ? "any" : 1) : undefined}
+                inputMode={k.type === "number" ? "decimal" : undefined}
                 value={values[k.key] ?? ""}
                 aria-label={t(k.label)}
                 aria-invalid={!!errors[k.key]}
-                onChange={(e) => setValues((v) => ({ ...v, [k.key]: e.target.value }))}
+                onKeyDown={k.type === "number" ? blockNegative : undefined}
+                onChange={(e) => setValues((v) => ({ ...v, [k.key]: k.type === "number" ? cleanNumber(e.target.value) : e.target.value }))}
               />
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                title={`${t("settings.resetDefault")}: ${k.def}`}
+                disabled={(values[k.key] ?? "") === k.def}
+                onClick={() => setValues((v) => ({ ...v, [k.key]: k.def }))}
+              >
+                {t("settings.resetColor")}
+              </button>
               <button className="btn btn-primary btn-sm" disabled={update.isPending || !dirty}>
                 <Icon name="save" /> {t("common.save")}
               </button>
@@ -118,12 +139,17 @@ function PhotoSettings() {
         );
   };
 
+  return <>{keys.map(renderRow)}</>;
+}
+
+function PhotoSettings() {
+  const { t } = useT();
   return (
     <div>
       <h2 className="settings-title">{t("settings.groupPhoto")}</h2>
-      {PHOTO_KEYS.map(renderRow)}
+      <KeyRows keys={PHOTO_KEYS} />
       <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupAvatar")}</h2>
-      {AVATAR_KEYS.map(renderRow)}
+      <KeyRows keys={AVATAR_KEYS} />
     </div>
   );
 }
@@ -133,6 +159,18 @@ const COLOR_FIELDS = [
   { prop: "mine", label: "settings.colorMine", glyph: "" },
   { prop: "favorite", label: "settings.colorFavorite", glyph: "★" },
   { prop: "newPin", label: "settings.colorNewPin", glyph: "+" },
+] as const;
+
+const CATEGORY_KEYS = [
+  { key: "category.page_size", def: "4", label: "settings.categoryPageSize", hint: "settings.categoryPageSizeHint", type: "number" },
+] as const;
+
+const VISIT_KEYS = [
+  { key: "visit.page_size", def: "5", label: "settings.visitPageSize", hint: "settings.visitPageSizeHint", type: "number" },
+] as const;
+
+const TAG_KEYS = [
+  { key: "tag.page_size", def: "4", label: "settings.tagPageSize", hint: "settings.tagPageSizeHint", type: "number" },
 ] as const;
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -221,12 +259,14 @@ function MapSettings() {
             type="number"
             min={1}
             max={50}
+            step={1}
             value={size}
             aria-label={t("settings.recentPageSize")}
             aria-invalid={!!sizeError}
-            onChange={(e) => setSize(e.target.value)}
+            onKeyDown={blockNegative}
+            onChange={(e) => setSize(cleanNumber(e.target.value))}
           />
-          <button type="button" className="btn btn-ghost btn-sm" disabled={size === "3"} onClick={() => setSize("3")}>
+          <button type="button" className="btn btn-ghost btn-sm" title={`${t("settings.resetDefault")}: 3`} disabled={size === "3"} onClick={() => setSize("3")}>
             {t("settings.resetColor")}
           </button>
           <button className="btn btn-primary btn-sm" disabled={updateSize.isPending || !sizeDirty}>
@@ -406,6 +446,12 @@ function GeneralSettings() {
           <strong style={{ fontSize: 14 }}>{preview}</strong>
         </div>
       </div>
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupCategory")}</h2>
+      <KeyRows keys={CATEGORY_KEYS} />
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupTag")}</h2>
+      <KeyRows keys={TAG_KEYS} />
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupVisit")}</h2>
+      <KeyRows keys={VISIT_KEYS} />
     </div>
   );
 }

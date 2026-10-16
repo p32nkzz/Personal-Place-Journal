@@ -11,7 +11,7 @@ import { getPhotoRules } from "~/server/lib/settings";
 
 export const runtime = "nodejs";
 
-/** Upload foto tinjauan MY PLACE (multipart): aturan app_settings + hapus EXIF/GPS. */
+/** Upload foto pantauan MY PLACE (multipart): aturan app_settings + hapus EXIF/GPS. */
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user || user.mustChangePassword || user.mode !== "EXPLORER")

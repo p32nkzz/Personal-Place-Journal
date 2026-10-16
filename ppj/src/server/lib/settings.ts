@@ -63,13 +63,13 @@ export function validateSetting(key: string, value: string): string | null {
     case "photo.max_size_mb":
     case "avatar.max_size_mb": {
       const n = Number(value);
-      return Number.isFinite(n) && n > 0 ? null : "SETTING_POSITIVE_NUMBER";
+      return value.trim() !== "" && Number.isFinite(n) && n >= 0 ? null : "SETTING_NON_NEGATIVE_NUMBER";
     }
     case "photo.max_per_visit":
     case "photo.max_per_master_place":
     case "photo.max_per_my_place": {
       const n = Number(value);
-      return Number.isInteger(n) && n >= 1 ? null : "SETTING_POSITIVE_INTEGER";
+      return value.trim() !== "" && Number.isInteger(n) && n >= 0 ? null : "SETTING_NON_NEGATIVE_INTEGER";
     }
     case "app.timezone": {
       try {
@@ -79,6 +79,9 @@ export function validateSetting(key: string, value: string): string | null {
         return "SETTING_TIMEZONE_INVALID";
       }
     }
+    case "category.page_size":
+    case "visit.page_size":
+    case "tag.page_size":
     case "map.recent_page_size": {
       const n = Number(value);
       return Number.isInteger(n) && n >= 1 && n <= 50 ? null : "SETTING_PAGE_SIZE";
@@ -123,6 +126,9 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   ...MAP_COLOR_DEFAULTS,
   "map.recent_page_size": String(RECENT_PAGE_SIZE_DEFAULT),
   "app.timezone": "Asia/Jakarta",
+  "category.page_size": "4",
+  "tag.page_size": "4",
+  "visit.page_size": "5",
   "photo.max_per_my_place": "10",
   "avatar.allowed_types": "jpg,png,webp",
   "avatar.max_size_mb": "5",
@@ -141,6 +147,27 @@ export async function getTimezone() {
     }
   }
   return "Asia/Jakarta";
+}
+
+/** Jumlah kunjungan per halaman pada detail MY PLACE (paging server-side). */
+export async function getVisitPageSize() {
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, "visit.page_size"));
+  const n = Number(row?.value);
+  return Number.isInteger(n) && n >= 1 && n <= 50 ? n : 5;
+}
+
+/** Jumlah TAG yang dimuat awal & per "muat lagi" pada semua filter/pemilih TAG (umum). */
+export async function getTagPageSize() {
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, "tag.page_size"));
+  const n = Number(row?.value);
+  return Number.isInteger(n) && n >= 1 && n <= 50 ? n : 4;
+}
+
+/** Jumlah kategori yang dimuat awal & per "muat lagi" pada semua filter/pemilih kategori (umum). */
+export async function getCategoryPageSize() {
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, "category.page_size"));
+  const n = Number(row?.value);
+  return Number.isInteger(n) && n >= 1 && n <= 50 ? n : 4;
 }
 
 /** Jumlah data awal & per pemuatan pada daftar filter tempat (menu Peta). */

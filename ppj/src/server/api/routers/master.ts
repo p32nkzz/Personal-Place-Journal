@@ -474,7 +474,7 @@ export const masterRouter = createTRPCRouter({
       return { ok: true };
     }),
 
-  /** Foto tinjauan MY PLACE yang mereferensikan MASTER ini (kandidat MASTER PHOTO, P-17/P-18). */
+  /** Foto pantauan MY PLACE yang mereferensikan MASTER ini (kandidat MASTER PHOTO, P-17/P-18). */
   myPlacePhotoCandidates: adminProcedure
     .input(z.object({ masterUid: uidSchema }))
     .query(async ({ ctx, input }) => {

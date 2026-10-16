@@ -196,7 +196,7 @@ export function myPlacePhotoUrl(p: {
     : `/api/files/myplace/${p.uid}`;
 }
 
-/** Foto tinjauan MY PLACE (utama dulu) untuk banyak tempat; id → daftar foto. */
+/** Foto pantauan MY PLACE (utama dulu) untuk banyak tempat; id → daftar foto. */
 export async function myPlacePhotosFor(placeIds: number[]) {
   const map = new Map<
     number,

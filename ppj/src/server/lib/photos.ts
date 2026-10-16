@@ -86,7 +86,7 @@ export async function insertMasterPhoto(p: {
   });
 }
 
-/** Batas jumlah foto tinjauan per MY PLACE (photo.max_per_my_place). */
+/** Batas jumlah foto pantauan per MY PLACE (photo.max_per_my_place). */
 export async function assertMyPlacePhotoCapacity(myPlaceId: number) {
   const rules = await getPhotoRules();
   const [row] = await db

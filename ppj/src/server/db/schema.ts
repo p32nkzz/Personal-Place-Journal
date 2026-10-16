@@ -596,7 +596,7 @@ export const visitPhotos = mysqlTable(
   ],
 );
 
-/** Foto tinjauan (penanda) MY PLACE — opsional, banyak per MY PLACE (ERD 12.22). */
+/** Foto pantauan (penanda) MY PLACE — opsional, banyak per MY PLACE (ERD 12.22). */
 export const myPlacePhotos = mysqlTable(
   "my_place_photos",
   {

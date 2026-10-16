@@ -16,7 +16,7 @@ import {
 } from "~/server/db/schema";
 import { fail, isDuplicateError, notFound } from "~/server/lib/errors";
 import { newUid } from "~/server/lib/ids";
-import { getMapColors, getMapSearchConfig, getPhotoRules, getTimezone, SETTING_DEFAULTS, validateSetting } from "~/server/lib/settings";
+import { getCategoryPageSize, getTagPageSize, getMapColors, getMapSearchConfig, getPhotoRules, getTimezone, SETTING_DEFAULTS, validateSetting } from "~/server/lib/settings";
 import { slugify } from "~/server/lib/slug";
 import { hexColorSchema, longTextSchema, nameSchema } from "~/server/lib/validation";
 
@@ -287,6 +287,12 @@ export const settingsRouter = createTRPCRouter({
   mapColors: publicProcedure.query(() => getMapColors()),
 
   /** Aturan foto aktif (untuk validasi sisi klien; penegakan tetap di server). */
+  /** Jumlah TAG per pemuatan (daftar & form MY PLACE) — TAG milik user, jadi hanya untuk akun aktif. */
+  tagPageSize: activeProcedure.query(async () => ({ pageSize: await getTagPageSize() })),
+
+  /** Jumlah kategori per pemuatan (Peta, daftar & form MY PLACE) — dapat dibaca siapa pun (Guest memakai Peta). */
+  categoryPageSize: publicProcedure.query(async () => ({ pageSize: await getCategoryPageSize() })),
+
   photoRules: activeProcedure.query(() => getPhotoRules()),
 
   list: adminProcedure.query(({ ctx }) =>
@@ -323,7 +329,13 @@ export const settingsRouter = createTRPCRouter({
           description:
             input.key === "map.recent_page_size"
               ? "Jumlah data awal & per muat pada filter tempat (peta)"
-              : input.key === "app.timezone"
+              : input.key === "category.page_size"
+                ? "Jumlah kategori per muat pada filter & pemilih kategori"
+                : input.key === "visit.page_size"
+                  ? "Jumlah kunjungan per halaman pada detail MY PLACE"
+                  : input.key === "tag.page_size"
+                  ? "Jumlah TAG per muat pada filter & pemilih TAG"
+                  : input.key === "app.timezone"
                 ? "Zona waktu default aplikasi (IANA)"
                 : "Warna pin peta",
           updatedBy: ctx.user.id,
