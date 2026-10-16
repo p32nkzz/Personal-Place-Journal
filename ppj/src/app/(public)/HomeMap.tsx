@@ -11,6 +11,7 @@ import {
 import { useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
 import { CategoryMultiSelect } from "~/components/CategoryMultiSelect";
+import { TagMultiSelect } from "~/components/TagMultiSelect";
 import { Icon } from "~/components/Icon";
 import { readableOn } from "~/components/map/colors";
 import { useMapColors } from "~/components/map/useMapColors";
@@ -22,12 +23,15 @@ export function HomeMap({
   viewer,
   initialFreePin = false,
   initialPin = null,
+  initialMy = null,
 }: {
   viewer: Viewer;
   /** Pin bebas langsung aktif (kembali dari form tempat baru). */
   initialFreePin?: boolean;
   /** Pin yang dipasang sejak awal (koordinat dari form tempat baru). */
   initialPin?: { lat: number; lng: number } | null;
+  /** MY PLACE yang langsung dibuka pop-up-nya (kembali dari form ubah). */
+  initialMy?: { uid: string; lat: number; lng: number } | null;
 }) {
   const { t } = useT();
   const explorer = viewer === "EXPLORER";
@@ -46,6 +50,8 @@ export function HomeMap({
   const { recentPageSize } = useMapSearchConfig();
   const [recentCount, setRecentCount] = useState(recentPageSize);
   const [categoryUids, setCategoryUids] = useState<string[]>([]);
+  // Filter TAG hanya untuk Explorer (TAG milik user; berlaku pada Tempat Saya).
+  const [tagUids, setTagUids] = useState<string[]>([]);
   // Filter jenis pin dikendalikan dari legenda di bawah peta.
   const [showMine, setShowMine] = useState(true);
   const [showFav, setShowFav] = useState(true);
@@ -53,27 +59,38 @@ export function HomeMap({
   // Pin bebas default OFF agar peta nyaman digeser tanpa memunculkan pin baru.
   const [freePin, setFreePin] = useState(initialFreePin);
   const [showMaster, setShowMaster] = useState(true);
-  const [sel, setSel] = useState<Selection | null>(initialPin ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng } : null);
-  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(initialPin ? { ...initialPin, zoom: 16 } : null);
+  // Layar sempit: kontrol filter selain pencarian nama dilipat di balik tombol "Filter".
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sel, setSel] = useState<Selection | null>(
+    initialMy ? { kind: "my", uid: initialMy.uid } : initialPin ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng } : null,
+  );
+  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(
+    initialMy ? { lat: initialMy.lat, lng: initialMy.lng, zoom: 16 } : initialPin ? { ...initialPin, zoom: 16 } : null,
+  );
 
   const cats = api.categories.listActive.useQuery();
   const masters = api.master.listMap.useQuery({ categoryUids: categoryUids.length ? categoryUids : undefined });
   const mine = api.place.list.useQuery(undefined, { enabled: explorer });
+  const tags = api.tag.list.useQuery(undefined, { enabled: explorer });
 
   const needle = q.trim().toLowerCase();
   const myItems = useMemo(
     () =>
-      (mine.data ?? []).filter((p) => !categoryUids.length || p.categories.some((c) => categoryUids.includes(c.uid))).filter(
-        (p) => !needle || p.name.toLowerCase().includes(needle) || (p.address ?? "").toLowerCase().includes(needle),
-      ),
-    [mine.data, needle, categoryUids],
+      (mine.data ?? [])
+        .filter((p) => !categoryUids.length || p.categories.some((c) => categoryUids.includes(c.uid)))
+        .filter((p) => !tagUids.length || p.tags.some((x) => tagUids.includes(x.uid)))
+        .filter((p) => !needle || p.name.toLowerCase().includes(needle) || (p.address ?? "").toLowerCase().includes(needle)),
+    [mine.data, needle, categoryUids, tagUids],
   );
   const masterItems = useMemo(
     () =>
-      (masters.data ?? []).filter(
-        (m) => !needle || m.name.toLowerCase().includes(needle) || m.address.toLowerCase().includes(needle),
-      ),
-    [masters.data, needle],
+      // MASTER tidak memiliki TAG: saat filter TAG aktif, hanya Tempat Saya yang ditampilkan.
+      tagUids.length
+        ? []
+        : (masters.data ?? []).filter(
+            (m) => !needle || m.name.toLowerCase().includes(needle) || m.address.toLowerCase().includes(needle),
+          ),
+    [masters.data, needle, tagUids],
   );
 
   const markers: MapMarker[] = useMemo(() => {
@@ -174,7 +191,7 @@ export function HomeMap({
   const matchRest = needle && allMatches.length > matches.length ? notLoaded(allMatches.slice(matches.length)) : "";
 
   return (
-    <div className="map-full">
+    <div className={`map-full${canPin ? " has-gsearch" : ""}${sel ? " has-popup" : ""}`}>
       <MapView
         className="map-box"
         satelliteToggle
@@ -203,10 +220,10 @@ export function HomeMap({
       )}
 
       {/* Kanan atas: pencarian data, kategori, chip jenis tempat */}
-      <div className="map-float map-tr">
+      <div className={`map-float map-tr map-filters${filtersOpen ? " is-open" : ""}`}>
         <div
           className="map-search"
-          style={{ minWidth: 220 }}
+          style={{ width: 300, maxWidth: "100%" }}
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setRecentOpen(false);
           }}
@@ -318,7 +335,19 @@ export function HomeMap({
             </div>
           )}
         </div>
-        <CategoryMultiSelect categories={cats.data ?? []} value={categoryUids} onChange={setCategoryUids} />
+        <button
+          type="button"
+          className="map-filter-toggle"
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((o) => !o)}
+          title={t("map.filters")}
+        >
+          <Icon name="layers" fixedWidth={false} /> {t("map.filters")}
+          {categoryUids.length + tagUids.length > 0 && <span className="cat-dd-badge">{categoryUids.length + tagUids.length}</span>}
+          <Icon name={filtersOpen ? "chevron-up" : "chevron-down"} fixedWidth={false} style={{ fontSize: 10 }} />
+        </button>
+        <CategoryMultiSelect compact categories={cats.data ?? []} value={categoryUids} onChange={setCategoryUids} />
+        {explorer && <TagMultiSelect compact tags={tags.data ?? []} value={tagUids} onChange={setTagUids} />}
         {canPin && (
           <button
             type="button"
@@ -333,10 +362,10 @@ export function HomeMap({
             }}
           >
             <span className="switch-track" aria-hidden><span className="switch-thumb" /></span>
-            <Icon name="pin" /> {t("map.freePin")}
+            {t("map.freePin")}
           </button>
         )}
-        {(masters.isLoading || (explorer && mine.isLoading)) && <Icon name="refresh" spin style={{ color: "var(--color-primary)" }} />}
+        {(masters.isLoading || (explorer && mine.isLoading)) && <Icon name="refresh" spin className="map-filters-spin" />}
       </div>
 
       {/* Popup detail + aksi */}
@@ -364,9 +393,13 @@ export function HomeMap({
               </button>
             </>
           )}
-          {canPin && <span><i style={{ background: C_PIN }} /> {t("map.pin")}</span>}
-          {canPin && freePin && <span className="legend-note">{t("map.clickHint")}</span>}
-          {!location && <span className="legend-note">{t("map.noLocation")}</span>}
+          {canPin && <span className="legend-static"><i style={{ background: C_PIN }} /> {t("map.pin")}</span>}
+          {((canPin && freePin) || !location) && (
+            <span className="legend-note">
+              {canPin && freePin && <span><Icon name="pin" fixedWidth={false} /> {t("map.clickHint")}</span>}
+              {!location && <span><Icon name="circle-info" fixedWidth={false} /> {t("map.noLocation")}</span>}
+            </span>
+          )}
         </div>
       </div>
     </div>

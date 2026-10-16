@@ -5,12 +5,14 @@ import "@fancyapps/ui/dist/fancybox/fancybox.css";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { ActiveChip, CategoryChips, MasterStatusChip, RelationChip, TagList, VisitStatusChip } from "~/components/chips";
+import { ActiveChip, CategoryChips, MasterStatusChip, RelationChip, TagList, VisitContextChip, VisitStatusChip } from "~/components/chips";
 import { Icon } from "~/components/Icon";
 import { googlePhotosFor, nearestPlacePhotos, reverseGeocode, type GooglePhoto, type GooglePlaceResult } from "~/components/map/MapView";
 import { Alert, Spinner, StatusChip, Stars } from "~/components/ui";
+import { ClampText, Coords, InfoRow, ThumbStrip } from "~/components/PlaceInfo";
 import { VisitFormModal } from "~/components/VisitFormModal";
 import { useFormat, useT } from "~/lib/i18n";
+import { useMapColors } from "~/components/map/useMapColors";
 import { api } from "~/trpc/react";
 
 export type Viewer = "GUEST" | "EXPLORER" | "ADMIN";
@@ -25,18 +27,6 @@ export type Selection =
       /** Pin sudah digeser: alamat/ID tempat dari hasil pencarian tidak berlaku lagi. */
       moved?: boolean;
     };
-
-function Header({ label, onClose }: { label: string; onClose: () => void }) {
-  const { t } = useT();
-  return (
-    <div className="row-between">
-      <span className="t-overline muted">{label}</span>
-      <button className="btn btn-ghost btn-sm btn-icon" onClick={onClose} aria-label={t("common.close")}>
-        <Icon name="xmark" />
-      </button>
-    </div>
-  );
-}
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -142,7 +132,7 @@ function GooglePhotosPanel({
 
 /**
  * Foto pada pop-up dikelompokkan dalam tab chip agar pop-up tidak memanjang:
- * foto milik tempat (MASTER / tinjauan) dan foto Google Maps (dimuat saat tab dibuka).
+ * foto milik tempat (MASTER / pantauan) dan foto Google Maps (dimuat saat tab dibuka).
  */
 function PhotoTabs({
   ownLabel,
@@ -180,38 +170,72 @@ function PhotoTabs({
   );
 }
 
+/* ------------------------- Blok tampilan ringkas pop-up ------------------------- */
+
+/** Kepala pop-up: penanda jenis (berwarna), tombol aksi kecil, tutup; judul di bawahnya. */
+function PopHead({
+  kind,
+  color,
+  title,
+  favorite,
+  actions,
+  onClose,
+}: {
+  kind: string;
+  color: string;
+  title?: string;
+  favorite?: boolean;
+  actions?: React.ReactNode;
+  onClose: () => void;
+}) {
+  const { t } = useT();
+  return (
+    <div className="pp-head">
+      <div className="pp-head-top">
+        <span className="pp-kind">
+          <i style={{ background: color }} />
+          {kind}
+        </span>
+        <span className="pp-head-actions">
+          {actions}
+          <button type="button" className="pp-icon-btn" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
+            <Icon name="xmark" fixedWidth={false} />
+          </button>
+        </span>
+      </div>
+      {title && (
+        <h2 className="pp-title">
+          {favorite && <Icon name="star" fixedWidth={false} style={{ color: "#eab308" }} />} {title}
+        </h2>
+      )}
+    </div>
+  );
+}
+
 /** Detail lengkap MASTER PLACE langsung pada peta. */
 export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Viewer; onClose: () => void }) {
   const { t } = useT();
+  const colors = useMapColors();
   const { data: m, isLoading } = api.master.get.useQuery({ uid });
   return (
-    <div className="stack-sm">
-      <Header label="MASTER" onClose={onClose} />
+    <div className="pp">
+      <PopHead kind="MASTER" color={colors.master} title={m?.name} onClose={onClose} />
       {isLoading || !m ? (
         <Spinner />
       ) : (
         <>
-          <h2 className="t-subhead">{m.name}</h2>
-          <div className="row">
+          <div className="pp-meta">
             <MasterStatusChip status={m.status} />
             <Stars value={m.rating.avg} count={m.rating.count} />
           </div>
           <PhotoTabs key={m.uid} ownLabel={t("map.tabMasterPhotos")} photos={m.photos} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} name={m.name} />
-          <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
-            <dt>{t("common.address")}</dt>
-            <dd>{m.address}</dd>
-            {m.description && (
-              <>
-                <dt>{t("common.description")}</dt>
-                <dd style={{ whiteSpace: "pre-wrap" }}>{m.description}</dd>
-              </>
-            )}
-            <dt>{t("common.category")}</dt>
-            <dd><CategoryChips items={m.categories} /></dd>
-            <dt>{t("common.coordinates")}</dt>
-            <dd className="mono">{m.latitude.toFixed(6)}, {m.longitude.toFixed(6)}</dd>
-          </dl>
-          <div className="row">
+          <div className="pp-info">
+            <InfoRow icon="map-pin" label={t("common.address")}>{m.address}</InfoRow>
+            {m.description && <InfoRow icon="circle-info" label={t("common.description")}><ClampText text={m.description} /></InfoRow>}
+            {m.categories.length > 0 && <InfoRow icon="layers" label={t("common.category")}><CategoryChips items={m.categories} /></InfoRow>}
+            <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={m.latitude} lng={m.longitude} placeId={m.googlePlaceId} googleLink /></InfoRow>
+          </div>
+          <div className="pp-actions">
             {viewer === "EXPLORER" && m.status === "ACTIVE" && (
               <Link className="btn btn-primary btn-sm" href={`/places/new?master=${m.uid}&from=map`}>
                 <Icon name="plus" /> {t("map.saveAsMine")}
@@ -227,127 +251,151 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
   );
 }
 
+/** Pager ringkas (sebelumnya/berikutnya + posisi) untuk daftar di dalam pop-up. */
+function MiniPager({ page, pageSize, total, onPage }: { page: number; pageSize: number; total: number; onPage: (n: number) => void }) {
+  const { t } = useT();
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(total, page * pageSize);
+  return (
+    <div className="pp-pager">
+      <span className="pp-pager-info">{t("table.showing", { from, to, total })}</span>
+      <span className="pp-pager-nav">
+        <button type="button" className="pp-icon-btn" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label={t("table.prev")} title={t("table.prev")}>
+          <Icon name="angle-left" fixedWidth={false} />
+        </button>
+        <b>{page}/{pages}</b>
+        <button type="button" className="pp-icon-btn" disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label={t("table.next")} title={t("table.next")}>
+          <Icon name="angle-right" fixedWidth={false} />
+        </button>
+      </span>
+    </div>
+  );
+}
+
 /** Detail lengkap MY PLACE (kunjungan, foto, relasi MASTER) langsung pada peta. */
 export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => void }) {
   const { t } = useT();
   const fmt = useFormat();
   const utils = api.useUtils();
+  const colors = useMapColors();
   const { data: p, isLoading } = api.place.get.useQuery({ uid });
   const [visitOpen, setVisitOpen] = useState(false);
+  const [tab, setTab] = useState<"visits" | "history">("visits");
+  // Kunjungan dipaging di server; ukuran halaman dari Pengaturan (visit.page_size), sama dengan halaman detail.
+  const [visitPage, setVisitPage] = useState(1);
+  const vq = api.place.visits.useQuery({ uid, page: visitPage }, { placeholderData: (prev) => prev });
+  const visitTotal = vq.data?.total ?? p?.visits.length ?? 0;
 
   return (
-    <div className="stack-sm">
-      <Header label={t("nav.myPlaces")} onClose={onClose} />
+    <div className="pp">
+      <PopHead
+        kind={t("nav.myPlaces")}
+        color={p?.isFavorite ? colors.favorite : colors.mine}
+        title={p?.name}
+        favorite={p?.isFavorite}
+        onClose={onClose}
+        actions={
+          p && (
+            <Link className="pp-icon-btn" href={`/places/${p.uid}/edit?from=map`} title={t("common.edit")} aria-label={t("common.edit")}>
+              <Icon name="pen" fixedWidth={false} />
+            </Link>
+          )
+        }
+      />
       {isLoading || !p ? (
         <Spinner />
       ) : (
         <>
-          <div className="row-between" style={{ alignItems: "flex-start", gap: 8 }}>
-            <h2 className="t-subhead" style={{ margin: 0, minWidth: 0 }}>
-              {p.isFavorite && <Icon name="star" style={{ color: "#f59e0b" }} />} {p.name}
-            </h2>
-            <Link
-              className="btn btn-secondary btn-sm btn-icon"
-              style={{ flexShrink: 0, width: 34, minHeight: 34 }}
-              href={`/places/${p.uid}/edit`}
-              title={t("common.edit")}
-              aria-label={t("common.edit")}
-            >
-              <Icon name="pen" />
-            </Link>
-          </div>
-          <div className="row">
+          <div className="pp-meta">
             <VisitStatusChip status={p.visitStatus} />
             <RelationChip status={p.masterRelationStatus} />
             {!p.isActive && <ActiveChip active={false} />}
+            <Stars value={p.rating.avg} count={p.rating.count} />
           </div>
-          <Stars value={p.rating.avg} count={p.rating.count} />
           <PhotoTabs key={p.uid} ownLabel={t("place.reviewPhotos")} photos={p.photos} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} name={p.name} />
-          <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
-            <dt>{t("common.address")}</dt>
-            <dd>{p.address ?? "—"}</dd>
-            {p.description && (
-              <>
-                <dt>{t("common.description")}</dt>
-                <dd style={{ whiteSpace: "pre-wrap" }}>{p.description}</dd>
-              </>
+          <div className="pp-info">
+            <InfoRow icon="map-pin" label={t("common.address")}>{p.address ?? "—"}</InfoRow>
+            {p.description && <InfoRow icon="circle-info" label={t("common.description")}><ClampText text={p.description} /></InfoRow>}
+            {(p.categories.length > 0 || p.tags.length > 0) && (
+              <InfoRow icon="layers" label={`${t("common.category")} / ${t("nav.tags")}`}>
+                <span className="pp-chips">
+                  {p.categories.length > 0 && <CategoryChips items={p.categories} />}
+                  {p.tags.length > 0 && <TagList items={p.tags} />}
+                </span>
+              </InfoRow>
             )}
-            <dt>{t("common.category")}</dt>
-            <dd><CategoryChips items={p.categories} /></dd>
-            {p.tags.length > 0 && (
-              <>
-                <dt>{t("nav.tags")}</dt>
-                <dd><TagList items={p.tags} /></dd>
-              </>
-            )}
-            <dt>{t("common.coordinates")}</dt>
-            <dd className="mono">{p.latitude.toFixed(6)}, {p.longitude.toFixed(6)}</dd>
             {p.master && (
-              <>
-                <dt>MASTER</dt>
-                <dd>
-                  <Link href={`/masters/${p.master.uid}`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{p.master.name}</Link>{" "}
-                  {p.master.status === "INACTIVE" && <StatusChip tone="neutral">{t("master.inactive")}</StatusChip>}
-                </dd>
-              </>
+              <InfoRow icon="link" label="MASTER">
+                <Link href={`/masters/${p.master.uid}`} className="pp-a">{p.master.name}</Link>
+                {p.master.status === "INACTIVE" && <> <StatusChip tone="neutral">{t("master.inactive")}</StatusChip></>}
+              </InfoRow>
             )}
             {p.itineraries.length > 0 && (
-              <>
-                <dt>{t("nav.itineraries")}</dt>
-                <dd>
-                  {p.itineraries.map((i, n) => (
-                    <span key={i.uid}>
-                      {n > 0 && ", "}
-                      <Link href={`/itineraries/${i.uid}`} style={{ color: "var(--color-primary)" }}>{i.name}</Link>
-                    </span>
-                  ))}
-                </dd>
-              </>
+              <InfoRow icon="route" label={t("nav.itineraries")}>
+                {p.itineraries.map((i, n) => (
+                  <span key={i.uid}>
+                    {n > 0 && ", "}
+                    <Link href={`/itineraries/${i.uid}`} className="pp-a">{i.name}</Link>
+                  </span>
+                ))}
+              </InfoRow>
             )}
-          </dl>
+            <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={p.latitude} lng={p.longitude} placeId={p.googlePlaceId} googleLink /></InfoRow>
+          </div>
 
-          <hr className="divider" style={{ margin: "4px 0" }} />
-          <div className="t-overline muted">{t("visit.title")} ({p.visits.length})</div>
-          {!p.visits.length ? (
-            <p className="muted t-small" style={{ margin: 0 }}>{t("visit.empty")}</p>
-          ) : (
-            <ul className="timeline" style={{ gap: 12 }}>
-              {p.visits.map((v) => (
-                <li key={v.uid}>
-                  <div><b>{fmt.dateTime(v.visitedAt)}</b></div>
-                  <div className="row">
-                    <Stars value={v.rating} />
-                    {v.context === "PLANNED" && <StatusChip tone="info">{t("visit.planned")}</StatusChip>}
-                    {v.context === "UNEXPECTED" && <StatusChip tone="warning">{t("visit.unexpected")}</StatusChip>}
-                  </div>
-                  {v.note && <div className="t-small" style={{ whiteSpace: "pre-wrap" }}>{v.note}</div>}
-                  {v.photos.length > 0 && <div style={{ marginTop: 6 }}><Photos photos={v.photos} alt={p.name} /></div>}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {p.history.length > 0 && (
-            <>
-              <div className="t-overline muted">{t("relation.history")}</div>
-              <ul className="timeline" style={{ gap: 8 }}>
+          {/* Kunjungan & riwayat dalam tab agar pop-up tidak memanjang */}
+          <div className="pp-section">
+            <div className="mini-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={tab === "visits"} className="mini-tab" onClick={() => setTab("visits")}>
+                <Icon name="calendar" fixedWidth={false} /> {t("visit.title")} <span className="mini-tab-n">{visitTotal}</span>
+              </button>
+              {p.history.length > 0 && (
+                <button type="button" role="tab" aria-selected={tab === "history"} className="mini-tab" onClick={() => setTab("history")}>
+                  <Icon name="history" fixedWidth={false} /> {t("relation.history")} <span className="mini-tab-n">{p.history.length}</span>
+                </button>
+              )}
+            </div>
+            {tab === "visits" ? (
+              !visitTotal ? (
+                <p className="muted t-small" style={{ margin: 0 }}>{t("visit.empty")}</p>
+              ) : (
+                <ul className="pp-visits pp-timeline">
+                  {(vq.data?.rows ?? []).map((v, i) => (
+                    <li key={v.uid} className={`pp-tl-${v.context.toLowerCase()}${i === 0 && (vq.data?.page ?? 1) === 1 ? " is-latest" : ""}`}>
+                      <div className="pp-visit-top">
+                        <b>{fmt.dateTime(v.visitedAt)}</b>
+                        <Stars value={v.rating} />
+                        {v.context !== "STANDALONE" && <VisitContextChip context={v.context} />}
+                      </div>
+                      {v.note && <div className="pp-note">{v.note}</div>}
+                      <ThumbStrip photos={v.photos} />
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : (
+              <ul className="pp-history">
                 {p.history.map((h) => (
                   <li key={h.uid}>
                     <b>{t(`history.${h.action}`)}</b> <span className="muted t-caption">{fmt.dateTime(h.performedAt)}</span>
-                    {h.reason && <div className="t-small">{h.reason}</div>}
+                    {h.reason && <div className="pp-note">{h.reason}</div>}
                   </li>
                 ))}
               </ul>
-            </>
-          )}
+            )}
+            {tab === "visits" && vq.data && vq.data.total > vq.data.pageSize && (
+              <MiniPager page={vq.data.page} pageSize={vq.data.pageSize} total={vq.data.total} onPage={setVisitPage} />
+            )}
+          </div>
 
-          <div className="row" style={{ marginTop: 4 }}>
+          <div className="pp-actions">
             {p.isActive && (
               <button className="btn btn-primary btn-sm" onClick={() => setVisitOpen(true)}>
                 <Icon name="plus" /> {t("visit.add")}
               </button>
             )}
-            <Link className="btn btn-secondary btn-sm" href={`/places/${p.uid}`}>
+            <Link className="btn btn-secondary btn-sm" href={`/places/${p.uid}?from=map`}>
               <Icon name="circle-info" /> {t("map.viewDetail")}
             </Link>
           </div>
@@ -358,6 +406,7 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
               onClose={() => setVisitOpen(false)}
               onSaved={() => {
                 void utils.place.get.invalidate({ uid });
+                void utils.place.visits.invalidate({ uid });
                 void utils.place.list.invalidate();
               }}
             />
@@ -387,6 +436,7 @@ export function PinPopup({
   onClose: () => void;
 }) {
   const { t } = useT();
+  const colors = useMapColors();
   const [geo, setGeo] = useState<{ address: string; placeId: string } | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "failed">("idle");
   const [nearPhotos, setNearPhotos] = useState<{ name: string; distance: number; photos: GooglePhoto[] } | null>(null);
@@ -435,8 +485,8 @@ export function PinPopup({
   });
 
   return (
-    <div className="stack-sm">
-      <Header label={t("map.pin")} onClose={onClose} />
+    <div className="pp">
+      <PopHead kind={t("map.pin")} color={colors.newPin} onClose={onClose} />
       {fromSearch && !!sel.google?.photos?.length && (
         <div className="stack-sm">
           <Photos
@@ -492,7 +542,7 @@ export function PinPopup({
           <Icon name="pin" fixedWidth={false} /> {t("map.dragHint")}
         </p>
       )}
-      <div className="row">
+      <div className="pp-actions">
         {viewer === "EXPLORER" && (
           <Link className="btn btn-primary btn-sm" href={`/places/new?${params}&from=map`}>
             <Icon name="plus" /> {t("map.addAsMine")}
