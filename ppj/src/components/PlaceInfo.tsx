@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Icon } from "~/components/Icon";
 import { Modal } from "~/components/ui";
@@ -22,20 +22,45 @@ export function InfoRow({ icon, label, children }: { icon: React.ComponentProps<
   );
 }
 
-/** Deskripsi dipotong 3 baris dengan tombol "selengkapnya". */
-export function ClampText({ text }: { text: string }) {
+/** Deskripsi sebagai kutipan (blockquote) miring, dipotong 2 baris (`inline`: 1 baris, tombol di kanan teks; `side`: tetap 2 baris, tombol di kanan teks); "selengkapnya" hanya muncul bila teks benar-benar terpotong. */
+export function DescQuote({ text, inline, side }: { text: string; inline?: boolean; side?: boolean }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
-  const long = text.length > 160 || text.split("\n").length > 3;
+  const [overflow, setOverflow] = useState(false);
+  const ref = useRef<HTMLQuoteElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      // Saat terbuka tetap ingat bahwa teks panjang (jangan menyembunyikan tombol "lebih sedikit").
+      if (!open) setOverflow(el.scrollHeight > el.clientHeight + 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, open]);
+
   return (
-    <>
-      <div className={open ? "pp-desc" : "pp-desc is-clamped"}>{text}</div>
-      {long && (
-        <button type="button" className="pp-link-btn" onClick={() => setOpen((o) => !o)}>
+    <div className={`pp-quote-wrap${inline ? " is-inline" : ""}${side ? " is-side" : ""}`}>
+      <blockquote ref={ref} className={open ? "pp-quote" : "pp-quote is-clamped"}>{text}</blockquote>
+      {(overflow || open) && (
+        <button
+          type="button"
+          className="pp-link-btn"
+          aria-expanded={open}
+          onClick={(e) => {
+            // Dipakai di dalam baris yang berupa tautan: jangan ikut membuka halaman detail.
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+        >
           {open ? t("map.readLess") : t("map.readMore")}
         </button>
       )}
-    </>
+    </div>
   );
 }
 

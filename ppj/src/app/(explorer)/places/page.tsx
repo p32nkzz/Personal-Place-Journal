@@ -8,6 +8,7 @@ import { MultiSelect } from "~/components/MultiSelect";
 import { TagMultiSelect } from "~/components/TagMultiSelect";
 import { PlaceDeleteDialog } from "~/components/PlaceDeleteDialog";
 import { PlaceThumb } from "~/components/PlaceThumb";
+import { DescQuote } from "~/components/PlaceInfo";
 import { ActiveChip, CategoryChips, RelationChip, TagList, VisitStatusChip } from "~/components/chips";
 import { Icon } from "~/components/Icon";
 import { ConfirmDialog, EmptyState, Pagination, SearchInput, Spinner, Stars, useErrorMessage, useToast } from "~/components/ui";
@@ -158,6 +159,7 @@ function Places() {
                       {!p.isActive && <ActiveChip active={false} />}
                     </div>
                     <span className="sub">{p.address ?? "—"}</span>
+                    {p.description && <DescQuote text={p.description} inline />}
                     <div className="row">
                       <VisitStatusChip status={p.visitStatus} />
                       <RelationChip status={p.masterRelationStatus} />

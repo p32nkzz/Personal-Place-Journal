@@ -252,6 +252,7 @@ export const masterRouter = createTRPCRouter({
           uid: r.uid,
           name: r.name,
           address: r.address,
+          description: r.description,
           status: statusOf(r),
           categories: cats.get(r.id) ?? [],
           rating: ratings.get(r.id) ?? { avg: null, count: 0 },

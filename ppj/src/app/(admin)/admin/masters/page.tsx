@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { CategoryMultiSelect } from "~/components/CategoryMultiSelect";
 import { CategoryChips } from "~/components/chips";
 import { Icon, type IconName } from "~/components/Icon";
+import { DescQuote } from "~/components/PlaceInfo";
 import { PlaceThumb } from "~/components/PlaceThumb";
 import {
   Alert,
@@ -126,6 +127,7 @@ function Masters() {
                     )}
                     <span className="title ms-title">{m.name}</span>
                     {m.address && <span className="sub">{m.address}</span>}
+                    {m.description && <DescQuote text={m.description} inline />}
                     {/* Mobile: rating lalu jumlah MY Place terhubung di bawahnya */}
                     <div className="ms-rate ms-rate-m">
                       <span className="pl-rating-m" title={m.rating.avg != null ? `${m.rating.avg.toFixed(1)} / 5` : t("common.noRating")}>

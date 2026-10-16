@@ -191,6 +191,7 @@ async function queryPlaces(
       uid: r.uid,
       name: r.name,
       address: r.address,
+      description: r.description,
       latitude: r.latitude,
       longitude: r.longitude,
       masterRelationStatus: r.masterRelationStatus,

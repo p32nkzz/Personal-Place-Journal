@@ -16,7 +16,7 @@ import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
 import { MapView } from "~/components/map/MapView";
 import { useMapColors } from "~/components/map/useMapColors";
 import { MyPlacePhotos } from "~/components/MyPlacePhotos";
-import { ClampText, Coords, InfoRow } from "~/components/PlaceInfo";
+import { Coords, DescQuote, InfoRow } from "~/components/PlaceInfo";
 import { PlaceDeleteDialog } from "~/components/PlaceDeleteDialog";
 import { PlaceThumb } from "~/components/PlaceThumb";
 import { PhotoGallery } from "~/components/PhotoGallery";
@@ -166,6 +166,7 @@ export default function PlaceDetailPage() {
                 <Icon name="map-pin" fixedWidth={false} /> {p.address}
               </div>
             )}
+            {p.description && <DescQuote text={p.description} side />}
             <div className="pd-meta">
               <VisitStatusChip status={p.visitStatus} />
               <RelationChip status={p.masterRelationStatus} />
@@ -178,9 +179,9 @@ export default function PlaceDetailPage() {
               <Icon name="pen" /> {t("common.edit")}
             </Link>
             {p.isActive ? (
-              <button className="btn btn-secondary btn-sm" onClick={() => setConfirm("inactive")}><Icon name="eye-slash" /> {t("place.deactivate")}</button>
+              <button className="btn btn-sm btn-tone btn-tone-off" onClick={() => setConfirm("inactive")}><Icon name="eye-slash" /> {t("place.deactivate")}</button>
             ) : (
-              <button className="btn btn-secondary btn-sm" onClick={() => setConfirm("active")}><Icon name="eye" /> {t("place.activate")}</button>
+              <button className="btn btn-sm btn-tone btn-tone-on" onClick={() => setConfirm("active")}><Icon name="eye" /> {t("place.activate")}</button>
             )}
           </div>
         </div>
@@ -313,11 +314,6 @@ export default function PlaceDetailPage() {
               <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: p.isFavorite ? mapColors.favorite : mapColors.mine, glyph: p.isFavorite ? "★" : undefined, title: p.name }]} fit />
             </div>
             <div className="pp-info">
-              {p.description && <InfoRow icon="circle-info" label={t("common.description")}><ClampText text={p.description} /></InfoRow>}
-              <InfoRow icon="layers" label={t("common.category")}>
-                <CategoryChips items={p.categories} />
-                {p.master && <div className="helper" style={{ marginTop: 2 }}>{t("place.categoryFromMaster")}</div>}
-              </InfoRow>
               <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={p.latitude} lng={p.longitude} placeId={p.googlePlaceId} googleLink streetView name={p.name} /></InfoRow>
               {p.itineraries.length > 0 && (
                 <InfoRow icon="route" label={t("nav.itineraries")}>

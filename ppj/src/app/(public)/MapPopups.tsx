@@ -9,7 +9,7 @@ import { ActiveChip, CategoryChips, MasterStatusChip, RelationChip, TagList, Vis
 import { Icon } from "~/components/Icon";
 import { googlePhotosFor, nearestPlacePhotos, reverseGeocode, type GooglePhoto, type GooglePlaceResult } from "~/components/map/MapView";
 import { Alert, Spinner, StatusChip, Stars } from "~/components/ui";
-import { ClampText, Coords, InfoRow, ThumbStrip } from "~/components/PlaceInfo";
+import { Coords, DescQuote, InfoRow, ThumbStrip } from "~/components/PlaceInfo";
 import { VisitFormModal } from "~/components/VisitFormModal";
 import { useFormat, useT } from "~/lib/i18n";
 import { useMapColors } from "~/components/map/useMapColors";
@@ -230,9 +230,9 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
           </div>
           <PhotoTabs key={m.uid} ownLabel={t("map.tabMasterPhotos")} photos={m.photos} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} name={m.name} />
           <div className="pp-info">
-            <InfoRow icon="map-pin" label={t("common.address")}>{m.address}</InfoRow>
-            {m.description && <InfoRow icon="circle-info" label={t("common.description")}><ClampText text={m.description} /></InfoRow>}
             {m.categories.length > 0 && <InfoRow icon="layers" label={t("common.category")}><CategoryChips items={m.categories} /></InfoRow>}
+            <InfoRow icon="map-pin" label={t("common.address")}>{m.address}</InfoRow>
+            {m.description && <DescQuote text={m.description} />}
             <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={m.latitude} lng={m.longitude} placeId={m.googlePlaceId} googleLink streetView name={m.name} /></InfoRow>
           </div>
           <div className="pp-actions">
@@ -315,8 +315,6 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
           </div>
           <PhotoTabs key={p.uid} ownLabel={t("place.reviewPhotos")} photos={p.photos} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} name={p.name} />
           <div className="pp-info">
-            <InfoRow icon="map-pin" label={t("common.address")}>{p.address ?? "—"}</InfoRow>
-            {p.description && <InfoRow icon="circle-info" label={t("common.description")}><ClampText text={p.description} /></InfoRow>}
             {(p.categories.length > 0 || p.tags.length > 0) && (
               <InfoRow icon="layers" label={`${t("common.category")} / ${t("nav.tags")}`}>
                 <span className="pp-chips">
@@ -325,6 +323,8 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
                 </span>
               </InfoRow>
             )}
+            <InfoRow icon="map-pin" label={t("common.address")}>{p.address ?? "—"}</InfoRow>
+            {p.description && <DescQuote text={p.description} />}
             {p.master && (
               <InfoRow icon="link" label="MASTER">
                 <Link href={`/masters/${p.master.uid}`} className="pp-a">{p.master.name}</Link>

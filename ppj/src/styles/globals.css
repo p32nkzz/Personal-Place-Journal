@@ -1459,3 +1459,24 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
   .db-kpis > * { grid-column: span 2; }
   .db-kpis > :nth-child(n + 4) { grid-column: span 3; }
 }
+
+/* Deskripsi pada pop-up peta: kutipan miring, 2 baris + "selengkapnya" */
+.pp-quote-wrap { margin: 3px 0; }
+.pp-quote { margin: 0; padding: 0 0 0 10px; border-left: 3px solid var(--color-tertiary); background: linear-gradient(90deg, var(--color-tint), transparent 85%); border-radius: 0 6px 6px 0; color: var(--color-text-muted); font-style: italic; font-size: 11.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pp-quote.is-clamped { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pp-quote-wrap .pp-link-btn { margin: 2px 0 0 13px; }
+
+/* Tombol aktif/nonaktif bernada sama dengan ikon di daftar (amber = nonaktifkan, hijau = aktifkan) */
+.btn.btn-tone { border: 1px solid; font-weight: 600; transition: filter 120ms ease, transform 120ms ease; }
+.btn.btn-tone:hover:not(:disabled) { filter: brightness(0.96); transform: translateY(-1px); }
+.btn.btn-tone-off { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+.btn.btn-tone-on { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+
+/* Deskripsi pada daftar: 1 baris, tombol "selengkapnya" di kanan teks */
+.pp-quote-wrap.is-inline { display: flex; align-items: flex-start; gap: 8px; margin: 0; min-width: 0; }
+.pp-quote-wrap.is-inline .pp-quote { flex: 1; min-width: 0; font-size: 11px; line-height: 1.4; }
+.pp-quote-wrap.is-inline .pp-quote.is-clamped { -webkit-line-clamp: 1; }
+.pp-quote-wrap.is-inline .pp-link-btn { flex-shrink: 0; margin: 0; font-size: 11px; line-height: 1.4; white-space: nowrap; }
+.pp-quote-wrap.is-side { display: flex; align-items: flex-end; gap: 8px; min-width: 0; }
+.pp-quote-wrap.is-side .pp-quote { flex: 1; min-width: 0; }
+.pp-quote-wrap.is-side .pp-link-btn { flex-shrink: 0; margin: 0; white-space: nowrap; }
