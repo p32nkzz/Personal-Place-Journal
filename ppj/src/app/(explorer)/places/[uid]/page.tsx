@@ -343,7 +343,7 @@ export default function PlaceDetailPage() {
               {p.master ? (
                 <div className="t-small">
                   {t("relation.referencing")}:{" "}
-                  <Link href={`/masters/${p.master.uid}`} className="pp-a">{p.master.name}</Link>{" "}
+                  <Link href={`/masters/${p.master.uid}?${new URLSearchParams({ from: "place", place: p.uid })}`} className="pp-a">{p.master.name}</Link>{" "}
                   {p.master.status === "INACTIVE" && <StatusChip tone="neutral">{t("master.inactive")}</StatusChip>}
                 </div>
               ) : (

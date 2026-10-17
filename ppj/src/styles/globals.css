@@ -1816,3 +1816,9 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
 .pl-row.is-inactive a.list-item:hover, .pl-row.is-inactive a.list-item:focus-visible { background: transparent; }
 .pl-row.is-inactive:hover .pl-thumb-cell { opacity: 1; }
 .pl-row.is-inactive .pl-thumb-cell { opacity: 0.85; }
+
+/* ---------- Detail MASTER publik ---------- */
+.mp-kind { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 7px; border-radius: 999px; background: var(--color-background); border: 1px solid var(--color-border); font: 700 10px/1.6 var(--font-body); letter-spacing: 0.06em; color: var(--color-text-muted); }
+.mp-kind i { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.5px rgb(15 23 42 / 0.15); }
+.mp-tabs { margin-bottom: 2px; }
+.mp-empty { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 120px; border: 1px dashed var(--color-border); border-radius: 12px; color: var(--color-text-subtle); font-size: 13px; }

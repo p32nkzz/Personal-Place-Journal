@@ -242,7 +242,7 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
                 <Icon name="plus" /> {t("map.saveAsMine")}
               </Link>
             )}
-            <Link className="btn btn-secondary btn-sm" href={viewer === "ADMIN" ? `/admin/masters/${m.uid}?from=map` : `/masters/${m.uid}`}>
+            <Link className="btn btn-secondary btn-sm" href={viewer === "ADMIN" ? `/admin/masters/${m.uid}?from=map` : `/masters/${m.uid}?from=map`}>
               <Icon name="circle-info" /> {t("map.viewDetail")}
             </Link>
           </div>
@@ -377,7 +377,7 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
             {p.description && <DescQuote text={p.description} />}
             {p.master && (
               <InfoRow icon="link" label="MASTER">
-                <Link href={`/masters/${p.master.uid}`} className="pp-a">{p.master.name}</Link>
+                <Link href={`/masters/${p.master.uid}?${new URLSearchParams({ from: "map-place", place: p.uid, lat: String(p.latitude), lng: String(p.longitude) })}`} className="pp-a">{p.master.name}</Link>
                 {p.master.status === "INACTIVE" && <> <StatusChip tone="neutral">{t("master.inactive")}</StatusChip></>}
               </InfoRow>
             )}
