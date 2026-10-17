@@ -16,7 +16,7 @@ import {
 } from "~/server/db/schema";
 import { fail, isDuplicateError, notFound } from "~/server/lib/errors";
 import { newUid } from "~/server/lib/ids";
-import { getMapColors, getMapSearchConfig, getPhotoRules, SETTING_DEFAULTS, validateSetting } from "~/server/lib/settings";
+import { getAvatarRules, getCategoryPageSize, getTagPageSize, getMapColors, getMapSearchConfig, getPhotoRules, getTimezone, SETTING_DEFAULTS, validateSetting } from "~/server/lib/settings";
 import { slugify } from "~/server/lib/slug";
 import { hexColorSchema, longTextSchema, nameSchema } from "~/server/lib/validation";
 
@@ -277,6 +277,9 @@ export const colorsRouter = createTRPCRouter({
 });
 
 export const settingsRouter = createTRPCRouter({
+  /** Zona waktu default aplikasi — dapat dibaca siapa pun. */
+  timezone: publicProcedure.query(async () => ({ timezone: await getTimezone() })),
+
   /** Konfigurasi daftar filter tempat pada peta — dapat dibaca siapa pun. */
   mapSearch: publicProcedure.query(() => getMapSearchConfig()),
 
@@ -284,11 +287,25 @@ export const settingsRouter = createTRPCRouter({
   mapColors: publicProcedure.query(() => getMapColors()),
 
   /** Aturan foto aktif (untuk validasi sisi klien; penegakan tetap di server). */
-  photoRules: activeProcedure.query(() => getPhotoRules()),
+  /** Jumlah TAG per pemuatan (daftar & form MY PLACE) — TAG milik user, jadi hanya untuk akun aktif. */
+  tagPageSize: activeProcedure.query(async () => ({ pageSize: await getTagPageSize() })),
 
-  list: adminProcedure.query(({ ctx }) =>
-    ctx.db.select().from(appSettings).orderBy(asc(appSettings.key)),
-  ),
+  /** Jumlah kategori per pemuatan (Peta, daftar & form MY PLACE) — dapat dibaca siapa pun (Guest memakai Peta). */
+  categoryPageSize: publicProcedure.query(async () => ({ pageSize: await getCategoryPageSize() })),
+
+  photoRules: activeProcedure.query(() => getPhotoRules()),
+  /** Aturan avatar (format & ukuran) untuk validasi di sisi klien sebelum unggah. */
+  avatarRules: activeProcedure.query(() => getAvatarRules()),
+
+  list: adminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db.select().from(appSettings).orderBy(asc(appSettings.key));
+    // Kunci bawaan yang belum pernah disimpan tetap tampil (memakai nilai bawaan); barisnya dibuat saat pertama diubah.
+    const have = new Set(rows.map((r) => r.key));
+    const virtual = Object.entries(SETTING_DEFAULTS)
+      .filter(([k]) => !have.has(k))
+      .map(([key, value]) => ({ ...rows[0]!, id: 0, uid: `default:${key}`, key, value, description: null, updatedBy: null, updatedAt: null as Date | null }));
+    return [...rows, ...(rows.length ? virtual : [])].sort((a, b) => a.key.localeCompare(b.key));
+  }),
 
   /** TX-16 — ubah nilai aturan; key tidak dapat ditambah/dihapus. */
   update: adminProcedure
@@ -297,7 +314,7 @@ export const settingsRouter = createTRPCRouter({
       const err = validateSetting(input.key, input.value);
       if (err) fail(err);
       const value =
-        input.key === "photo.allowed_types"
+        input.key === "photo.allowed_types" || input.key === "avatar.allowed_types"
           ? input.value
               .split(",")
               .map((s) => s.trim().toLowerCase())
@@ -317,7 +334,20 @@ export const settingsRouter = createTRPCRouter({
           uid: newUid(),
           key: input.key,
           value: normalized,
-          description: input.key === "map.recent_page_size" ? "Jumlah data awal & per muat pada filter tempat (peta)" : "Warna pin peta",
+          description:
+            input.key === "map.default_zoom"
+              ? "Zoom bawaan peta (1-20)"
+              : input.key === "map.recent_page_size"
+              ? "Jumlah data awal & per muat pada filter tempat (peta)"
+              : input.key === "category.page_size"
+                ? "Jumlah kategori per muat pada filter & pemilih kategori"
+                : input.key === "visit.page_size"
+                  ? "Jumlah kunjungan per halaman pada detail MY PLACE"
+                  : input.key === "tag.page_size"
+                  ? "Jumlah TAG per muat pada filter & pemilih TAG"
+                  : input.key === "app.timezone"
+                ? "Zona waktu default aplikasi (IANA)"
+                : "Warna pin peta",
           updatedBy: ctx.user.id,
         });
       }

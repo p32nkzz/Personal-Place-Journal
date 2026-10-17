@@ -23,6 +23,7 @@ import {
   masterPlaceCategories,
   masterPlacePhotos,
   masterPlaces,
+  myPlacePhotos,
   myPlaces,
   visitPhotos,
   visits,
@@ -40,6 +41,7 @@ import {
   categoriesForMasters,
   masterPhotoUrl,
   masterRatings,
+  myPlacePhotoUrl,
   primaryMasterPhotos,
   visitPhotoUrl,
 } from "~/server/lib/queries";
@@ -112,6 +114,7 @@ export const masterRouter = createTRPCRouter({
         rating: ratings.get(r.id) ?? { avg: null, count: 0 },
         photoUrl: photos.get(r.id) ?? null,
         createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
       }));
     }),
 
@@ -184,7 +187,8 @@ export const masterRouter = createTRPCRouter({
       z.object({
         q: z.string().trim().max(100).optional(),
         status: z.enum(["ALL", "ACTIVE", "INACTIVE", "DELETED"]).default("ALL"),
-        sort: z.enum(["name", "createdAt", "updatedAt"]).default("createdAt"),
+        categoryUids: z.array(uidSchema).max(100).optional(),
+        sort: z.enum(["name", "createdAt", "updatedAt"]).default("updatedAt"),
         order: z.enum(["asc", "desc"]).default("desc"),
         page: z.number().int().min(1).default(1),
         limit: z.number().int().min(1).max(100).default(10),
@@ -200,6 +204,11 @@ export const masterRouter = createTRPCRouter({
       if (input.status === "INACTIVE")
         conds.push(eq(masterPlaces.isActive, false), isNull(masterPlaces.deletedAt));
       if (input.status === "DELETED") conds.push(isNotNull(masterPlaces.deletedAt));
+      if (input.categoryUids?.length)
+        // Pilihan ganda kategori: MASTER yang memiliki salah satu kategori terpilih.
+        conds.push(
+          sql`${masterPlaces.id} in (select mpc.master_place_id from master_place_categories mpc inner join categories c on c.id = mpc.category_id where c.uid in (${sql.join(input.categoryUids.map((u) => sql`${u}`), sql`, `)}))`,
+        );
       const where = conds.length ? and(...conds) : undefined;
       const col = masterPlaces[input.sort];
       const [totalRow] = await ctx.db
@@ -214,7 +223,7 @@ export const masterRouter = createTRPCRouter({
         .limit(input.limit)
         .offset((input.page - 1) * input.limit);
       const ids = rows.map((r) => r.id);
-      const [ratings, cats, refCounts] = await Promise.all([
+      const [ratings, cats, refCounts, photoRows] = await Promise.all([
         masterRatings(ids),
         categoriesForMasters(ids),
         ids.length
@@ -227,6 +236,14 @@ export const masterRouter = createTRPCRouter({
               .where(inArray(myPlaces.masterPlaceId, ids))
               .groupBy(myPlaces.masterPlaceId)
           : Promise.resolve([]),
+        // Foto MASTER untuk thumbnail & pratinjau di daftar (utama dulu).
+        ids.length
+          ? ctx.db
+              .select()
+              .from(masterPlacePhotos)
+              .where(inArray(masterPlacePhotos.masterPlaceId, ids))
+              .orderBy(desc(masterPlacePhotos.isPrimary), asc(masterPlacePhotos.sortOrder), asc(masterPlacePhotos.id))
+          : Promise.resolve([]),
       ]);
       const refMap = new Map(refCounts.map((r) => [r.id, Number(r.n)]));
       return {
@@ -235,11 +252,18 @@ export const masterRouter = createTRPCRouter({
           uid: r.uid,
           name: r.name,
           address: r.address,
+          description: r.description,
           status: statusOf(r),
           categories: cats.get(r.id) ?? [],
           rating: ratings.get(r.id) ?? { avg: null, count: 0 },
           referencedBy: refMap.get(r.id) ?? 0,
+          latitude: r.latitude,
+          longitude: r.longitude,
           createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+          photos: photoRows
+            .filter((ph) => ph.masterPlaceId === r.id)
+            .map((ph) => ({ uid: ph.uid, url: masterPhotoUrl(ph), caption: ph.caption, isPrimary: ph.isPrimary })),
         })),
       };
     }),
@@ -467,6 +491,79 @@ export const masterRouter = createTRPCRouter({
         caption: src.caption,
         originType: "VISIT",
         sourceVisitPhotoId: src.id,
+      });
+      return { ok: true };
+    }),
+
+  /** Foto pantauan MY PLACE yang mereferensikan MASTER ini (kandidat MASTER PHOTO, P-17/P-18). */
+  myPlacePhotoCandidates: adminProcedure
+    .input(z.object({ masterUid: uidSchema }))
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.db
+        .select({
+          uid: myPlacePhotos.uid,
+          storageType: myPlacePhotos.storageType,
+          externalUrl: myPlacePhotos.externalUrl,
+          caption: myPlacePhotos.caption,
+          placeName: myPlaces.name,
+          createdAt: myPlacePhotos.createdAt,
+        })
+        .from(myPlacePhotos)
+        .innerJoin(myPlaces, eq(myPlaces.id, myPlacePhotos.myPlaceId))
+        .innerJoin(masterPlaces, eq(masterPlaces.id, myPlaces.masterPlaceId))
+        .where(
+          and(
+            eq(masterPlaces.uid, input.masterUid),
+            sql`${myPlaces.userId} in (select id from users where deleted_at is null)`,
+          ),
+        )
+        .orderBy(desc(myPlacePhotos.createdAt))
+        .limit(200);
+      return rows.map((r) => ({
+        uid: r.uid,
+        url: myPlacePhotoUrl(r),
+        caption: r.caption,
+        placeName: r.placeName,
+        visitedAt: r.createdAt,
+      }));
+    }),
+
+  /** MASTER PHOTO sebagai salinan independen dari MY PLACE PHOTO (origin MY_PLACE, tanpa persetujuan Explorer). */
+  addFromMyPlacePhoto: adminProcedure
+    .input(z.object({ masterUid: uidSchema, myPlacePhotoUid: uidSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const [m] = await ctx.db
+        .select()
+        .from(masterPlaces)
+        .where(eq(masterPlaces.uid, input.masterUid));
+      if (!m || m.deletedAt) notFound();
+      const [vp] = await ctx.db
+        .select({ photo: myPlacePhotos })
+        .from(myPlacePhotos)
+        .innerJoin(myPlaces, eq(myPlaces.id, myPlacePhotos.myPlaceId))
+        .where(
+          and(
+            eq(myPlacePhotos.uid, input.myPlacePhotoUid),
+            eq(myPlaces.masterPlaceId, m.id),
+          ),
+        );
+      if (!vp) fail("PHOTO_SOURCE_INVALID");
+      await assertMasterPhotoCapacity(m.id);
+      const src = vp.photo;
+      const filePath =
+        src.storageType === "UPLOAD" && src.filePath
+          ? await copyUpload("master", src.filePath)
+          : null;
+      await insertMasterPhoto({
+        masterId: m.id,
+        adminId: ctx.user.id,
+        storageType: src.storageType,
+        filePath,
+        externalUrl: src.externalUrl,
+        fileName: src.fileName,
+        caption: src.caption,
+        originType: "MY_PLACE",
+        sourceMyPlacePhotoId: src.id,
       });
       return { ok: true };
     }),

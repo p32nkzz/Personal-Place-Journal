@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { DateField } from "~/components/DateField";
 import { Alert, Field, Modal } from "~/components/ui";
 import { useT } from "~/lib/i18n";
 import { Icon } from "./Icon";
@@ -51,10 +52,10 @@ export function ItineraryForm({
         </Field>
         <div className="form-grid cols-2">
           <Field label={t("itinerary.startDate")} htmlFor="it-s">
-            <input id="it-s" className="input" type="date" value={v.startDate} onChange={(e) => setV({ ...v, startDate: e.target.value })} />
+            <DateField id="it-s" value={v.startDate} onChange={(d) => setV({ ...v, startDate: d })} clearable />
           </Field>
           <Field label={t("itinerary.endDate")} htmlFor="it-e" error={dateError} helper={t("itinerary.dateLabelHint")}>
-            <input id="it-e" className="input" type="date" value={v.endDate} aria-invalid={!!dateError} onChange={(e) => setV({ ...v, endDate: e.target.value })} />
+            <DateField id="it-e" value={v.endDate} invalid={!!dateError} min={v.startDate || undefined} onChange={(d) => setV({ ...v, endDate: d })} clearable />
           </Field>
         </div>
       </div>

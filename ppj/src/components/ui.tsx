@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import {
   createContext,
   useCallback,
@@ -100,6 +101,9 @@ export function useToast() {
 
 /* ------------------------------ Modal --------------------------------- */
 
+/** Urutan modal yang sedang terbuka; Escape hanya menutup yang paling atas. */
+const modalStack: string[] = [];
+
 export function Modal({
   title,
   children,
@@ -115,11 +119,23 @@ export function Modal({
 }) {
   const titleId = useId();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    modalStack.push(titleId);
+    return () => {
+      const i = modalStack.lastIndexOf(titleId);
+      if (i >= 0) modalStack.splice(i, 1);
+    };
+  }, [titleId]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || modalStack[modalStack.length - 1] !== titleId) return;
+      // Pratinjau foto (Fancybox) di atas modal menangani Escape-nya sendiri.
+      if (document.querySelector(".fancybox__container")) return;
+      onClose();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
+  }, [onClose, titleId]);
+  const body = (
     <div
       className="modal-backdrop"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
@@ -136,6 +152,8 @@ export function Modal({
       </div>
     </div>
   );
+  // Portal ke <body>: tombol di dalam dialog tidak boleh ikut men-submit <form> tempat Modal dipanggil.
+  return typeof document === "undefined" ? body : createPortal(body, document.body);
 }
 
 export function ConfirmDialog({
@@ -323,6 +341,9 @@ export function TagChip({ name, color }: { name: string; color: string }) {
     </span>
   );
 }
+
+/** Warna TAG yang sudah disesuaikan agar teks putih tetap kontras (dipakai TagChip & pemilih TAG di form). */
+export const tagColor = (hex: string) => darken(hex);
 
 function darken(hex: string) {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);
@@ -545,7 +566,8 @@ export function Pagination({
   limit: number;
   total: number;
   onPage: (p: number) => void;
-  onLimit: (l: number) => void;
+  /** Tanpa ini, pemilih jumlah baris disembunyikan (ukuran halaman tetap dari pengaturan). */
+  onLimit?: (l: number) => void;
 }) {
   const { t } = useT();
   const pages = Math.max(1, Math.ceil(total / limit));
@@ -560,6 +582,7 @@ export function Pagination({
     <div className="pager">
       <span>{t("table.showing", { from, to, total })}</span>
       <div className="row" style={{ gap: 12 }}>
+        {onLimit && (
         <label className="row t-small" style={{ gap: 6 }}>
           {t("table.rows")}
           <Select
@@ -575,6 +598,7 @@ export function Pagination({
             ))}
           </Select>
         </label>
+        )}
         <div className="pager-nav">
           <button className="pager-btn" disabled={page <= 1} onClick={() => onPage(1)} aria-label={t("table.first")}>
             <Icon name="angles-left" />

@@ -2,23 +2,24 @@
 
 import { Suspense, useState } from "react";
 
+import { Icon, type IconName } from "~/components/Icon";
 import {
   Alert,
   ConfirmDialog,
   EmptyState,
   Field,
   Modal,
+  Pagination,
+  SearchInput,
   Spinner,
-  StatusButton,
   StatusConfirm,
-  Tabs,
+  tagColor,
   useErrorMessage,
-  useToast, Pagination, SearchInput, SortHeader } from "~/components/ui";
+  useToast,
+} from "~/components/ui";
 import { useT } from "~/lib/i18n";
-import { Select } from "~/components/Select";
 import { useUrlState } from "~/lib/useUrlState";
 import { api } from "~/trpc/react";
-import { Icon } from "~/components/Icon";
 
 export default function CategoriesPage() {
   return (
@@ -33,6 +34,9 @@ function CategoriesInner() {
   const [tabState, setTabState] = useUrlState({ tab: "cat" });
   const tab = tabState.tab === "color" ? "color" : "cat";
   const setTab = (v: "cat" | "color") => setTabState({ tab: v });
+  // Jumlah untuk tab chip (ringan: hanya total halaman pertama).
+  const catTotal = api.categories.adminPage.useQuery({ status: "ALL", sort: "sortOrder", order: "asc", page: 1, limit: 1 }).data?.total;
+  const colorTotal = api.colors.adminList.useQuery({ status: "ALL", sort: "sortOrder", order: "asc", page: 1, limit: 1 }).data?.total;
   return (
     <div className="container page">
       <div className="page-head">
@@ -41,15 +45,50 @@ function CategoriesInner() {
           <p>{t("category.hint")}</p>
         </div>
       </div>
-      <Tabs
-        tabs={[
-          { id: "cat", label: t("category.tab") },
-          { id: "color", label: t("color.tab") },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
+      <div className="mini-tabs pd-tabs" role="tablist" aria-label={t("nav.categories")}>
+        <button type="button" role="tab" aria-selected={tab === "cat"} className="mini-tab" onClick={() => setTab("cat")}>
+          <Icon name="layers" fixedWidth={false} /> {t("category.tab")}
+          {catTotal != null && <span className="mini-tab-n">{catTotal}</span>}
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "color"} className="mini-tab" onClick={() => setTab("color")}>
+          <Icon name="palette" fixedWidth={false} /> {t("color.tab")}
+          {colorTotal != null && <span className="mini-tab-n">{colorTotal}</span>}
+        </button>
+      </div>
       {tab === "cat" ? <CategoryTab /> : <ColorTab />}
+    </div>
+  );
+}
+
+/** Segmen status (Semua | Aktif | Tidak aktif) dan urutan, dipakai kedua tab. */
+function StatusSeg({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = useT();
+  const opts: [string, string, IconName | null][] = [
+    ["ALL", t("common.all"), null],
+    ["ACTIVE", t("common.active"), "circle-check"],
+    ["INACTIVE", t("common.inactive"), "circle-regular"],
+  ];
+  return (
+    <div className="fl-seg" role="radiogroup" aria-label={t("common.status")}>
+      {opts.map(([v, l, ic]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} data-ms={v} onClick={() => onChange(v)}>
+          {ic && <Icon name={ic} fixedWidth={false} />} {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SortSeg({ value, options, onChange }: { value: string; options: [string, string][]; onChange: (v: string) => void }) {
+  const { t } = useT();
+  return (
+    <div className="fl-seg fl-seg-sort" role="radiogroup" aria-label={t("common.sortBy")}>
+      <span className="fl-seg-label"><Icon name="sort" fixedWidth={false} /></span>
+      {options.map(([v, l]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)}>
+          {l}
+        </button>
+      ))}
     </div>
   );
 }
@@ -72,11 +111,6 @@ function CategoryTab() {
     page,
     limit,
   });
-  const sortProps = {
-    sort: s.csort || null,
-    order: (s.corder || null) as "asc" | "desc" | null,
-    onSort: (sort: string | null, order: "asc" | "desc" | null) => setS({ csort: sort ?? "", corder: order ?? "", cpage: "1" }),
-  };
   const [edit, setEdit] = useState<CatEdit | null>(null);
   const [del, setDel] = useState<{ uid: string; name: string } | null>(null);
   const [statusTarget, setStatusTarget] = useState<{ uid: string; name: string; isActive: boolean } | null>(null);
@@ -93,45 +127,71 @@ function CategoryTab() {
   const setActive = api.categories.setActive.useMutation({ onSuccess: () => { done(); setStatusTarget(null); }, onError: (e) => setError(errMsg(e)) });
   const remove = api.categories.delete.useMutation({ onSuccess: done, onError: (e) => { setError(errMsg(e)); setDel(null); } });
 
+  const sortVal = s.csort || "sortOrder";
+
   return (
     <>
-      <div className="row-between" style={{ marginBottom: 12 }}>
-        <p className="muted" style={{ margin: 0 }}>{t("category.rule")}</p>
-        <button className="btn btn-primary" onClick={() => { setError(null); setEdit({ name: "", description: "", sortOrder: (data?.total ?? 0) + 1 }); }}><Icon name="plus" /> {t("category.new")}</button>
-      </div>
       {error && !edit && <div style={{ marginBottom: 12 }}><Alert kind="error">{error}</Alert></div>}
       <div className="card card-flush">
-        <div className="toolbar">
-          <SearchInput style={{ flex: 1, minWidth: 220 }} placeholder={t("common.search")} value={s.cq} onChange={(q) => setS({ cq: q, cpage: "1" })} />
-          <Select className="select" value={s.cstatus} onChange={(e) => setS({ cstatus: e.target.value, cpage: "1" })} aria-label={t("common.status")}>
-            <option value="ALL">{t("common.allStatus")}</option>
-            <option value="ACTIVE">{t("common.active")}</option>
-            <option value="INACTIVE">{t("common.inactive")}</option>
-          </Select>
+        <div className="fl-bar">
+          <div className="fl-row">
+            <div className="fl-search">
+              <Icon name="search" fixedWidth={false} />
+              <SearchInput className="input" placeholder={t("category.searchPlaceholder")} value={s.cq} onChange={(q) => setS({ cq: q, cpage: "1" })} />
+            </div>
+            <button className="btn btn-primary" onClick={() => { setError(null); setEdit({ name: "", description: "", sortOrder: (data?.total ?? 0) + 1 }); }}><Icon name="plus" /> {t("category.new")}</button>
+          </div>
+          <div className="fl-row fl-filters">
+            <StatusSeg value={s.cstatus} onChange={(v) => setS({ cstatus: v, cpage: "1" })} />
+            <SortSeg
+              value={sortVal}
+              options={[["sortOrder", t("category.sortOrder")], ["name", t("common.name")], ["createdAt", t("common.newest")]]}
+              onChange={(v) => setS({ csort: v, corder: v === "createdAt" ? "desc" : "asc", cpage: "1" })}
+            />
+          </div>
+          <p className="ct-rule"><Icon name="circle-info" fixedWidth={false} /> {t("category.rule")}</p>
         </div>
         {isLoading ? <Spinner /> : !data?.rows.length ? <EmptyState title={t("category.empty")} /> : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th className="col-no">{t("table.no")}</th><th><SortHeader label={t("common.name")} field="name" {...sortProps} /></th><th>Slug</th><th>{t("category.usage")}</th><th>{t("common.status")}</th><th>{t("common.actions")}</th></tr></thead>
-              <tbody>
-                {data.rows.map((c, i) => (
-                  <tr key={c.uid}>
-                    <td className="col-no">{(page - 1) * limit + i + 1}</td>
-                    <td><b>{c.name}</b>{c.description && <div className="t-caption muted">{c.description}</div>}</td>
-                    <td className="mono">{c.slug}</td>
-                    <td className="mono">{c.usage}</td>
-                    <td><StatusButton tone={c.isActive ? "success" : "neutral"} onClick={() => setStatusTarget({ uid: c.uid, name: c.name, isActive: c.isActive })}>{c.isActive ? t("common.active") : t("common.inactive")}</StatusButton></td>
-                    <td>
-                      <div className="row" style={{ minWidth: 200 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => { setError(null); setEdit({ uid: c.uid, name: c.name, description: c.description ?? "", sortOrder: c.sortOrder }); }}><Icon name="pen" /> {t("common.edit")}</button>
-                        {c.usage === 0 && <button className="btn btn-danger-ghost btn-sm" onClick={() => setDel({ uid: c.uid, name: c.name })}><Icon name="trash" /> {t("common.delete")}</button>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="list">
+            {data.rows.map((c) => (
+              <li key={c.uid} className="pl-row ct-row">
+                <div className="pl-thumb-cell">
+                  <span className={`ct-ico${c.isActive ? "" : " is-off"}`} title={`${t("category.sortOrder")}: ${c.sortOrder}`}>
+                    <Icon name="layers" fixedWidth={false} />
+                    <b>{c.sortOrder}</b>
+                  </span>
+                </div>
+                <div className="list-item pl-main">
+                  <div className="grow stack-sm" style={{ gap: 5 }}>
+                    <span className="ct-name">
+                      <span className="title">{c.name}</span>
+                    </span>
+                    <span className="ct-meta">
+                      <span className={`ct-usage${c.usage ? "" : " is-zero"}`} title={t("category.usage")}>
+                        <Icon name="map-pin" fixedWidth={false} /> {c.usage} {t("category.usedBy")}
+                      </span>
+                      <code className="ct-slug" title="Slug">{c.slug}</code>
+                    </span>
+                    {c.description && <span className="sub">{c.description}</span>}
+                  </div>
+                </div>
+                <div className="pl-side">
+                  <div className="pl-actions">
+                    <button type="button" className="ph-btn ph-edit" title={t("common.edit")} aria-label={`${t("common.edit")}: ${c.name}`} onClick={() => { setError(null); setEdit({ uid: c.uid, name: c.name, description: c.description ?? "", sortOrder: c.sortOrder }); }}>
+                      <Icon name="pen" fixedWidth={false} />
+                    </button>
+                    <button type="button" className={`ph-btn ${c.isActive ? "ph-off" : "ph-on"}`} title={c.isActive ? t("place.deactivate") : t("place.activate")} aria-label={`${c.isActive ? t("place.deactivate") : t("place.activate")}: ${c.name}`} onClick={() => setStatusTarget({ uid: c.uid, name: c.name, isActive: c.isActive })}>
+                      <Icon name={c.isActive ? "eye-slash" : "eye"} fixedWidth={false} />
+                    </button>
+                    {/* Kategori yang sudah dipakai hanya dapat dinonaktifkan. */}
+                    <button type="button" className="ph-btn ph-del" disabled={c.usage > 0} title={c.usage > 0 ? t("category.cannotDelete") : t("common.delete")} aria-label={`${t("common.delete")}: ${c.name}`} onClick={() => setDel({ uid: c.uid, name: c.name })}>
+                      <Icon name="trash" fixedWidth={false} />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
         {data && <Pagination page={page} limit={limit} total={data.total} onPage={(p) => setS({ cpage: String(p) })} onLimit={(l) => setS({ climit: String(l), cpage: "1" })} />}
       </div>
@@ -191,11 +251,6 @@ function ColorTab() {
     page,
     limit,
   });
-  const sortProps = {
-    sort: s.ksort || null,
-    order: (s.korder || null) as "asc" | "desc" | null,
-    onSort: (sort: string | null, order: "asc" | "desc" | null) => setS({ ksort: sort ?? "", korder: order ?? "", kpage: "1" }),
-  };
   const [edit, setEdit] = useState<ColorEdit | null>(null);
   const [del, setDel] = useState<{ id: number; name: string } | null>(null);
   const [statusTarget, setStatusTarget] = useState<{ id: number; name: string; isActive: boolean } | null>(null);
@@ -212,44 +267,74 @@ function ColorTab() {
   const setActive = api.colors.setActive.useMutation({ onSuccess: () => { done(); setStatusTarget(null); }, onError: (e) => setError(errMsg(e)) });
   const remove = api.colors.delete.useMutation({ onSuccess: done, onError: (e) => { setError(errMsg(e)); setDel(null); } });
 
+  const sortVal = s.ksort || "sortOrder";
+
   return (
     <>
-      <div className="row-between" style={{ marginBottom: 12 }}>
-        <p className="muted" style={{ margin: 0 }}>{t("color.rule")}</p>
-        <button className="btn btn-primary" onClick={() => { setError(null); setEdit({ hexCode: "#3B82F6", name: "", sortOrder: (data?.total ?? 0) + 1 }); }}><Icon name="plus" /> {t("color.new")}</button>
-      </div>
+      {error && !edit && <div style={{ marginBottom: 12 }}><Alert kind="error">{error}</Alert></div>}
       <div className="card card-flush">
-        <div className="toolbar">
-          <SearchInput style={{ flex: 1, minWidth: 220 }} placeholder={t("common.search")} value={s.kq} onChange={(q) => setS({ kq: q, kpage: "1" })} />
-          <Select className="select" value={s.kstatus} onChange={(e) => setS({ kstatus: e.target.value, kpage: "1" })} aria-label={t("common.status")}>
-            <option value="ALL">{t("common.allStatus")}</option>
-            <option value="ACTIVE">{t("common.active")}</option>
-            <option value="INACTIVE">{t("common.inactive")}</option>
-          </Select>
+        <div className="fl-bar">
+          <div className="fl-row">
+            <div className="fl-search">
+              <Icon name="search" fixedWidth={false} />
+              <SearchInput className="input" placeholder={t("color.searchPlaceholder")} value={s.kq} onChange={(q) => setS({ kq: q, kpage: "1" })} />
+            </div>
+            <button className="btn btn-primary" onClick={() => { setError(null); setEdit({ hexCode: "#3B82F6", name: "", sortOrder: (data?.total ?? 0) + 1 }); }}><Icon name="plus" /> {t("color.new")}</button>
+          </div>
+          <div className="fl-row fl-filters">
+            <StatusSeg value={s.kstatus} onChange={(v) => setS({ kstatus: v, kpage: "1" })} />
+            <SortSeg
+              value={sortVal}
+              options={[["sortOrder", t("category.sortOrder")], ["name", t("common.name")], ["hexCode", "HEX"]]}
+              onChange={(v) => setS({ ksort: v, korder: "asc", kpage: "1" })}
+            />
+          </div>
+          <p className="ct-rule"><Icon name="circle-info" fixedWidth={false} /> {t("color.rule")}</p>
         </div>
         {isLoading ? <Spinner /> : !data?.rows.length ? <EmptyState title={t("category.empty")} /> : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th className="col-no">{t("table.no")}</th><th>{t("color.preview")}</th><th><SortHeader label={t("common.name")} field="name" {...sortProps} /></th><th><SortHeader label="HEX" field="hexCode" {...sortProps} /></th><th>{t("common.status")}</th><th>{t("common.actions")}</th></tr></thead>
-              <tbody>
-                {data.rows.map((c, i) => (
-                  <tr key={c.id}>
-                    <td className="col-no">{(page - 1) * limit + i + 1}</td>
-                    <td><span className="tag-dot" style={{ background: c.hexCode, width: 24, height: 24, boxShadow: "0 0 0 1px var(--color-border-input)" }} /></td>
-                    <td><b>{c.name}</b></td>
-                    <td className="mono">{c.hexCode}</td>
-                    <td><StatusButton tone={c.isActive ? "success" : "neutral"} onClick={() => setStatusTarget({ id: c.id, name: c.name, isActive: c.isActive })}>{c.isActive ? t("common.active") : t("common.inactive")}</StatusButton></td>
-                    <td>
-                      <div className="row" style={{ minWidth: 200 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => { setError(null); setEdit({ id: c.id, hexCode: c.hexCode, name: c.name, sortOrder: c.sortOrder }); }}><Icon name="pen" /> {t("common.edit")}</button>
-                        <button className="btn btn-danger-ghost btn-sm" onClick={() => setDel({ id: c.id, name: c.name })}><Icon name="trash" /> {t("common.delete")}</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="list">
+            {data.rows.map((c) => (
+              <li key={c.id} className="pl-row ct-row">
+                <div className="pl-thumb-cell">
+                  <span className={`ct-swatch${c.isActive ? "" : " is-off"}`} style={{ background: c.hexCode }} title={c.hexCode}>
+                    <b className="ct-order" title={`${t("category.sortOrder")}: ${c.sortOrder}`}>{c.sortOrder}</b>
+                  </span>
+                </div>
+                <div className="list-item pl-main">
+                  <div className="grow stack-sm" style={{ gap: 5 }}>
+                    <span className="ct-name">
+                      <span className="title">{c.name}</span>
+                    </span>
+                    <span className="ct-meta">
+                      <span className="tag ct-sample" style={{ background: tagColor(c.hexCode) }}>{t("color.sample")}</span>
+                      <button
+                        type="button"
+                        className="ct-slug ct-hex"
+                        title={t("common.copy")}
+                        aria-label={`${t("common.copy")}: ${c.hexCode}`}
+                        onClick={() => void navigator.clipboard?.writeText(c.hexCode).then(() => toast.push(`${t("common.copied")}: ${c.hexCode}`, "success"))}
+                      >
+                        {c.hexCode} <Icon name="copy" fixedWidth={false} />
+                      </button>
+                    </span>
+                  </div>
+                </div>
+                <div className="pl-side">
+                  <div className="pl-actions">
+                    <button type="button" className="ph-btn ph-edit" title={t("common.edit")} aria-label={`${t("common.edit")}: ${c.name}`} onClick={() => { setError(null); setEdit({ id: c.id, hexCode: c.hexCode, name: c.name, sortOrder: c.sortOrder }); }}>
+                      <Icon name="pen" fixedWidth={false} />
+                    </button>
+                    <button type="button" className={`ph-btn ${c.isActive ? "ph-off" : "ph-on"}`} title={c.isActive ? t("place.deactivate") : t("place.activate")} aria-label={`${c.isActive ? t("place.deactivate") : t("place.activate")}: ${c.name}`} onClick={() => setStatusTarget({ id: c.id, name: c.name, isActive: c.isActive })}>
+                      <Icon name={c.isActive ? "eye-slash" : "eye"} fixedWidth={false} />
+                    </button>
+                    <button type="button" className="ph-btn ph-del" title={t("common.delete")} aria-label={`${t("common.delete")}: ${c.name}`} onClick={() => setDel({ id: c.id, name: c.name })}>
+                      <Icon name="trash" fixedWidth={false} />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
         {data && <Pagination page={page} limit={limit} total={data.total} onPage={(p) => setS({ kpage: String(p) })} onLimit={(l) => setS({ klimit: String(l), kpage: "1" })} />}
       </div>

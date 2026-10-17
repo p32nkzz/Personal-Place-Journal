@@ -3,7 +3,9 @@
 import {
   AdvancedMarker,
   APIProvider,
+  ControlPosition,
   Map,
+  MapControl,
   Pin,
   useMap,
   useMapsLibrary,
@@ -11,9 +13,11 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "~/components/Icon";
-import { Alert, Modal } from "~/components/ui";
+import { Alert, Modal, useToast } from "~/components/ui";
 import { useT } from "~/lib/i18n";
+import { setSatellite, useSatellite } from "./mapType";
 import { readableOn } from "./colors";
+import { useMapSearchConfig } from "./useMapSearchConfig";
 
 const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -30,6 +34,8 @@ export type MapMarker = {
   selected?: boolean;
   /** Penanda dapat digeser (drag & drop) oleh user. */
   draggable?: boolean;
+  /** Urutan tumpukan (z-index); makin besar makin di atas. Penanda terpilih selalu paling atas. */
+  z?: number;
 };
 
 export type MapLine = {
@@ -96,6 +102,48 @@ function Lines({ lines }: { lines: MapLine[] }) {
   return null;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Animasi kamera halus ke `target` dengan zoom akhir `zoom`:
+ * - dekat: pan beranimasi (bawaan Google) lalu zoom naik/turun bertahap;
+ * - jauh (di luar layar): zoom-out bertahap sampai tujuan terlihat, pan, lalu zoom-in bertahap.
+ * Dibatalkan bila `cancelled()` (pin lain dipilih di tengah animasi).
+ */
+async function flyTo(map: google.maps.Map, target: google.maps.LatLngLiteral, zoom: number, cancelled: () => boolean) {
+  if (reducedMotion()) {
+    map.setCenter(target);
+    map.setZoom(zoom);
+    return;
+  }
+  const STEP = 110;
+  const idleOr = (ms: number) =>
+    Promise.race([new Promise<void>((r) => google.maps.event.addListenerOnce(map, "idle", () => r())), sleep(ms)]);
+  const visible = () => {
+    const b = map.getBounds();
+    return !!b && b.contains(target);
+  };
+  let z = map.getZoom() ?? zoom;
+  // Tujuan di luar layar: mundur (zoom-out) dulu agar pan tidak "melompat".
+  while (!visible() && z > 3) {
+    if (cancelled()) return;
+    z -= 1;
+    map.setZoom(z);
+    await sleep(STEP);
+  }
+  if (cancelled()) return;
+  map.panTo(target);
+  await idleOr(700);
+  while (z !== zoom) {
+    if (cancelled()) return;
+    z += z < zoom ? 1 : -1;
+    map.setZoom(z);
+    await sleep(STEP);
+  }
+  if (!cancelled()) map.panTo(target);
+}
+
 function Controller({
   markers,
   focus,
@@ -109,22 +157,31 @@ function Controller({
 }) {
   const map = useMap();
   const fitted = useRef("");
-  const centeredOnDevice = useRef(false);
+  const centeredOnDevice = useRef<number | false>(false);
+  // Zoom bawaan dari Pengaturan. Bila nilainya baru selesai dimuat setelah peta tampil, efek di bawah
+  // dijalankan ulang sekali agar zoom akhir sesuai pengaturan.
+  const { defaultZoom } = useMapSearchConfig();
+  const zoomRef = useRef(defaultZoom);
+  zoomRef.current = defaultZoom;
 
+  // Fokus ke tempat/pin: kamera "terbang" halus (pan beranimasi + zoom bertahap) agar perpindahan antar pin nyaman diikuti.
+  const flight = useRef(0);
   useEffect(() => {
     if (!map || !focus) return;
-    map.panTo({ lat: focus.lat, lng: focus.lng });
-    if (focus.zoom) map.setZoom(focus.zoom);
-  }, [map, focus]);
+    const id = ++flight.current;
+    void flyTo(map, { lat: focus.lat, lng: focus.lng }, focus.zoom ?? zoomRef.current, () => id !== flight.current);
+  }, [map, focus, defaultZoom]);
 
   useEffect(() => {
     if (!map || !fit || !markers.length) return;
-    const sig = markers.map((m) => `${m.id}:${m.lat}:${m.lng}`).join("|");
+    const sig = markers.map((m) => `${m.id}:${m.lat}:${m.lng}`).join("|") + `@${defaultZoom}`;
     if (fitted.current === sig) return;
     fitted.current = sig;
     if (markers.length === 1) {
-      map.setCenter({ lat: markers[0]!.lat, lng: markers[0]!.lng });
-      map.setZoom(15);
+      // Satu titik (form & detail): pusatkan pada titik. Zoom hanya dinaikkan ke zoom bawaan Pengaturan bila
+      // zoom saat ini lebih kecil; bila user sudah memperbesar (mis. saat menggeser pin), zoom-nya dipertahankan.
+      map.panTo({ lat: markers[0]!.lat, lng: markers[0]!.lng });
+      if ((map.getZoom() ?? 0) < zoomRef.current) map.setZoom(zoomRef.current);
       return;
     }
     const b = new google.maps.LatLngBounds();
@@ -132,19 +189,65 @@ function Controller({
     map.fitBounds(b, 60);
     // Titik yang berhimpitan/berdekatan tidak boleh memicu zoom berlebihan.
     google.maps.event.addListenerOnce(map, "idle", () => {
-      if ((map.getZoom() ?? 0) > 16) map.setZoom(16);
+      const cap = Math.min(21, zoomRef.current + 1);
+      if ((map.getZoom() ?? 0) > cap) map.setZoom(cap);
     });
-  }, [map, markers, fit]);
+  }, [map, markers, fit, defaultZoom]);
 
   useEffect(() => {
     // Titik tengah awal = lokasi perangkat bila izin diberikan (K-20).
-    if (!map || !deviceLocation || centeredOnDevice.current || focus || fit) return;
-    centeredOnDevice.current = true;
+    if (!map || !deviceLocation || centeredOnDevice.current === defaultZoom || focus || fit) return;
+    centeredOnDevice.current = defaultZoom;
     map.setCenter(deviceLocation);
-    map.setZoom(14);
-  }, [map, deviceLocation, focus, fit]);
+    map.setZoom(zoomRef.current);
+  }, [map, deviceLocation, focus, fit, defaultZoom]);
 
   return null;
+}
+
+/**
+ * Tombol melayang "kembali ke lokasi saya": ambil lokasi perangkat terbaru lalu kamera terbang halus
+ * ke sana dengan zoom bawaan dari Pengaturan. Bila gagal (izin ditolak dsb.) memakai lokasi terakhir
+ * yang diketahui, atau memberi tahu bahwa lokasi tidak tersedia.
+ */
+function LocateControl({ known, onLocated }: { known: DeviceLocation; onLocated: (l: { lat: number; lng: number }) => void }) {
+  const map = useMap();
+  const { t } = useT();
+  const toast = useToast();
+  const { defaultZoom } = useMapSearchConfig();
+  const [busy, setBusy] = useState(false);
+  const go = (l: { lat: number; lng: number }) => {
+    if (map) void flyTo(map, l, defaultZoom, () => false);
+  };
+  const locate = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      if (known) go(known);
+      else toast.push(t("map.locateFail"), "error");
+      return;
+    }
+    setBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const l = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setBusy(false);
+        onLocated(l);
+        go(l);
+      },
+      () => {
+        setBusy(false);
+        if (known) go(known);
+        else toast.push(t("map.locateFail"), "error");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  };
+  return (
+    <MapControl position={ControlPosition.RIGHT_BOTTOM}>
+      <button type="button" className="map-locate-btn" onClick={locate} disabled={busy} title={t("map.locateMe")} aria-label={t("map.locateMe")}>
+        <Icon name={busy ? "refresh" : "crosshairs"} spin={busy} fixedWidth={false} />
+      </button>
+    </MapControl>
+  );
 }
 
 export function MapView({
@@ -158,6 +261,8 @@ export function MapView({
   fit,
   deviceLocation = null,
   className = "map-box",
+  satelliteToggle = false,
+  streetView = false,
 }: {
   markers?: MapMarker[];
   lines?: MapLine[];
@@ -170,8 +275,18 @@ export function MapView({
   fit?: boolean;
   deviceLocation?: DeviceLocation;
   className?: string;
+  /** Tombol ganti jalan ⇄ satelit MELAYANG di dalam peta (hanya menu Peta). Peta lain memakai MapTypeSwitch di luar kotak peta. */
+  satelliteToggle?: boolean;
+  /** Tampilkan kontrol Street View (pegman) pada peta. Bawaan mati: Street View dibuka dari tombol di detail tempat. */
+  streetView?: boolean;
 }) {
   const { t } = useT();
+  const { pinScale, pinScaleActive } = useMapSearchConfig();
+  const satellite = useSatellite();
+  const toggleSatellite = () => setSatellite(!satellite);
+  // Lokasi dari tombol "lokasi saya" (dipakai bila halaman tidak mengirim lokasi perangkat).
+  const [located, setLocated] = useState<DeviceLocation>(null);
+  const here = located ?? deviceLocation;
   if (!KEY) {
     return (
       <div className={className} style={{ display: "grid", placeItems: "center", padding: 24, textAlign: "center" }}>
@@ -184,12 +299,14 @@ export function MapView({
       <Map
         className={className}
         mapId="DEMO_MAP_ID"
+        mapTypeId={satellite ? "hybrid" : "roadmap"}
         defaultCenter={{ lat: -2.5, lng: 118 }}
         defaultZoom={5}
         gestureHandling="greedy"
         disableDefaultUI={false}
         mapTypeControl={false}
-        streetViewControl={false}
+        streetViewControl={streetView}
+        streetViewControlOptions={{ position: ControlPosition.RIGHT_BOTTOM }}
         fullscreenControl={false}
         clickableIcons={false}
         onClick={(e) => {
@@ -201,16 +318,33 @@ export function MapView({
           if (c && onCenterChange) onCenterChange(c.lat(), c.lng());
         }}
       >
+        {satelliteToggle && (
+          <MapControl position={ControlPosition.LEFT_BOTTOM}>
+            <button
+              type="button"
+              className="map-type-btn"
+              aria-pressed={satellite}
+              title={satellite ? t("map.typeRoadmap") : t("map.typeSatellite")}
+              onClick={toggleSatellite}
+            >
+              <Icon name={satellite ? "map" : "image"} fixedWidth={false} /> {satellite ? t("map.typeRoadmap") : t("map.typeSatellite")}
+            </button>
+          </MapControl>
+        )}
         <Controller markers={markers} focus={focus} fit={fit} deviceLocation={deviceLocation} />
+        <LocateControl known={here} onLocated={setLocated} />
         <Lines lines={lines} />
         {markers.map((m) => (
           <AdvancedMarker
             key={m.id}
             position={{ lat: m.lat, lng: m.lng }}
             title={m.title}
-            zIndex={m.selected ? 10 : 1}
+            zIndex={m.selected ? 100000 : (m.z ?? 1)}
             onClick={() => onMarkerClick?.(m.id)}
-            draggable={m.draggable}
+            draggable={!!m.draggable}
+            // Ukuran aktif lewat transform pada kontainer marker agar membesar/mengecil halus (ujung pin tetap di titiknya).
+            className="map-pin"
+            style={{ transform: `scale(${m.selected ? pinScaleActive / pinScale : 1})` }}
             onDragEnd={(e) => {
               const ll = e.latLng;
               if (ll) onMarkerDragEnd?.(m.id, ll.lat(), ll.lng());
@@ -221,12 +355,12 @@ export function MapView({
               borderColor="#ffffff"
               glyphColor={m.glyphColor ?? readableOn(m.color)}
               glyph={m.glyph}
-              scale={m.selected ? 1.4 : 1}
+              scale={pinScale}
             />
           </AdvancedMarker>
         ))}
-        {deviceLocation && (
-          <AdvancedMarker position={deviceLocation} title={t("map.you")} zIndex={0}>
+        {here && (
+          <AdvancedMarker position={here} title={t("map.you")} zIndex={0}>
             <div
               style={{
                 width: 16,
@@ -293,10 +427,12 @@ function GoogleSearchInner({
   onSelect,
   placeholder,
   origin,
+  autoNearby = false,
 }: {
   onSelect: (p: GooglePlaceResult) => void;
   placeholder: string;
   origin?: { lat: number; lng: number } | null;
+  autoNearby?: boolean;
 }) {
   const { t } = useT();
   const places = useMapsLibrary("places");
@@ -313,6 +449,9 @@ function GoogleSearchInner({
   const [notFound, setNotFound] = useState<string | null>(null);
   const token = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const detailService = useRef<google.maps.places.PlacesService | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Mode "langsung tampilkan lokasi terdekat" (mis. dari tombol "Tambah dari peta") sampai user berinteraksi.
+  const auto = useRef(autoNearby);
 
   const fromGeocode = (r: google.maps.GeocoderResult): Suggestion => ({
     id: r.place_id,
@@ -377,6 +516,28 @@ function GoogleSearchInner({
       },
     );
   };
+
+  // Buka saran terdekat tanpa memfokuskan input (keyboard ponsel tidak muncul); ikuti titik asal
+  // yang bisa berubah saat lokasi perangkat didapat.
+  useEffect(() => {
+    if (!auto.current || !places || !origin) return;
+    setNearbyOpen(true);
+    loadNearby();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [places, origin?.lat, origin?.lng]);
+
+  // Saat dibuka tanpa fokus, klik di luar area pencarian menutup daftar.
+  useEffect(() => {
+    if (!nearbyOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        auto.current = false;
+        setNearbyOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [nearbyOpen]);
 
   useEffect(() => {
     if (!places || q.trim().length < 3) {
@@ -453,6 +614,7 @@ function GoogleSearchInner({
   }, [places, geocoding, q]);
 
   const finish = (r: GooglePlaceResult) => {
+    auto.current = false;
     token.current = null;
     setItems([]);
     setNearbyOpen(false);
@@ -534,6 +696,7 @@ function GoogleSearchInner({
 
   return (
     <div
+      ref={boxRef}
       className="map-search"
       onBlur={(e) => {
         // Tutup saran terdekat saat fokus keluar dari area pencarian.
@@ -558,6 +721,7 @@ function GoogleSearchInner({
             e.preventDefault();
             setActive((i) => (i <= 0 ? list.length - 1 : i - 1));
           } else if (e.key === "Escape") {
+            auto.current = false;
             setItems([]);
             setNearbyOpen(false);
             setActive(-1);
@@ -637,16 +801,19 @@ export function GooglePlaceSearch({
   onSelect,
   placeholder,
   origin,
+  autoNearby,
 }: {
   onSelect: (p: GooglePlaceResult) => void;
   placeholder: string;
   /** Titik asal saran lokasi terdekat (lokasi perangkat atau pusat peta). */
   origin?: { lat: number; lng: number } | null;
+  /** Langsung tampilkan daftar lokasi terdekat saat halaman dibuka. */
+  autoNearby?: boolean;
 }) {
   if (!KEY) return null;
   return (
     <APIProvider apiKey={KEY}>
-      <GoogleSearchInner onSelect={onSelect} placeholder={placeholder} origin={origin} />
+      <GoogleSearchInner onSelect={onSelect} placeholder={placeholder} origin={origin} autoNearby={autoNearby} />
     </APIProvider>
   );
 }
@@ -678,7 +845,7 @@ export async function nearestPlacePhotos(
   lat: number,
   lng: number,
   radius = 60,
-): Promise<{ name: string; distance: number; photos: GooglePhoto[] } | null> {
+): Promise<{ name: string; placeId: string | null; distance: number; photos: GooglePhoto[] } | null> {
   for (let i = 0; i < 50 && !(typeof google !== "undefined" && google.maps?.importLibrary); i++) {
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -717,6 +884,7 @@ export async function nearestPlacePhotos(
     }
     return {
       name: best.r.name!,
+      placeId: best.r.place_id ?? null,
       distance: Math.round(best.d),
       photos: photos.slice(0, 6).map((ph) => ({
         url: ph.getUrl({ maxWidth: 640 }),

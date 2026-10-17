@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 
 import { db } from "~/server/db";
-import { masterPlacePhotos, visitPhotos } from "~/server/db/schema";
+import { masterPlacePhotos, myPlacePhotos, visitPhotos } from "~/server/db/schema";
 import { fail } from "./errors";
 import { newUid } from "./ids";
 import { getPhotoRules } from "./settings";
@@ -60,8 +60,9 @@ export async function insertMasterPhoto(p: {
   externalUrl?: string | null;
   fileName?: string | null;
   caption?: string | null;
-  originType: "ADMIN" | "VISIT";
+  originType: "ADMIN" | "VISIT" | "MY_PLACE";
   sourceVisitPhotoId?: number | null;
+  sourceMyPlacePhotoId?: number | null;
 }) {
   const [count] = await db
     .select({ n: sql<number>`count(*)` })
@@ -72,6 +73,7 @@ export async function insertMasterPhoto(p: {
     uid: newUid(),
     masterPlaceId: p.masterId,
     sourceVisitPhotoId: p.sourceVisitPhotoId ?? null,
+    sourceMyPlacePhotoId: p.sourceMyPlacePhotoId ?? null,
     filePath: p.filePath ?? null,
     externalUrl: p.externalUrl ?? null,
     fileName: p.fileName ?? null,
@@ -81,5 +83,41 @@ export async function insertMasterPhoto(p: {
     isPrimary: n === 0,
     sortOrder: n,
     createdBy: p.adminId,
+  });
+}
+
+/** Batas jumlah foto pantauan per MY PLACE (photo.max_per_my_place). */
+export async function assertMyPlacePhotoCapacity(myPlaceId: number) {
+  const rules = await getPhotoRules();
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(myPlacePhotos)
+    .where(eq(myPlacePhotos.myPlaceId, myPlaceId));
+  if (Number(row?.n ?? 0) >= rules.maxPerMyPlace) fail("PHOTO_LIMIT_REACHED");
+}
+
+export async function insertMyPlacePhoto(p: {
+  myPlaceId: number;
+  storageType: "UPLOAD" | "EXTERNAL" | "S3";
+  filePath?: string | null;
+  externalUrl?: string | null;
+  fileName?: string | null;
+  caption?: string | null;
+}) {
+  const [count] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(myPlacePhotos)
+    .where(eq(myPlacePhotos.myPlaceId, p.myPlaceId));
+  const n = Number(count?.n ?? 0);
+  await db.insert(myPlacePhotos).values({
+    uid: newUid(),
+    myPlaceId: p.myPlaceId,
+    filePath: p.filePath ?? null,
+    externalUrl: p.externalUrl ?? null,
+    fileName: p.fileName ?? null,
+    caption: p.caption ?? null,
+    storageType: p.storageType,
+    isPrimary: n === 0,
+    sortOrder: n,
   });
 }

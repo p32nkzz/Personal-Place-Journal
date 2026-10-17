@@ -20,6 +20,7 @@ import {
   masterPlacePhotos,
   masterPlaces,
   myPlaceMasterHistories,
+  myPlacePhotos,
   myPlaceTags,
   myPlaces,
   tags,
@@ -28,6 +29,8 @@ import {
 } from "~/server/db/schema";
 import { fail, notFound } from "~/server/lib/errors";
 import { removeUpload } from "~/server/lib/files";
+import { getVisitPageSize } from "~/server/lib/settings";
+import { assertMyPlacePhotoCapacity, insertMyPlacePhoto } from "~/server/lib/photos";
 import { newUid } from "~/server/lib/ids";
 import { distanceMeters } from "~/server/lib/geo";
 import {
@@ -41,6 +44,7 @@ import {
   categoriesForPlaces,
   effectiveCategories,
   masterPhotoUrl,
+  myPlacePhotosFor,
   placeRatings,
   tagsForPlaces,
   visitPhotoUrl,
@@ -65,6 +69,16 @@ const placeFields = {
 };
 
 /** Mengambil MY PLACE milik user (ownership divalidasi server-side). */
+async function ownedMyPlacePhoto(userId: number, photoUid: string, tx?: Tx) {
+  const [r] = await (tx ?? db)
+    .select({ ph: myPlacePhotos })
+    .from(myPlacePhotos)
+    .innerJoin(myPlaces, eq(myPlaces.id, myPlacePhotos.myPlaceId))
+    .where(and(eq(myPlacePhotos.uid, photoUid), eq(myPlaces.userId, userId)));
+  if (!r) notFound();
+  return r.ph;
+}
+
 export async function ownedPlace(userId: number, uid: string, tx?: Tx) {
   const q = (tx ?? db)
     .select()
@@ -96,11 +110,11 @@ async function setPlaceTags(tx: Tx, userId: number, placeId: number, uids: strin
 
 const placeFilterSchema = z.object({
   q: z.string().trim().max(100).optional(),
-  categoryUid: uidSchema.optional(),
-  tagUid: uidSchema.optional(),
+  categoryUids: z.array(uidSchema).max(100).optional(),
+  tagUids: z.array(uidSchema).max(100).optional(),
   favorite: z.boolean().optional(),
   visitStatus: z.enum(["PLAN", "VISITED"]).optional(),
-  relationStatus: z.enum(["UNREFERRED", "REVIEW", "REJECTED", "REFERRED"]).optional(),
+  relationStatuses: z.array(z.enum(["UNREFERRED", "REVIEW", "REJECTED", "REFERRED"])).max(4).optional(),
   showInactive: z.boolean().default(false),
 });
 type PlaceFilter = z.infer<typeof placeFilterSchema>;
@@ -123,20 +137,21 @@ async function queryPlaces(
   }
   if (f.favorite != null) conds.push(eq(myPlaces.isFavorite, f.favorite));
   if (f.visitStatus) conds.push(eq(myPlaces.visitStatus, f.visitStatus));
-  if (f.relationStatus) conds.push(eq(myPlaces.masterRelationStatus, f.relationStatus));
-  if (f.tagUid) {
+  if (f.relationStatuses?.length) conds.push(inArray(myPlaces.masterRelationStatus, f.relationStatuses));
+  if (f.tagUids?.length) {
+    // Pilihan ganda TAG: tempat yang memiliki salah satu TAG terpilih (milik user ini).
     conds.push(
-      sql`${myPlaces.id} in (select mpt.my_place_id from my_place_tags mpt inner join tags t on t.id = mpt.tag_id where t.uid = ${f.tagUid} and t.user_id = ${userId})`,
+      sql`${myPlaces.id} in (select mpt.my_place_id from my_place_tags mpt inner join tags t on t.id = mpt.tag_id where t.uid in (${sql.join(f.tagUids.map((u) => sql`${u}`), sql`, `)}) and t.user_id = ${userId})`,
     );
   }
-  if (f.categoryUid) {
+  if (f.categoryUids?.length) {
     // Effective category (DV-04): MASTER bila direferensikan, selain itu stored MY PLACE.
     conds.push(sql`(
       (${myPlaces.masterPlaceId} is not null and ${myPlaces.masterPlaceId} in (
-        select mpc.master_place_id from master_place_categories mpc inner join categories c on c.id = mpc.category_id where c.uid = ${f.categoryUid}))
+        select mpc.master_place_id from master_place_categories mpc inner join categories c on c.id = mpc.category_id where c.uid in (${sql.join(f.categoryUids.map((u) => sql`${u}`), sql`, `)})))
       or
       (${myPlaces.masterPlaceId} is null and ${myPlaces.id} in (
-        select pc.my_place_id from my_place_categories pc inner join categories c on c.id = pc.category_id where c.uid = ${f.categoryUid}))
+        select pc.my_place_id from my_place_categories pc inner join categories c on c.id = pc.category_id where c.uid in (${sql.join(f.categoryUids.map((u) => sql`${u}`), sql`, `)})))
     )`);
   }
   const where = and(...conds);
@@ -151,10 +166,24 @@ async function queryPlaces(
     ? await q.limit(paging.limit).offset((paging.page - 1) * paging.limit)
     : await q.limit(1000);
   const ids = rows.map((r) => r.id);
-  const [cats, tg, ratings] = await Promise.all([
+  // Jumlah & kunjungan terakhir per tempat (hanya untuk daftar berhalaman).
+  const visitStats = new Map<number, { n: number; last: Date | null }>();
+  if (paging && ids.length) {
+    const vs = await db
+      .select({ id: visits.myPlaceId, n: sql<number>`count(*)`, last: sql<Date | null>`max(${visits.visitedAt})`.mapWith(visits.visitedAt) })
+      .from(visits)
+      .where(inArray(visits.myPlaceId, ids))
+      .groupBy(visits.myPlaceId);
+    // Hasil agregat dipetakan lewat kolom visited_at (UTC) — tanpa ini MySQL mengembalikan string tanpa zona
+    // yang terbaca sebagai waktu lokal server sehingga bergeser sebesar offset zona server.
+    for (const v of vs) visitStats.set(v.id, { n: Number(v.n), last: v.last ?? null });
+  }
+  const [cats, tg, ratings, photos] = await Promise.all([
     effectiveCategories(rows),
     tagsForPlaces(ids),
     placeRatings(ids),
+    // Foto pantauan hanya untuk tabel berhalaman (daftar MY PLACE), bukan data peta.
+    paging ? myPlacePhotosFor(ids) : Promise.resolve(new Map<number, never[]>()),
   ]);
   return {
     total: Number(totalRow?.total ?? 0),
@@ -162,6 +191,7 @@ async function queryPlaces(
       uid: r.uid,
       name: r.name,
       address: r.address,
+      description: r.description,
       latitude: r.latitude,
       longitude: r.longitude,
       masterRelationStatus: r.masterRelationStatus,
@@ -169,9 +199,14 @@ async function queryPlaces(
       isFavorite: r.isFavorite,
       isActive: r.isActive,
       createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
       categories: cats.get(r.id) ?? [],
       tags: tg.get(r.id) ?? [],
       rating: ratings.get(r.id) ?? { avg: null, count: 0 },
+      // Urutan: foto utama dulu (myPlacePhotosFor).
+      photos: photos.get(r.id) ?? [],
+      visitCount: visitStats.get(r.id)?.n ?? 0,
+      lastVisitedAt: visitStats.get(r.id)?.last ?? null,
     })),
   };
 }
@@ -215,6 +250,59 @@ export const placeRouter = createTRPCRouter({
       .where(and(eq(myPlaces.userId, ctx.user.id), eq(myPlaces.isActive, true)))
       .orderBy(asc(myPlaces.name)),
   ),
+
+  /** Kunjungan sebuah MY PLACE, terbaru dulu, dengan paging server-side (ukuran halaman dari Pengaturan). */
+  visits: explorerProcedure
+    .input(z.object({ uid: uidSchema, page: z.number().int().min(1).default(1) }))
+    .query(async ({ ctx, input }) => {
+      const p = await ownedPlace(ctx.user.id, input.uid);
+      const pageSize = await getVisitPageSize();
+      const [stat] = await ctx.db
+        .select({ n: sql<number>`count(*)`, last: sql<Date | null>`max(${visits.visitedAt})`.mapWith(visits.visitedAt) })
+        .from(visits)
+        .where(eq(visits.myPlaceId, p.id));
+      const total = Number(stat?.n ?? 0);
+      // Halaman di luar jangkauan (mis. setelah menghapus) dirapatkan ke halaman terakhir.
+      const lastPage = Math.max(1, Math.ceil(total / pageSize));
+      const page = Math.min(input.page, lastPage);
+      const rows = await ctx.db
+        .select({ v: visits, itineraryName: itineraries.name })
+        .from(visits)
+        .leftJoin(itineraries, eq(itineraries.id, visits.itineraryId))
+        .where(eq(visits.myPlaceId, p.id))
+        .orderBy(desc(visits.visitedAt), desc(visits.id))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize);
+      const ids = rows.map((r) => r.v.id);
+      const photoRows = ids.length
+        ? await ctx.db
+            .select()
+            .from(visitPhotos)
+            .where(inArray(visitPhotos.visitId, ids))
+            .orderBy(desc(visitPhotos.isPrimary), asc(visitPhotos.sortOrder), asc(visitPhotos.id))
+        : [];
+      return {
+        total,
+        page,
+        pageSize,
+        lastVisitedAt: stat?.last ?? null,
+        rows: rows.map(({ v, itineraryName }) => ({
+          uid: v.uid,
+          visitedAt: v.visitedAt,
+          rating: v.rating,
+          note: v.note,
+          itineraryName,
+          context: v.itineraryPlaceId
+            ? ("PLANNED" as const)
+            : v.itineraryId
+              ? ("UNEXPECTED" as const)
+              : ("STANDALONE" as const),
+          photos: photoRows
+            .filter((ph) => ph.visitId === v.id)
+            .map((ph) => ({ uid: ph.uid, url: visitPhotoUrl(ph), caption: ph.caption, isPrimary: ph.isPrimary })),
+        })),
+      };
+    }),
 
   get: explorerProcedure
     .input(z.object({ uid: uidSchema }))
@@ -319,6 +407,7 @@ export const placeRouter = createTRPCRouter({
         rating: ratings.get(p.id) ?? { avg: null, count: 0 },
         history: history.map((h) => ({ ...h, hasSnapshot: !!Number(h.hasSnapshot) })),
         itineraries: itinRows,
+        photos: (await myPlacePhotosFor([p.id])).get(p.id) ?? [],
         visits: visitRows.map(({ v, itineraryName }) => ({
           uid: v.uid,
           visitedAt: v.visitedAt,
@@ -493,6 +582,62 @@ export const placeRouter = createTRPCRouter({
       return { ok: true };
     }),
 
+  /* --------------------------- MY PLACE PHOTO --------------------------- */
+
+  addExternalPhoto: explorerProcedure
+    .input(
+      z.object({
+        placeUid: uidSchema,
+        url: z.string().url().max(2000),
+        caption: z.string().trim().max(2000).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const p = await ownedPlace(ctx.user.id, input.placeUid);
+      await assertMyPlacePhotoCapacity(p.id);
+      await insertMyPlacePhoto({
+        myPlaceId: p.id,
+        storageType: "EXTERNAL",
+        externalUrl: input.url,
+        caption: input.caption ?? null,
+      });
+      return { ok: true };
+    }),
+
+  setPrimaryPhoto: explorerProcedure
+    .input(z.object({ photoUid: uidSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.transaction(async (tx) => {
+        const r = await ownedMyPlacePhoto(ctx.user.id, input.photoUid, tx);
+        await tx
+          .update(myPlacePhotos)
+          .set({ isPrimary: false })
+          .where(and(eq(myPlacePhotos.myPlaceId, r.myPlaceId), eq(myPlacePhotos.isPrimary, true)));
+        await tx.update(myPlacePhotos).set({ isPrimary: true }).where(eq(myPlacePhotos.id, r.id));
+      });
+      return { ok: true };
+    }),
+
+  updatePhotoCaption: explorerProcedure
+    .input(z.object({ photoUid: uidSchema, caption: z.string().trim().max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      const r = await ownedMyPlacePhoto(ctx.user.id, input.photoUid);
+      await ctx.db
+        .update(myPlacePhotos)
+        .set({ caption: input.caption || null })
+        .where(eq(myPlacePhotos.id, r.id));
+      return { ok: true };
+    }),
+
+  deletePhoto: explorerProcedure
+    .input(z.object({ photoUid: uidSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const r = await ownedMyPlacePhoto(ctx.user.id, input.photoUid);
+      await ctx.db.delete(myPlacePhotos).where(eq(myPlacePhotos.id, r.id));
+      if (r.storageType === "UPLOAD") await removeUpload(r.filePath);
+      return { ok: true };
+    }),
+
   /** P-10 langkah 1 — data terkait yang ikut terhapus + apakah perlu DELETE CONSENT. */
   deletePreview: explorerProcedure
     .input(z.object({ uid: uidSchema }))
@@ -507,6 +652,10 @@ export const placeRouter = createTRPCRouter({
         .from(visitPhotos)
         .innerJoin(visits, eq(visits.id, visitPhotos.visitId))
         .where(eq(visits.myPlaceId, p.id));
+      const [mph] = await ctx.db
+        .select({ n: sql<number>`count(*)` })
+        .from(myPlacePhotos)
+        .where(eq(myPlacePhotos.myPlaceId, p.id));
       const [h] = await ctx.db
         .select({ n: sql<number>`count(*)` })
         .from(myPlaceMasterHistories)
@@ -520,6 +669,7 @@ export const placeRouter = createTRPCRouter({
       return {
         visits: Number(v?.n ?? 0),
         visitPhotos: Number(ph?.n ?? 0),
+        myPlacePhotos: Number(mph?.n ?? 0),
         histories: history,
         itineraryPlaces: itin.map((i) => i.name),
         needsConsent: history > 0 || itin.length > 0,
@@ -549,6 +699,12 @@ export const placeRouter = createTRPCRouter({
           .innerJoin(visits, eq(visits.id, visitPhotos.visitId))
           .where(eq(visits.myPlaceId, p.id));
         for (const ph of photos)
+          if (ph.storageType === "UPLOAD" && ph.filePath) files.push(ph.filePath);
+        const ownPhotos = await tx
+          .select({ filePath: myPlacePhotos.filePath, storageType: myPlacePhotos.storageType })
+          .from(myPlacePhotos)
+          .where(eq(myPlacePhotos.myPlaceId, p.id));
+        for (const ph of ownPhotos)
           if (ph.storageType === "UPLOAD" && ph.filePath) files.push(ph.filePath);
         await tx.delete(myPlaces).where(eq(myPlaces.id, p.id));
       });

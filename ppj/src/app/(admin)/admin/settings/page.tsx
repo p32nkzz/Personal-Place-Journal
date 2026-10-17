@@ -1,33 +1,43 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { Icon, type IconName } from "~/components/Icon";
 import { MAP_COLOR_DEFAULTS, MAP_COLOR_KEYS, readableOn, type MapColors } from "~/components/map/colors";
 import { useMapColors } from "~/components/map/useMapColors";
+import { Select } from "~/components/Select";
+import { SettingRow, SettingsShell } from "~/components/SettingRow";
 import { Alert, Spinner, useErrorMessage, useToast } from "~/components/ui";
-import { useFormat, useT } from "~/lib/i18n";
+import { formatWithColon, tzOffsetMs, useFormat, useT } from "~/lib/i18n";
 import { useUrlState } from "~/lib/useUrlState";
 import { api } from "~/trpc/react";
 
-type Tab = "photo" | "map";
+type Tab = "general" | "photo" | "map";
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
+  { id: "general", label: "settings.tabGeneral", icon: "gear" },
   { id: "photo", label: "settings.tabPhoto", icon: "image" },
   { id: "map", label: "settings.tabMap", icon: "map" },
 ];
 
 const PHOTO_KEYS = [
-  { key: "photo.allowed_types", label: "settings.allowedTypes", hint: "settings.allowedTypesHint", type: "text" },
-  { key: "photo.max_size_mb", label: "settings.maxSize", hint: "settings.maxSizeHint", type: "number" },
-  { key: "photo.max_per_visit", label: "settings.maxPerVisit", hint: "settings.maxPerVisitHint", type: "number" },
-  { key: "photo.max_per_master_place", label: "settings.maxPerMaster", hint: "settings.maxPerMasterHint", type: "number" },
+  { key: "photo.allowed_types", def: "jpg,png,webp", label: "settings.allowedTypes", hint: "settings.allowedTypesHint", type: "text" },
+  { key: "photo.max_size_mb", def: "5", label: "settings.maxSize", hint: "settings.maxSizeHint", type: "number" },
+  { key: "photo.max_per_visit", def: "10", label: "settings.maxPerVisit", hint: "settings.maxPerVisitHint", type: "number" },
+  { key: "photo.max_per_my_place", def: "10", label: "settings.maxPerMyPlace", hint: "settings.maxPerMyPlaceHint", type: "number" },
+  { key: "photo.max_per_master_place", def: "20", label: "settings.maxPerMaster", hint: "settings.maxPerMasterHint", type: "number" },
+] as const;
+
+const AVATAR_KEYS = [
+  { key: "avatar.allowed_types", def: "jpg,png,webp", label: "settings.avatarTypes", hint: "settings.avatarTypesHint", type: "text" },
+  { key: "avatar.max_size_mb", def: "5", label: "settings.avatarMaxSize", hint: "settings.avatarMaxSizeHint", type: "number" },
 ] as const;
 
 function Settings() {
   const { t } = useT();
-  const [s, set] = useUrlState({ tab: "photo" });
-  const tab: Tab = s.tab === "map" ? "map" : "photo";
+  const [s, set] = useUrlState({ tab: "general" });
+  const tab: Tab = s.tab === "map" ? "map" : s.tab === "photo" ? "photo" : "general";
 
   return (
     <div className="container page">
@@ -38,73 +48,29 @@ function Settings() {
         </div>
       </div>
 
-      <div className="settings-layout">
-        <nav className="settings-nav" aria-label={t("nav.settings")}>
-          {TABS.map((x) => (
-            <button
-              key={x.id}
-              type="button"
-              className="settings-nav-item"
-              aria-current={tab === x.id ? "page" : undefined}
-              onClick={() => set({ tab: x.id })}
-            >
-              <Icon name={x.icon} /> {t(x.label)}
-            </button>
-          ))}
-        </nav>
-
-        <section className="settings-panel card card-flush">
-          {/* Catatan "berlaku untuk upload berikutnya" hanya relevan untuk aturan foto. */}
-          {tab === "photo" && (
-            <p className="settings-note">
-              <Icon name="circle-info" fixedWidth={false} /> {t("settings.applyNote")}
-            </p>
-          )}
-          {tab === "photo" ? <PhotoSettings /> : <MapSettings />}
-        </section>
-      </div>
-    </div>
-  );
-}
-
-/** Satu baris pengaturan: label + keterangan di kiri, kontrol di kanan. */
-function Row({
-  label,
-  hint,
-  meta,
-  dirty,
-  error,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  meta?: string;
-  dirty?: boolean;
-  error?: string | null;
-  children: React.ReactNode;
-}) {
-  const { t } = useT();
-  return (
-    <div className={`setting-row ${dirty ? "is-dirty" : ""}`}>
-      <div className="setting-info">
-        <div className="setting-label">
-          {label}
-          {dirty && <span className="setting-dirty">{t("settings.unsaved")}</span>}
-        </div>
-        {hint && <div className="setting-hint">{hint}</div>}
-        {meta && <div className="setting-meta">{meta}</div>}
-        {error && (
-          <div className="helper helper-error" role="alert" style={{ marginTop: 4 }}>
-            <Icon name="warning" fixedWidth={false} /> {error}
-          </div>
+      <SettingsShell tabs={TABS.map((x) => ({ ...x, label: t(x.label) }))} value={tab} onChange={(id) => set({ tab: id })} ariaLabel={t("nav.settings")}>
+        {/* Catatan "berlaku untuk upload berikutnya" hanya relevan untuk aturan foto. */}
+        {tab === "photo" && (
+          <p className="settings-note">
+            <Icon name="circle-info" fixedWidth={false} /> {t("settings.applyNote")}
+          </p>
         )}
-      </div>
-      <div className="setting-control">{children}</div>
+        {tab === "general" ? <GeneralSettings /> : tab === "photo" ? <PhotoSettings /> : <MapSettings />}
+      </SettingsShell>
     </div>
   );
 }
 
-function PhotoSettings() {
+type KeyDef = { key: string; def: string; label: string; hint: string; type: "text" | "number" };
+
+/** Field angka: tidak boleh negatif (blokir tombol minus/notasi eksponen dan bersihkan hasil tempel). */
+const blockNegative = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === "-" || e.key === "+" || e.key === "e" || e.key === "E") e.preventDefault();
+};
+const cleanNumber = (s: string) => s.replace(/[^0-9.]/g, "");
+
+/** Baris-baris pengaturan numerik/teks sederhana (satu form per key). */
+function KeyRows({ keys }: { keys: readonly KeyDef[] }) {
   const { t } = useT();
   const fmt = useFormat();
   const toast = useToast();
@@ -129,10 +95,7 @@ function PhotoSettings() {
 
   if (isLoading) return <Spinner />;
 
-  return (
-    <div>
-      <h2 className="settings-title">{t("settings.groupPhoto")}</h2>
-      {PHOTO_KEYS.map((k) => {
+  const renderRow = (k: KeyDef) => {
         const row = data?.find((d) => d.key === k.key);
         if (!row) return null;
         const dirty = values[k.key] !== row.value;
@@ -144,25 +107,49 @@ function PhotoSettings() {
               update.mutate({ key: k.key, value: values[k.key] ?? "" });
             }}
           >
-            <Row label={t(k.label)} hint={t(k.hint)} meta={`${k.key} · ${t("settings.lastUpdated")} ${fmt.dateTime(row.updatedAt)}`} dirty={dirty} error={errors[k.key]}>
+            <SettingRow label={t(k.label)} hint={t(k.hint)} meta={`${k.key} · ${t("settings.lastUpdated")} ${fmt.dateTime(row.updatedAt)}`} dirty={dirty} error={errors[k.key]}>
               <input
                 id={k.key}
                 className="input"
                 style={{ width: k.type === "text" ? 180 : 110 }}
                 type={k.type}
-                step={k.type === "number" ? "any" : undefined}
+                min={k.type === "number" ? 0 : undefined}
+                step={k.type === "number" ? (k.key.endsWith("_mb") ? "any" : k.key.startsWith("map.pin_scale") ? 0.1 : 1) : undefined}
+                inputMode={k.type === "number" ? "decimal" : undefined}
                 value={values[k.key] ?? ""}
                 aria-label={t(k.label)}
                 aria-invalid={!!errors[k.key]}
-                onChange={(e) => setValues((v) => ({ ...v, [k.key]: e.target.value }))}
+                onKeyDown={k.type === "number" ? blockNegative : undefined}
+                onChange={(e) => setValues((v) => ({ ...v, [k.key]: k.type === "number" ? cleanNumber(e.target.value) : e.target.value }))}
               />
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                title={`${t("settings.resetDefault")}: ${k.def}`}
+                disabled={(values[k.key] ?? "") === k.def}
+                onClick={() => setValues((v) => ({ ...v, [k.key]: k.def }))}
+              >
+                {t("settings.resetColor")}
+              </button>
               <button className="btn btn-primary btn-sm" disabled={update.isPending || !dirty}>
                 <Icon name="save" /> {t("common.save")}
               </button>
-            </Row>
+            </SettingRow>
           </form>
         );
-      })}
+  };
+
+  return <>{keys.map(renderRow)}</>;
+}
+
+function PhotoSettings() {
+  const { t } = useT();
+  return (
+    <div>
+      <h2 className="settings-title">{t("settings.groupPhoto")}</h2>
+      <KeyRows keys={PHOTO_KEYS} />
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupAvatar")}</h2>
+      <KeyRows keys={AVATAR_KEYS} />
     </div>
   );
 }
@@ -172,6 +159,24 @@ const COLOR_FIELDS = [
   { prop: "mine", label: "settings.colorMine", glyph: "" },
   { prop: "favorite", label: "settings.colorFavorite", glyph: "★" },
   { prop: "newPin", label: "settings.colorNewPin", glyph: "+" },
+] as const;
+
+const CATEGORY_KEYS = [
+  { key: "category.page_size", def: "4", label: "settings.categoryPageSize", hint: "settings.categoryPageSizeHint", type: "number" },
+] as const;
+
+const MAP_VIEW_KEYS = [
+  { key: "map.default_zoom", def: "15", label: "settings.mapZoom", hint: "settings.mapZoomHint", type: "number" },
+  { key: "map.pin_scale", def: "1", label: "settings.pinScale", hint: "settings.pinScaleHint", type: "number" },
+  { key: "map.pin_scale_active", def: "1.4", label: "settings.pinScaleActive", hint: "settings.pinScaleActiveHint", type: "number" },
+] as const;
+
+const VISIT_KEYS = [
+  { key: "visit.page_size", def: "5", label: "settings.visitPageSize", hint: "settings.visitPageSizeHint", type: "number" },
+] as const;
+
+const TAG_KEYS = [
+  { key: "tag.page_size", def: "4", label: "settings.tagPageSize", hint: "settings.tagPageSizeHint", type: "number" },
 ] as const;
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -240,14 +245,17 @@ function MapSettings() {
 
   return (
     <div>
-      <h2 className="settings-title">{t("settings.groupSearch")}</h2>
+      <h2 className="settings-title">{t("settings.groupMapView")}</h2>
+      <KeyRows keys={MAP_VIEW_KEYS} />
+
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupSearch")}</h2>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           updateSize.mutate({ key: "map.recent_page_size", value: size });
         }}
       >
-        <Row
+        <SettingRow
           label={t("settings.recentPageSize")}
           hint={t("settings.recentPageSizeHint")}
           meta={sizeRow ? `map.recent_page_size · ${t("settings.lastUpdated")} ${fmt.dateTime(sizeRow.updatedAt)}` : "map.recent_page_size"}
@@ -260,18 +268,20 @@ function MapSettings() {
             type="number"
             min={1}
             max={50}
+            step={1}
             value={size}
             aria-label={t("settings.recentPageSize")}
             aria-invalid={!!sizeError}
-            onChange={(e) => setSize(e.target.value)}
+            onKeyDown={blockNegative}
+            onChange={(e) => setSize(cleanNumber(e.target.value))}
           />
-          <button type="button" className="btn btn-ghost btn-sm" disabled={size === "3"} onClick={() => setSize("3")}>
+          <button type="button" className="btn btn-ghost btn-sm" title={`${t("settings.resetDefault")}: 3`} disabled={size === "3"} onClick={() => setSize("3")}>
             {t("settings.resetColor")}
           </button>
           <button className="btn btn-primary btn-sm" disabled={updateSize.isPending || !sizeDirty}>
             <Icon name="save" /> {t("common.save")}
           </button>
-        </Row>
+        </SettingRow>
       </form>
 
       <h2 className="settings-title">{t("settings.mapColors")}</h2>
@@ -285,7 +295,7 @@ function MapSettings() {
         const v = draft[f.prop];
         const ok = HEX.test(v);
         return (
-          <Row key={f.prop} label={t(f.label)} dirty={v.toUpperCase() !== current[f.prop].toUpperCase()}>
+          <SettingRow key={f.prop} label={t(f.label)} dirty={v.toUpperCase() !== current[f.prop].toUpperCase()}>
             <PinPreview color={ok ? v : "#999999"} glyph={f.glyph} />
             <input
               type="color"
@@ -311,7 +321,7 @@ function MapSettings() {
             >
               {t("settings.resetColor")}
             </button>
-          </Row>
+          </SettingRow>
         );
       })}
       <div className="settings-footer">
@@ -322,6 +332,138 @@ function MapSettings() {
           {t("common.cancel")}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Daftar seluruh zona waktu IANA dengan keterangan lengkap: offset UTC, ID zona, dan nama zona. */
+function useTimezoneOptions(lang: string) {
+  return useMemo(() => {
+    const now = new Date();
+    const locale = lang === "ID" ? "id-ID" : "en-GB";
+    let ids: string[] = [];
+    try {
+      ids = (Intl as unknown as { supportedValuesOf: (k: string) => string[] }).supportedValuesOf("timeZone");
+    } catch {
+      ids = ["Asia/Jakarta", "UTC"];
+    }
+    if (!ids.includes("UTC")) ids = [...ids, "UTC"];
+    const rows = ids.map((id) => {
+      const off = tzOffsetMs(id, now.getTime()) / 60000;
+      const sign = off < 0 ? "-" : "+";
+      const abs = Math.abs(off);
+      const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+      const mm = String(abs % 60).padStart(2, "0");
+      let name = "";
+      try {
+        name =
+          new Intl.DateTimeFormat(locale, { timeZone: id, timeZoneName: "longGeneric" })
+            .formatToParts(now)
+            .find((p) => p.type === "timeZoneName")?.value ?? "";
+      } catch {
+        name = "";
+      }
+      return { id, off, label: `(UTC${sign}${hh}:${mm}) ${id.replaceAll("_", " ")}${name ? ` — ${name}` : ""}` };
+    });
+    return rows.sort((a, b) => a.off - b.off || a.id.localeCompare(b.id));
+  }, [lang]);
+}
+
+function GeneralSettings() {
+  const { t, lang, timezone } = useT();
+  const fmt = useFormat();
+  const router = useRouter();
+  const toast = useToast();
+  const errMsg = useErrorMessage();
+  const utils = api.useUtils();
+  const { data } = api.settings.list.useQuery();
+  const row = data?.find((d) => d.key === "app.timezone");
+  const options = useTimezoneOptions(lang);
+  const [value, setValue] = useState(timezone);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => setValue(timezone), [timezone]);
+  useEffect(() => {
+    const h = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(h);
+  }, []);
+
+  const update = api.settings.update.useMutation({
+    onSuccess: () => {
+      setError(null);
+      void utils.settings.invalidate();
+      toast.push(t("common.saved"), "success");
+      // Muat ulang layout server agar seluruh halaman memakai zona waktu baru.
+      router.refresh();
+    },
+    onError: (e) => setError(errMsg(e)),
+  });
+
+  const dirty = value !== timezone;
+  const preview = (() => {
+    try {
+      return formatWithColon(
+        new Intl.DateTimeFormat(lang === "ID" ? "id-ID" : "en-GB", {
+          dateStyle: "full",
+          timeStyle: "long",
+          timeZone: value,
+        }),
+        now,
+      );
+    } catch {
+      return "—";
+    }
+  })();
+
+  return (
+    <div>
+      <h2 className="settings-title">{t("settings.groupRegional")}</h2>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          update.mutate({ key: "app.timezone", value });
+        }}
+      >
+        <SettingRow
+          label={t("settings.timezone")}
+          hint={t("settings.timezoneHint")}
+          meta={row ? `app.timezone · ${t("settings.lastUpdated")} ${fmt.dateTime(row.updatedAt)}` : "app.timezone"}
+          dirty={dirty}
+          error={error}
+        >
+          <div style={{ width: 380, maxWidth: "100%" }}>
+            <Select value={value} onChange={(e) => setValue(e.target.value)} aria-label={t("settings.timezone")} searchFrom={0} width="100%">
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={value === "Asia/Jakarta"} onClick={() => setValue("Asia/Jakarta")}>
+            {t("settings.resetColor")}
+          </button>
+          <button className="btn btn-primary btn-sm" disabled={update.isPending || !dirty}>
+            <Icon name="save" /> {t("common.save")}
+          </button>
+        </SettingRow>
+      </form>
+      <div className="setting-row">
+        <div className="setting-info">
+          <div className="setting-label">{t("settings.timezoneNow")}</div>
+          <div className="setting-hint">{value}</div>
+        </div>
+        <div className="setting-control">
+          <strong style={{ fontSize: 14 }}>{preview}</strong>
+        </div>
+      </div>
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupCategory")}</h2>
+      <KeyRows keys={CATEGORY_KEYS} />
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupTag")}</h2>
+      <KeyRows keys={TAG_KEYS} />
+      <h2 className="settings-title" style={{ marginTop: 8 }}>{t("settings.groupVisit")}</h2>
+      <KeyRows keys={VISIT_KEYS} />
     </div>
   );
 }

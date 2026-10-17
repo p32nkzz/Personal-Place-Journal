@@ -47,8 +47,8 @@ export default function ItinerariesPage() {
               </div>
               {i.description && <p className="t-small" style={{ margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{i.description}</p>}
               <div className="row" style={{ marginTop: 4 }}>
-                <span className="cat">{t("itinerary.stops", { n: i.places })}</span>
-                <span className="cat">{t("itinerary.visitCount", { n: i.visits })}</span>
+                <span className="meta-chip"><Icon name="route" fixedWidth={false} /> {t("itinerary.stops", { n: i.places })}</span>
+                <span className="meta-chip"><Icon name="map-pin" fixedWidth={false} /> {t("itinerary.visitCount", { n: i.visits })}</span>
               </div>
             </Link>
           ))}

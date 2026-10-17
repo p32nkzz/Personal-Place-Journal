@@ -7,14 +7,14 @@
 | Document ID | BRD-PPJ-001 |
 | Document | Business Requirement Document (BRD) |
 | Application | Personal Place Journal |
-| Version | 1.2.0 |
+| Version | 1.3.0 |
 | Status | IN_REVIEW |
 | Document Owner | Verry Prima |
 | Author | Verry Prima |
 | Primary Users | Explorer, Admin, Guest |
 | Audience | Product Owner, Business Analyst, Developer, QA, AI coding agent |
-| Created / Last Updated | 2026-08-25 / 2026-10-14 |
-| Related Documents | SPEC-PPJ (kebutuhan awal), ERD-PPJ-001 v1.2.0 (`result/v1.2.0/ERD_PPJ_v1.2.0.md`), SRS-PPJ-001 (`TBD`), UI-Mockup (`TBD`) |
+| Created / Last Updated | 2026-08-25 / 2026-10-15 |
+| Related Documents | SPEC-PPJ (kebutuhan awal), ERD-PPJ-001 v1.3.0 (`result/v1.3.0/ERD_PPJ_v1.3.0.md`), SRS-PPJ-001 (`TBD`), UI-Mockup (`TBD`) |
 | Purpose | Mendokumentasikan kebutuhan bisnis dan aturan utama aplikasi pencatatan tempat, rencana perjalanan, kunjungan, serta pengelolaan MASTER PLACE. |
 
 Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan konsep inti/business rule, MINOR = penambahan requirement, PATCH = koreksi redaksi.
@@ -34,6 +34,7 @@ Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan konsep inti/business rul
 | 1.0.0 | 2026-10-13 | Verry Prima | Restrukturisasi sesuai `standard/BRD_standard.md` v1.0; penambahan role Guest, lifecycle MASTER PLACE (ACTIVE/INACTIVE/DELETED), user management & reset password, aturan edit MY PLACE selama REVIEW, permission matrix, deletion matrix, NFR, Open Issues, RTM; penghapusan MY PLACE dengan persetujuan, MY PLACE ACTIVE/INACTIVE, mode Admin/Explorer untuk akun ADMIN, lokasi perangkat sebagai titik tengah peta | Semua |
 | 1.1.0 | 2026-10-13 | Verry Prima | Pembahasan ulang Assumptions, Constraints, Dependencies, Risks, dan Open Issues: bilingual ID/EN, ubah profil/password/email (konfirmasi link), wajib ganti password setelah reset, restore user, backup manual oleh Admin, konfigurasi aturan foto, kriteria duplikasi, aturan field wajib & panjang, validasi VISIT/ITINERARY, target NFR, EXIF & UU PDP, risiko baru RK-10..14 | 2, 4, 7, 10, 12, 13, 14, 15, 16, 17, 19–31 |
 | 1.2.0 | 2026-10-14 | Verry Prima | Penambahan **username** unik pada USER: dapat dipakai sebagai kredensial login selain email, panjang 4–20 karakter, diisi Admin saat membuat Explorer, dan dapat diganti user sendiri setelah login; proses P-15 & P-16, FR-USR-001 diperbarui, FR-USR-023..024, BR/DR/validasi/AC/RTM, NFR-SEC-013, RK-15; ERD diselaraskan ke ERD-PPJ-001 v1.2.0 | 1, 2, 4, 7, 10, 12, 13, 15, 17, 19, 22, 23, 25–32 |
+| 1.3.0 | 2026-10-15 | Verry Prima | Fitur **foto profil (avatar)** user yang dikelola sendiri setelah login, dengan konfigurasi `avatar.allowed_types` & `avatar.max_size_mb`; fitur **foto tinjauan MY PLACE (MY PLACE PHOTO)** opsional, banyak foto per MY PLACE, storage UPLOAD/EXTERNAL/S3, batas `photo.max_per_my_place`, dan dapat dijadikan MASTER PLACE PHOTO oleh Admin; proses P-17 & P-18, P-01/P-08/P-10/P-14 diperbarui, modul baru 13.19 (`MPP`), FR-USR-025..026, FR-MYP-015, FR-MPH-004, FR-CFG diperbarui, RK-16; ERD diselaraskan ke ERD-PPJ-001 v1.3.0 | 1, 2, 4, 7, 9, 10, 11, 12, 13, 15, 17, 19, 22–25, 27–32 |
 
 ### 2.1 Keputusan Klarifikasi pada Versi 1.0.0
 
@@ -105,6 +106,15 @@ Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan konsep inti/business rul
 | K-54 | Aturan username: panjang **4–20 karakter**; hanya huruf, angka, titik (`.`), dan garis bawah (`_`); tidak boleh mengandung `@` agar tidak tertukar dengan email; unik tanpa membedakan huruf besar/kecil (disimpan huruf kecil), termasuk username milik user soft-deleted. | 13.1, 15.4 |
 | K-55 | Username wajib diisi Admin saat membuat akun Explorer (Admin awal: melalui seed). Setelah login, user dapat mengganti username miliknya sendiri; perubahan berlaku langsung tanpa konfirmasi, dan username lama dapat dipakai akun lain. Admin tidak mengubah username Explorer. | 10, 12.9, 12.16, 13.1 |
 
+### 2.4 Keputusan Klarifikasi pada Versi 1.3.0
+
+| No | Keputusan | Section |
+|---|---|---|
+| K-56 | Setiap user (Explorer & Admin) dapat memiliki **satu foto profil (avatar)** yang opsional. Setelah login, user mengunggah, mengganti, dan menghapus avatar miliknya sendiri; Admin tidak mengubah avatar user lain. Avatar hanya melalui **upload file** (tanpa external link); avatar lama dihapus saat diganti dan riwayatnya tidak disimpan. | 10, 12.17, 13.1 |
+| K-57 | Aturan avatar disimpan sebagai konfigurasi tersendiri di `app_settings`: `avatar.allowed_types` (default `jpg, png, webp`) dan `avatar.max_size_mb` (default `5`), sama dengan nilai default `photo.*` saat ini. | 13.17 |
+| K-58 | **Foto tinjauan MY PLACE (MY PLACE PHOTO)** bersifat opsional, dapat ditambahkan saat membuat atau mengubah MY PLACE, dan satu MY PLACE dapat memiliki banyak foto. Aturan penyimpanan sama dengan VISIT PHOTO (UPLOAD / EXTERNAL / S3, caption, urutan, maksimal satu primary). Tipe & ukuran mengikuti `photo.allowed_types` / `photo.max_size_mb`; jumlah maksimum per MY PLACE diatur `photo.max_per_my_place` (default `10`, sama dengan batas per VISIT). | 12.1, 13.17, 13.19 |
+| K-59 | Admin dapat menjadikan MY PLACE PHOTO sebagai **MASTER PLACE PHOTO** (salinan independen dengan referensi sumber), dengan aturan yang sama seperti VISIT PHOTO: hanya dari MY PLACE yang saat ini mereferensikan MASTER tersebut dan tanpa persetujuan/pemberitahuan Explorer (K-16, K-35). | 12.8, 13.11, 25 |
+
 ---
 
 ## 3. Approval / Sign-off
@@ -133,8 +143,10 @@ Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan konsep inti/business rul
 | FAVORITE | Flag boolean personal ON/OFF pada MY PLACE. | CATEGORY, TAG, VISIT STATUS |
 | TAG COLOR REFERENCE | Daftar preset warna bersama untuk TAG; bukan foreign key. | `tags.color` (nilai aktual) |
 | VISIT | Catatan kunjungan aktual ke MY PLACE; sumber rating. | ITINERARY PLACE |
-| VISIT PHOTO | Foto dokumentasi sebuah VISIT; data personal. | MASTER PLACE PHOTO |
-| MASTER PLACE PHOTO | Foto MASTER PLACE yang dikelola Admin; shared data, record independen. | VISIT PHOTO |
+| VISIT PHOTO | Foto dokumentasi sebuah VISIT; data personal. | MY PLACE PHOTO, MASTER PLACE PHOTO |
+| MY PLACE PHOTO (Foto Tinjauan) | Foto opsional pada MY PLACE sebagai informasi/penanda tempat, diisi Explorer saat membuat atau mengubah MY PLACE; data personal. | VISIT PHOTO (dokumentasi kunjungan), MASTER PLACE PHOTO |
+| MASTER PLACE PHOTO | Foto MASTER PLACE yang dikelola Admin; shared data, record independen. | VISIT PHOTO, MY PLACE PHOTO |
+| AVATAR (Foto Profil) | Satu foto profil opsional milik user, diunggah dan diganti sendiri oleh user setelah login. | Foto tempat |
 | ITINERARY | Rencana perjalanan milik Explorer (planning context). | VISIT |
 | ITINERARY PLACE | Satu planned stop (occurrence) dalam ITINERARY yang menunjuk ke MY PLACE. | VISIT, MY PLACE |
 | PLANNED PLACE VISIT | VISIT yang mereferensikan ITINERARY PLACE. | UNEXPECTED VISIT |
@@ -148,7 +160,7 @@ Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan konsep inti/business rul
 | EFFECTIVE CATEGORY | CATEGORY yang ditampilkan untuk MY PLACE (lihat 16). | Stored MY PLACE category |
 | MASTER RELATION HISTORY | Catatan append-only lifecycle hubungan MY PLACE ↔ MASTER PLACE; hanya ikut terhapus bila owner menghapus MY PLACE dengan persetujuan eksplisit. | General audit log |
 | DELETE CONSENT | Persetujuan eksplisit (checkbox) owner untuk menghapus MY PLACE beserta seluruh data terkait. | Konfirmasi hapus biasa |
-| APP SETTING (Konfigurasi Aplikasi) | Nilai aturan aplikasi yang dapat diubah Admin tanpa perubahan kode, mis. aturan foto. | Konstanta hard-coded |
+| APP SETTING (Konfigurasi Aplikasi) | Nilai aturan aplikasi yang dapat diubah Admin tanpa perubahan kode, mis. aturan foto dan avatar. | Konstanta hard-coded |
 | BACKUP | Salinan database dan file foto yang dibuat atas perintah Admin, tercatat di riwayat backup. | Restore |
 | USERNAME | Nama login unik milik user (4–20 karakter, huruf/angka/`.`/`_`, tanpa membedakan huruf besar/kecil); dapat dipakai untuk login selain email dan dapat diganti user sendiri. | Nama tampilan (`name`), email |
 | EMAIL CHANGE CONFIRMATION | Link sekali pakai (berlaku 24 jam) yang dikirim ke email baru; email berubah hanya setelah link diklik. | Perubahan email langsung |
@@ -194,8 +206,8 @@ Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan konsep inti/business rul
 
 ### 7.1 In-Scope (Fase 1)
 
-- FR-USR: Login dengan email atau username, manajemen akun Explorer oleh Admin (termasuk restore), reset password, ubah profil/username/password/email sendiri, preferensi bahasa, switch mode Admin/Explorer.
-- FR-CFG: Konfigurasi aturan foto oleh Admin.
+- FR-USR: Login dengan email atau username, manajemen akun Explorer oleh Admin (termasuk restore), reset password, ubah profil/username/password/email/avatar sendiri, preferensi bahasa, switch mode Admin/Explorer.
+- FR-CFG: Konfigurasi aturan foto dan avatar oleh Admin.
 - FR-BKP: Backup manual database & file foto oleh Admin.
 - FR-MAP: Pencarian & pin tempat pada peta (Google Maps/Places), lokasi perangkat sebagai titik tengah peta, tampilan MASTER PLACE pada peta.
 - FR-GST: Akses Guest read-only ke MASTER PLACE aktif.
@@ -206,7 +218,8 @@ Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan konsep inti/business rul
 - FR-FAV: FAVORITE pada MY PLACE.
 - FR-TAG / FR-CLR: TAG personal dan TAG COLOR REFERENCE.
 - FR-VST / FR-VPH: VISIT, rating, dan VISIT PHOTO.
-- FR-MPH: MASTER PLACE PHOTO (upload Admin atau dari VISIT PHOTO).
+- FR-MPP: MY PLACE PHOTO (foto tinjauan MY PLACE, opsional).
+- FR-MPH: MASTER PLACE PHOTO (upload Admin, dari VISIT PHOTO, atau dari MY PLACE PHOTO).
 - FR-ITN: ITINERARY dan ITINERARY PLACE.
 - FR-RTE: Visualisasi planned route dan actual visit.
 - FR-FLT: Filter/pencarian MY PLACE.
@@ -260,7 +273,7 @@ Personal Place Journal adalah aplikasi web berbasis peta untuk mencatat tempat y
 ### 9.1 Kemampuan Utama
 
 1. Mencari tempat melalui peta (Google Maps/Places) atau melakukan pin manual.
-2. Menyimpan tempat sebagai `MY PLACE`.
+2. Menyimpan tempat sebagai `MY PLACE`, opsional dengan foto tinjauan.
 3. Menggunakan `MASTER PLACE` sebagai referensi tempat terstandarisasi (opsional).
 4. Mengklasifikasikan tempat dengan CATEGORY.
 5. Mengelompokkan MY PLACE dengan TAG personal.
@@ -281,7 +294,9 @@ TAG                 = grouping/penandaan personal Explorer
 FAVORITE            = flag personal ON/OFF pada MY PLACE
 VISIT               = actual visit record
 VISIT PHOTO         = dokumentasi personal VISIT
+MY PLACE PHOTO      = foto tinjauan personal MY PLACE (opsional)
 MASTER PLACE PHOTO  = foto shared MASTER PLACE
+AVATAR              = foto profil user (opsional)
 ITINERARY           = planned journey
 ITINERARY PLACE     = planned stop dalam ITINERARY
 TAG COLOR REFERENCE = preset warna bersama (tanpa FK)
@@ -297,6 +312,7 @@ MASTER PLACE ─────────────┐
                           ├── CATEGORY
                           ├── TAG
                           ├── FAVORITE (flag)
+                          ├── MY PLACE PHOTO ──(dipilih Admin)──▶ MASTER PLACE PHOTO (salinan independen)
                           └── VISIT
                                 └── VISIT PHOTO ──(dipilih Admin)──▶ MASTER PLACE PHOTO (salinan independen)
 
@@ -308,7 +324,7 @@ TAG COLOR REFERENCE ──(preset, tanpa FK)──▶ TAG.color
 
 ### 9.4 Core Principle
 
-> **MASTER PLACE adalah sumber referensi tempat bersama yang dikendalikan Admin. MY PLACE adalah representasi personal Explorer yang independen dan dapat memiliki snapshot data sendiri. CATEGORY adalah klasifikasi domain. TAG adalah grouping personal milik Explorer. FAVORITE adalah penanda personal ON/OFF pada MY PLACE. VISIT adalah factual record kunjungan terhadap MY PLACE dan menjadi sumber rating. ITINERARY adalah planning context yang menggunakan MY PLACE dan tidak wajib berelasi dengan MASTER PLACE. VISIT PHOTO dan MASTER PLACE PHOTO memiliki lifecycle independen. TAG COLOR adalah shared reference/preset yang nilainya disimpan langsung pada TAG tanpa foreign key. MASTER RELATION HISTORY adalah historical record append-only yang hanya ikut terhapus ketika owner menghapus MY PLACE dengan persetujuan eksplisit. Akun ADMIN dapat bekerja sebagai Explorer atas data personalnya sendiri, tetapi fungsi Admin dan fungsi Explorer tidak pernah aktif bersamaan.**
+> **MASTER PLACE adalah sumber referensi tempat bersama yang dikendalikan Admin. MY PLACE adalah representasi personal Explorer yang independen dan dapat memiliki snapshot data sendiri. CATEGORY adalah klasifikasi domain. TAG adalah grouping personal milik Explorer. FAVORITE adalah penanda personal ON/OFF pada MY PLACE. VISIT adalah factual record kunjungan terhadap MY PLACE dan menjadi sumber rating. ITINERARY adalah planning context yang menggunakan MY PLACE dan tidak wajib berelasi dengan MASTER PLACE. VISIT PHOTO, MY PLACE PHOTO, dan MASTER PLACE PHOTO memiliki lifecycle independen. TAG COLOR adalah shared reference/preset yang nilainya disimpan langsung pada TAG tanpa foreign key. MASTER RELATION HISTORY adalah historical record append-only yang hanya ikut terhapus ketika owner menghapus MY PLACE dengan persetujuan eksplisit. Akun ADMIN dapat bekerja sebagai Explorer atas data personalnya sendiri, tetapi fungsi Admin dan fungsi Explorer tidak pernah aktif bersamaan.**
 
 Perubahan terhadap konsep inti di atas harus dibahas dan disepakati sebelum diterapkan pada desain database, API, UI, atau kode aplikasi.
 
@@ -324,11 +340,12 @@ Seluruh kemampuan dan larangan Explorer pada section ini juga berlaku untuk **ak
 
 Explorer **dapat**:
 - login menggunakan email atau username dan mengelola data personal miliknya;
-- mengubah nama, username, password, email (dengan konfirmasi link), dan preferensi bahasa miliknya;
+- mengubah nama, username, password, email (dengan konfirmasi link), foto profil (avatar), dan preferensi bahasa miliknya;
 - mencari tempat melalui Google Maps/Places; peta berpusat pada lokasi perangkat, dan Explorer bebas menentukan pin di lokasi mana pun;
 - melihat MASTER PLACE `ACTIVE`, serta MASTER `INACTIVE` yang direferensikan MY PLACE miliknya (read-only, berlabel "Tidak aktif");
 - membuat MY PLACE dari hasil Google, dari MASTER PLACE, atau input baru;
 - mengubah data prefill sebelum menyimpan MY PLACE;
+- menambahkan, menghapus, mengurutkan, dan menetapkan primary foto tinjauan (MY PLACE PHOTO) saat membuat atau mengubah MY PLACE;
 - menonaktifkan dan mengaktifkan kembali MY PLACE;
 - menghapus MY PLACE; jika MY PLACE memiliki history relasi atau ITINERARY PLACE, penghapusan memerlukan persetujuan eksplisit (12.10);
 - memilih CATEGORY aktif untuk MY PLACE;
@@ -361,14 +378,14 @@ Admin **dapat**:
 - melihat daftar pengajuan dan snapshot-nya;
 - menolak pengajuan dengan alasan; menerima dengan membuat MASTER baru atau mereferensikan MASTER existing;
 - mereferensikan MY PLACE atas inisiatif, memindahkan referensi (RE-REFER), dan melepas referensi (UNREFER);
-- melihat (read-only) MY PLACE dan VISIT PHOTO Explorer untuk keperluan kurasi;
-- mengelola MASTER PLACE PHOTO, termasuk mengambil VISIT PHOTO sebagai sumber;
+- melihat (read-only) MY PLACE, MY PLACE PHOTO, dan VISIT PHOTO Explorer untuk keperluan kurasi;
+- mengelola MASTER PLACE PHOTO, termasuk mengambil VISIT PHOTO atau MY PLACE PHOTO sebagai sumber;
 - mengelola CATEGORY dan TAG COLOR REFERENCE;
 - membuat (termasuk menetapkan username awal), mengubah, menonaktifkan, mengaktifkan kembali, dan soft-delete akun Explorer;
 - mereset password Explorer (generate random atau set manual);
 - mengubah email Explorer melalui konfirmasi link ke email baru;
 - me-restore akun Explorer yang `DELETED`;
-- mengelola konfigurasi aturan foto;
+- mengelola konfigurasi aturan foto dan avatar;
 - menjalankan backup manual dan mengunduh file backup;
 - me-review pengajuan MY PLACE, termasuk pengajuan miliknya sendiri yang dibuat dalam mode Explorer;
 - berpindah ke mode Explorer.
@@ -376,7 +393,8 @@ Admin **dapat**:
 Admin **tidak dapat**:
 - membuat akun Admin baru (Fase 1);
 - mengubah username Explorer setelah akun dibuat (username hanya diganti oleh pemilik akun);
-- mengubah data MY PLACE, VISIT, VISIT PHOTO, TAG, FAVORITE, atau ITINERARY milik Explorer lain;
+- mengubah data MY PLACE, MY PLACE PHOTO, VISIT, VISIT PHOTO, TAG, FAVORITE, atau ITINERARY milik Explorer lain;
+- mengubah atau menghapus avatar user lain;
 - memiliki TAG personal Explorer lain;
 - menggunakan fungsi Explorer saat berada dalam mode Admin.
 
@@ -386,7 +404,7 @@ Admin **tidak dapat**:
 
 Guest **dapat**: melihat peta berisi MASTER PLACE `ACTIVE` beserta detailnya (nama, alamat, deskripsi, koordinat, CATEGORY, rating MASTER, MASTER PLACE PHOTO).
 
-Guest **tidak dapat**: melihat MY PLACE, VISIT, VISIT PHOTO, TAG, ITINERARY, atau data user; melakukan perubahan data apa pun.
+Guest **tidak dapat**: melihat MY PLACE, MY PLACE PHOTO, VISIT, VISIT PHOTO, TAG, ITINERARY, atau data user (termasuk avatar); melakukan perubahan data apa pun.
 
 ### 10.4 Mode Admin / Explorer pada Akun ADMIN
 
@@ -396,7 +414,7 @@ Guest **tidak dapat**: melihat MY PLACE, VISIT, VISIT PHOTO, TAG, ITINERARY, ata
 | Mode awal | Setelah login, akun ADMIN selalu berada pada mode `ADMIN`. |
 | Switch | Admin dapat berpindah mode kapan saja melalui aksi "Switch Mode" tanpa login ulang. Pada Fase 1 hanya akun ADMIN yang dapat switch. |
 | Eksklusivitas | Pada satu waktu hanya satu mode aktif. Fungsi Admin hanya dapat dipakai dalam mode `ADMIN`; fungsi Explorer hanya dalam mode `EXPLORER`. |
-| Data personal | Dalam mode `EXPLORER`, akun ADMIN memiliki MY PLACE, TAG, VISIT, VISIT PHOTO, dan ITINERARY sendiri dengan skema dan aturan yang sama persis seperti Explorer; owner = `user_id` akun ADMIN tersebut. |
+| Data personal | Dalam mode `EXPLORER`, akun ADMIN memiliki MY PLACE, MY PLACE PHOTO, TAG, VISIT, VISIT PHOTO, dan ITINERARY sendiri dengan skema dan aturan yang sama persis seperti Explorer; owner = `user_id` akun ADMIN tersebut. |
 | Isolasi | Data personal akun ADMIN terisolasi dari Explorer lain sama seperti antar Explorer. Dalam mode `ADMIN`, data personal tersebut diperlakukan seperti data Explorer lain (read-only untuk kurasi). |
 | Self-review | Diizinkan: Admin dapat me-review pengajuan MY PLACE miliknya sendiri setelah switch ke mode `ADMIN`. |
 | Perhitungan | VISIT milik akun ADMIN ikut dihitung pada rating MASTER seperti VISIT Explorer. |
@@ -435,6 +453,9 @@ Kolom **Explorer** juga berlaku untuk akun ADMIN dalam mode Explorer. Kolom **Ad
 | CRUD VISIT PHOTO | ❌ | ✅ (own) | ❌ |
 | Read VISIT PHOTO Explorer lain | ❌ | ❌ | 👁 |
 | Gunakan VISIT PHOTO sebagai MASTER PLACE PHOTO | ❌ | ❌ | ✅ |
+| CRUD MY PLACE PHOTO (foto tinjauan) | ❌ | ✅ (own) | ❌ |
+| Read MY PLACE PHOTO Explorer lain | ❌ | ❌ | 👁 |
+| Gunakan MY PLACE PHOTO sebagai MASTER PLACE PHOTO | ❌ | ❌ | ✅ |
 | CRUD ITINERARY & ITINERARY PLACE | ❌ | ✅ (own) | ❌ |
 | Create / Update akun Explorer | ❌ | ❌ | ✅ |
 | Inactivate / Activate / Soft delete Explorer | ❌ | ❌ | ✅ |
@@ -443,11 +464,14 @@ Kolom **Explorer** juga berlaku untuk akun ADMIN dalam mode Explorer. Kolom **Ad
 | Ubah nama & password sendiri | ❌ | ✅ | ✅ |
 | Ubah username sendiri | ❌ | ✅ | ✅ |
 | Ubah username Explorer | ❌ | ❌ | ❌ |
+| Upload / ganti / hapus avatar sendiri | ❌ | ✅ | ✅ |
+| Read avatar user lain | ❌ | ❌ | 👁 |
+| Ubah / hapus avatar user lain | ❌ | ❌ | ❌ |
 | Ubah email sendiri (konfirmasi link) | ❌ | ✅ | ✅ |
 | Ubah email Explorer (konfirmasi link ke email baru) | ❌ | ❌ | ✅ |
 | Restore akun Explorer `DELETED` | ❌ | ❌ | ✅ |
 | Pilih bahasa antarmuka | ✅ (per perangkat) | ✅ (tersimpan di profil) | ✅ (tersimpan di profil) |
-| Kelola konfigurasi aturan foto | ❌ | ❌ | ✅ |
+| Kelola konfigurasi aturan foto & avatar | ❌ | ❌ | ✅ |
 | Backup manual & unduh file backup | ❌ | ❌ | ✅ |
 
 ---
@@ -458,7 +482,9 @@ Kolom **Explorer** juga berlaku untuk akun ADMIN dalam mode Explorer. Kolom **Ad
 
 ```text
 USER
+ ├── AVATAR (atribut, opsional)
  ├── MY PLACE
+ │    ├── MY PLACE PHOTO
  │    ├── CATEGORY (via my_place_categories)
  │    ├── TAG (via my_place_tags)
  │    ├── FAVORITE (flag)
@@ -492,6 +518,9 @@ MY PLACE      1 ───── N VISIT
 VISIT         1 ───── N VISIT PHOTO
 MASTER PLACE  1 ───── N MASTER PLACE PHOTO
 VISIT PHOTO   0..1 ── N MASTER PLACE PHOTO    (source, optional)
+MY PLACE      1 ───── N MY PLACE PHOTO
+MY PLACE PHOTO 0..1 ─ N MASTER PLACE PHOTO    (source, optional)
+USER          1 ───── 0..1 AVATAR             (atribut USER)
 ITINERARY     1 ───── N ITINERARY PLACE
 MY PLACE      1 ───── N ITINERARY PLACE       (boleh muncul berkali-kali)
 ITINERARY     0..1 ── N VISIT                 (itinerary context, optional)
@@ -512,6 +541,8 @@ MY PLACE      1 ───── N MY PLACE MASTER HISTORY
 | TAG | Personal | Explorer | Explorer pemilik |
 | VISIT | Personal | Explorer (via MY PLACE) | Explorer pemilik |
 | VISIT PHOTO | Personal | Explorer (via VISIT) | Explorer pemilik |
+| MY PLACE PHOTO | Personal | Explorer (via MY PLACE) | Explorer pemilik |
+| AVATAR | Account | User ybs | User ybs |
 | ITINERARY / ITINERARY PLACE | Personal | Explorer | Explorer pemilik |
 | APP SETTING | Konfigurasi | Sistem | Admin |
 | BACKUP LOG & file backup | Operasional | Sistem | Admin |
@@ -530,6 +561,7 @@ MY PLACE      1 ───── N MY PLACE MASTER HISTORY
 | MASTER RELATION STATUS | VISIT STATUS | Dua state machine berbeda; tidak boleh dicampur |
 | ITINERARY PLACE | VISIT | Rencana (`sequence`) vs fakta (`visited_at`) |
 | VISIT PHOTO | MASTER PLACE PHOTO | Personal vs shared; record independen |
+| MY PLACE PHOTO | VISIT PHOTO | Foto tinjauan/penanda tempat (melekat ke MY PLACE) vs dokumentasi kunjungan (melekat ke VISIT); keduanya personal dan dapat menjadi sumber MASTER PLACE PHOTO |
 | INACTIVE | SOFT DELETE | Dapat diaktifkan kembali vs terhapus (tanpa restore Fase 1) |
 | State | Action | `REFERRED` adalah state; `RE-REFER` adalah action history |
 
@@ -550,7 +582,7 @@ MY PLACE      1 ───── N MY PLACE MASTER HISTORY
 | 2b | Sistem | Jika dari MASTER PLACE `ACTIVE`: prefill dari MASTER; `master_place_id` diisi | Form terisi |
 | 2c | Explorer | Jika input baru: mengisi data manual | Form terisi |
 | 3 | Sistem | Menampilkan warning jika, pada MY PLACE milik user yang sama, `google_place_id` sama, **atau** MASTER sama, **atau** jarak koordinat ≤ 50 m | Warning (tidak memblokir) |
-| 4 | Explorer | Mengubah data prefill, memilih CATEGORY aktif, TAG, FAVORITE | — |
+| 4 | Explorer | Mengubah data prefill, memilih CATEGORY aktif, TAG, FAVORITE, dan (opsional) menambahkan foto tinjauan | — |
 | 5 | Explorer | Menyimpan | MY PLACE tersimpan |
 
 **Post-condition:**
@@ -640,14 +672,14 @@ Explorer tidak perlu memberikan persetujuan atas tindakan di atas.
 
 ITINERARY PLACE tidak wajib berelasi dengan MASTER PLACE dan tidak wajib menghasilkan VISIT.
 
-### 12.8 P-08 — MASTER PLACE PHOTO dari VISIT PHOTO
+### 12.8 P-08 — MASTER PLACE PHOTO dari VISIT PHOTO atau MY PLACE PHOTO
 
 **Aktor:** Admin
 
-1. Admin melihat VISIT PHOTO (read-only) **hanya** dari MY PLACE yang saat ini mereferensikan MASTER tersebut.
-2. Admin memilih foto → sistem membuat MASTER PLACE PHOTO sebagai record independen dengan referensi sumber `source_visit_photo_id`.
-3. VISIT PHOTO tetap data personal Explorer.
-4. Selain itu, Admin dapat mengunggah foto MASTER secara langsung tanpa mengambil dari VISIT PHOTO.
+1. Admin melihat VISIT PHOTO dan MY PLACE PHOTO (read-only) **hanya** dari MY PLACE yang saat ini mereferensikan MASTER tersebut.
+2. Admin memilih foto → sistem membuat MASTER PLACE PHOTO sebagai record independen dengan referensi sumber `source_visit_photo_id` atau `source_my_place_photo_id`.
+3. VISIT PHOTO dan MY PLACE PHOTO tetap data personal Explorer.
+4. Selain itu, Admin dapat mengunggah foto MASTER secara langsung tanpa mengambil dari foto Explorer.
 
 ### 12.9 P-09 — Manajemen Akun & Reset Password
 
@@ -672,13 +704,13 @@ Password minimal 8 karakter. Setelah akun dibuat dan setelah reset (generate mau
 | Langkah | Aktor | Aksi | Hasil |
 |---:|---|---|---|
 | 1 | Sistem | Memeriksa data terkait MY PLACE | — |
-| 2a | Sistem | Jika **tidak** memiliki MASTER RELATION HISTORY dan **tidak** menjadi ITINERARY PLACE: menampilkan konfirmasi hapus biasa beserta jumlah VISIT & VISIT PHOTO yang ikut terhapus | Dialog konfirmasi |
-| 2b | Sistem | Jika memiliki MASTER RELATION HISTORY **dan/atau** ITINERARY PLACE: menampilkan dialog yang menjelaskan alasan dan merinci data terkait yang akan ikut terhapus — jumlah VISIT, VISIT PHOTO, record history relasi MASTER, serta ITINERARY PLACE (beserta nama ITINERARY-nya) — dan checkbox persetujuan **"Saya setuju menghapus seluruh data yang terhubung dengan MY PLACE ini"** | Dialog consent |
+| 2a | Sistem | Jika **tidak** memiliki MASTER RELATION HISTORY dan **tidak** menjadi ITINERARY PLACE: menampilkan konfirmasi hapus biasa beserta jumlah VISIT, VISIT PHOTO, & MY PLACE PHOTO yang ikut terhapus | Dialog konfirmasi |
+| 2b | Sistem | Jika memiliki MASTER RELATION HISTORY **dan/atau** ITINERARY PLACE: menampilkan dialog yang menjelaskan alasan dan merinci data terkait yang akan ikut terhapus — jumlah VISIT, VISIT PHOTO, MY PLACE PHOTO, record history relasi MASTER, serta ITINERARY PLACE (beserta nama ITINERARY-nya) — dan checkbox persetujuan **"Saya setuju menghapus seluruh data yang terhubung dengan MY PLACE ini"** | Dialog consent |
 | 3a | Explorer | Mencentang persetujuan dan mengonfirmasi | MY PLACE dan seluruh data terkait terhapus permanen |
 | 3b | Explorer | Tidak mencentang persetujuan | Penghapusan tidak dapat dilanjutkan; sistem menampilkan pesan bahwa MY PLACE tidak dapat dihapus tanpa persetujuan karena memiliki data terkait, dan menyarankan **menonaktifkan** MY PLACE |
 | 4 | Explorer | (Opsional) Menonaktifkan MY PLACE | MY PLACE `INACTIVE`; seluruh data tetap utuh |
 
-**Post-condition (3a):** VISIT, VISIT PHOTO, MASTER RELATION HISTORY, ITINERARY PLACE yang menunjuk MY PLACE ini, serta association TAG & CATEGORY terhapus. ITINERARY dan stop lain di dalamnya tetap ada. MASTER PLACE PHOTO yang bersumber dari VISIT PHOTO tetap ada. Jika MY PLACE berstatus `REVIEW`, pengajuannya hilang dari antrean review. Rating MASTER dihitung ulang.
+**Post-condition (3a):** VISIT, VISIT PHOTO, MY PLACE PHOTO, MASTER RELATION HISTORY, ITINERARY PLACE yang menunjuk MY PLACE ini, serta association TAG & CATEGORY terhapus. ITINERARY dan stop lain di dalamnya tetap ada. MASTER PLACE PHOTO yang bersumber dari VISIT PHOTO atau MY PLACE PHOTO tetap ada. Jika MY PLACE berstatus `REVIEW`, pengajuannya hilang dari antrean review. Rating MASTER dihitung ulang.
 **Exception:** Penghapusan tidak menghasilkan history `UNREFERRED`.
 
 ### 12.11 P-11 — Switch Mode Akun ADMIN
@@ -719,12 +751,12 @@ Password minimal 8 karakter. Setelah akun dibuat dan setelah reset (generate mau
 
 **Exception:** Backup tidak dapat dimulai bila backup lain masih `RUNNING`. Restore dilakukan tim teknis di luar aplikasi.
 
-### 12.14 P-14 — Konfigurasi Aturan Foto
+### 12.14 P-14 — Konfigurasi Aturan Foto & Avatar
 
 **Aktor:** Admin (mode Admin)
 
-1. Admin mengubah nilai aturan foto (tipe file, ukuran maksimum, jumlah maksimum per VISIT / per MASTER).
-2. Nilai baru berlaku untuk upload berikutnya; foto yang sudah ada tidak terpengaruh.
+1. Admin mengubah nilai aturan foto (tipe file, ukuran maksimum, jumlah maksimum per VISIT / per MY PLACE / per MASTER) atau aturan avatar (tipe file, ukuran maksimum).
+2. Nilai baru berlaku untuk upload berikutnya; foto dan avatar yang sudah ada tidak terpengaruh.
 3. Jika jumlah foto existing melebihi batas baru, foto tetap ada, tetapi upload baru ditolak sampai jumlah di bawah batas.
 
 ### 12.15 P-15 — Login dengan Email atau Username
@@ -752,6 +784,33 @@ Password minimal 8 karakter. Setelah akun dibuat dan setelah reset (generate mau
 
 **Exception:** Username baru sama dengan username saat ini (tanpa membedakan huruf besar/kecil) → tidak ada perubahan. Username lama tidak dicadangkan dan dapat dipakai akun lain. Perubahan username tidak menghasilkan history.
 
+### 12.17 P-17 — Foto Profil (Avatar)
+
+**Aktor:** Explorer, Admin (avatar miliknya sendiri) · **Pre-condition:** User login dan tidak sedang wajib mengganti password
+
+| Langkah | Aktor | Aksi | Hasil |
+|---:|---|---|---|
+| 1 | User | Memilih file foto pada profil | — |
+| 2 | Sistem | Memvalidasi tipe file dan ukuran terhadap `avatar.allowed_types` dan `avatar.max_size_mb` yang berlaku saat upload | Ditolak bila tidak sesuai |
+| 3 | Sistem | Menghapus metadata lokasi GPS (EXIF), menyimpan file, dan menetapkannya sebagai avatar user | Avatar tampil di profil |
+| 4 | Sistem | Jika user sudah memiliki avatar | File avatar lama dihapus dari penyimpanan |
+| 5 | User | (Opsional) Menghapus avatar | Avatar kosong; aplikasi menampilkan avatar default |
+
+**Exception:** Avatar tidak dapat diisi melalui external link. Admin tidak dapat mengubah atau menghapus avatar user lain.
+
+### 12.18 P-18 — Foto Tinjauan MY PLACE
+
+**Aktor:** Explorer (owner) · **Trigger:** Membuat (P-01) atau mengubah MY PLACE
+
+| Langkah | Aktor | Aksi | Hasil |
+|---:|---|---|---|
+| 1 | Explorer | (Opsional) Menambahkan satu atau banyak foto tinjauan: upload file atau external link | — |
+| 2 | Sistem | Memvalidasi tipe & ukuran (`photo.allowed_types`, `photo.max_size_mb`) dan jumlah (`photo.max_per_my_place`) | Ditolak bila melebihi batas |
+| 3 | Sistem | Menghapus metadata GPS (EXIF) dari file upload; menyimpan MY PLACE PHOTO | Foto tersimpan pada MY PLACE |
+| 4 | Explorer | Mengisi caption, mengurutkan, menetapkan maksimal satu primary, atau menghapus foto | Galeri MY PLACE diperbarui |
+
+**Exception:** MY PLACE tetap dapat disimpan tanpa foto. Perubahan foto tinjauan selama `REVIEW` tidak mengubah snapshot pengajuan. Foto tinjauan ikut terhapus bila MY PLACE dihapus; MASTER PLACE PHOTO yang bersumber darinya tetap ada.
+
 ---
 
 ## 13. Functional Requirements
@@ -776,6 +835,7 @@ password_hash       (hash; tidak menyimpan plain text)
 role                (ADMIN / EXPLORER — reference value; mode aktif adalah state sesi, bukan atribut tersimpan)
 preferred_language  (ID / EN, default ID)
 must_change_password (default FALSE; TRUE setelah akun dibuat / password di-reset)
+avatar NULL         (referensi file foto profil; opsional, hanya upload)
 is_active
 deleted_at NULL
 deleted_by NULL
@@ -831,6 +891,8 @@ Akun dikelola Admin. Data personal milik Explorer tetap milik Explorer tersebut.
 | FR-USR-022 | Guest DAPAT memilih bahasa antarmuka; pilihan disimpan per perangkat/browser. | Should | Guest |
 | FR-USR-023 | Admin HARUS mengisi username saat membuat akun Explorer; username wajib unik. | Must | Admin |
 | FR-USR-024 | User HARUS dapat mengganti username miliknya sendiri setelah login; perubahan berlaku langsung tanpa konfirmasi. | Must | Explorer, Admin |
+| FR-USR-025 | User HARUS dapat mengunggah, mengganti, dan menghapus foto profil (avatar) miliknya sendiri setelah login. | Must | Explorer, Admin |
+| FR-USR-026 | Sistem HARUS memvalidasi upload avatar terhadap `avatar.allowed_types` dan `avatar.max_size_mb` yang berlaku saat upload. | Must | Sistem |
 
 #### Business Rules
 - BR-USR-001: Email unik di seluruh user.
@@ -851,6 +913,10 @@ Akun dikelola Admin. Data personal milik Explorer tetap milik Explorer tersebut.
 - BR-USR-016: Login menerima email atau username sebagai identifier; identifier yang mengandung `@` diperlakukan sebagai email.
 - BR-USR-017: Username hanya dapat diganti oleh pemilik akun; Admin hanya menetapkan username saat membuat akun Explorer.
 - BR-USR-018: Username lama yang telah diganti tidak dicadangkan dan dapat dipakai akun lain; perubahan username tidak menghasilkan history.
+- BR-USR-019: Avatar opsional; satu user maksimal memiliki satu avatar.
+- BR-USR-020: Avatar hanya dapat diunggah, diganti, atau dihapus oleh pemilik akun; Admin hanya dapat melihat avatar user dalam pengelolaan akun.
+- BR-USR-021: Avatar hanya melalui upload file (tanpa external link); file avatar lama dihapus saat diganti/dihapus dan riwayatnya tidak disimpan.
+- BR-USR-022: Metadata lokasi GPS (EXIF) dihapus dari file avatar saat upload.
 
 #### Validation Rules
 | Field | Aturan | Pesan Error (contoh) |
@@ -861,6 +927,7 @@ Akun dikelola Admin. Data personal milik Explorer tetap milik Explorer tersebut.
 | password | Wajib; minimal 8 karakter; memuat huruf kecil, huruf besar, angka, simbol | "Password tidak memenuhi ketentuan" |
 | new_email | Format email valid; belum dipakai user lain (termasuk soft-deleted) | "Email sudah digunakan" |
 | preferred_language | `ID` atau `EN` | — |
+| avatar | Opsional; tipe file ∈ `avatar.allowed_types`; ukuran ≤ `avatar.max_size_mb` | "Format foto profil tidak didukung" / "Ukuran foto profil melebihi batas" |
 | identifier login | Wajib; email atau username | "Email/username atau password salah" (generik) |
 
 #### Deletion Behavior
@@ -1054,6 +1121,7 @@ Setiap MY PLACE dimiliki tepat satu user (Explorer, atau akun ADMIN dalam mode E
 | FR-MYP-012 | Sistem TIDAK BOLEH menghapus MY PLACE sebagaimana FR-MYP-011 tanpa persetujuan; sistem HARUS menampilkan pesan yang jelas mengapa penghapusan tidak dapat dilakukan dan menyarankan menonaktifkan MY PLACE. | Must | Sistem |
 | FR-MYP-013 | Explorer HARUS dapat menonaktifkan dan mengaktifkan kembali MY PLACE miliknya. | Must | Explorer |
 | FR-MYP-014 | Sistem HARUS menyembunyikan MY PLACE `INACTIVE` dari list dan peta default, dan menampilkannya bila Explorer memilih filter status nonaktif. | Must | Sistem |
+| FR-MYP-015 | Explorer HARUS dapat menambahkan foto tinjauan (opsional) saat membuat atau mengubah MY PLACE (13.19). | Must | Explorer |
 
 #### Business Rules
 - BR-MYP-001: Satu MY PLACE maksimal memiliki satu MASTER PLACE aktif pada satu waktu.
@@ -1065,8 +1133,9 @@ Setiap MY PLACE dimiliki tepat satu user (Explorer, atau akun ADMIN dalam mode E
 - BR-MYP-007: MY PLACE `INACTIVE` TIDAK BOLEH ditambahkan sebagai ITINERARY PLACE baru, dicatat VISIT baru, atau diajukan menjadi MASTER.
 - BR-MYP-008: Menonaktifkan MY PLACE TIDAK mengubah MASTER reference, `master_relation_status`, history, VISIT, ITINERARY PLACE existing, TAG, CATEGORY, maupun FAVORITE.
 - BR-MYP-009: VISIT dari MY PLACE `INACTIVE` TIDAK dihitung pada rating MASTER PLACE.
-- BR-MYP-010: Penghapusan MY PLACE dengan persetujuan menghapus permanen VISIT, VISIT PHOTO, MASTER RELATION HISTORY, ITINERARY PLACE terkait, serta association TAG & CATEGORY; ITINERARY dan MASTER PLACE PHOTO tetap ada.
+- BR-MYP-010: Penghapusan MY PLACE dengan persetujuan menghapus permanen VISIT, VISIT PHOTO, MY PLACE PHOTO, MASTER RELATION HISTORY, ITINERARY PLACE terkait, serta association TAG & CATEGORY; ITINERARY dan MASTER PLACE PHOTO tetap ada.
 - BR-MYP-011: Business action relasi oleh Admin (RE-REFER, UNREFER, automatic UNREFER) tetap berlaku terhadap MY PLACE `INACTIVE`.
+- BR-MYP-012: Foto tinjauan tidak wajib; MY PLACE dapat disimpan tanpa foto. Foto tinjauan tidak termasuk snapshot pengajuan.
 
 #### Validation Rules
 | Field | Aturan | Pesan Error (contoh) |
@@ -1338,6 +1407,7 @@ master_place_photos
 id
 master_place_id
 source_visit_photo_id NULL
+source_my_place_photo_id NULL
 file_reference
 sort_order
 is_primary
@@ -1349,17 +1419,19 @@ updated_at
 #### Functional Requirements
 | ID | Requirement | Prioritas | Role |
 |---|---|---|---|
-| FR-MPH-001 | Admin HARUS dapat mengunggah satu atau banyak foto MASTER PLACE secara langsung (tanpa mengambil dari VISIT PHOTO). | Must | Admin |
+| FR-MPH-001 | Admin HARUS dapat mengunggah satu atau banyak foto MASTER PLACE secara langsung (tanpa mengambil dari VISIT PHOTO atau MY PLACE PHOTO). | Must | Admin |
 | FR-MPH-002 | Admin HARUS dapat menjadikan VISIT PHOTO sebagai MASTER PLACE PHOTO (record independen). | Must | Admin |
 | FR-MPH-003 | Admin HARUS dapat menghapus, mengurutkan, dan menetapkan primary MASTER PLACE PHOTO. | Must | Admin |
+| FR-MPH-004 | Admin HARUS dapat menjadikan MY PLACE PHOTO (foto tinjauan) sebagai MASTER PLACE PHOTO (record independen). | Must | Admin |
 
 #### Business Rules
 - BR-MPH-001: Maksimal satu primary photo per MASTER PLACE; primary opsional.
 - BR-MPH-002: Explorer TIDAK BOLEH membuat MASTER PLACE PHOTO secara langsung.
-- BR-MPH-003: MASTER PLACE PHOTO bukan alias VISIT PHOTO; lifecycle dan storage reference independen.
-- BR-MPH-004: Menghapus VISIT PHOTO, VISIT, MY PLACE, atau user TIDAK BOLEH menghapus MASTER PLACE PHOTO.
-- BR-MPH-005: VISIT PHOTO yang dapat dijadikan MASTER PLACE PHOTO hanya berasal dari MY PLACE yang saat ini mereferensikan MASTER tersebut.
+- BR-MPH-003: MASTER PLACE PHOTO bukan alias VISIT PHOTO maupun MY PLACE PHOTO; lifecycle dan storage reference independen.
+- BR-MPH-004: Menghapus VISIT PHOTO, MY PLACE PHOTO, VISIT, MY PLACE, atau user TIDAK BOLEH menghapus MASTER PLACE PHOTO.
+- BR-MPH-005: VISIT PHOTO dan MY PLACE PHOTO yang dapat dijadikan MASTER PLACE PHOTO hanya berasal dari MY PLACE yang saat ini mereferensikan MASTER tersebut.
 - BR-MPH-006: Tipe, ukuran, dan jumlah MASTER PLACE PHOTO mengikuti konfigurasi aplikasi (13.17).
+- BR-MPH-007: Satu MASTER PLACE PHOTO memiliki paling banyak satu sumber (VISIT PHOTO **atau** MY PLACE PHOTO).
 
 ---
 
@@ -1466,12 +1538,12 @@ Hard delete — lihat Section 17.
 |---|---|---|---|
 | FR-GST-001 | Guest HARUS dapat melihat peta berisi MASTER PLACE `ACTIVE` tanpa login. | Must | Guest |
 | FR-GST-002 | Guest HARUS dapat melihat detail MASTER PLACE: name, address, description, koordinat, CATEGORY aktif, rating MASTER, MASTER PLACE PHOTO. | Must | Guest |
-| FR-GST-003 | Sistem TIDAK BOLEH menampilkan MY PLACE, VISIT, VISIT PHOTO, TAG, ITINERARY, atau data user kepada Guest. | Must | Sistem |
+| FR-GST-003 | Sistem TIDAK BOLEH menampilkan MY PLACE, MY PLACE PHOTO, VISIT, VISIT PHOTO, TAG, ITINERARY, atau data user (termasuk avatar) kepada Guest. | Must | Sistem |
 
-### 13.17 APP CONFIGURATION — Aturan Foto (`CFG`)
+### 13.17 APP CONFIGURATION — Aturan Foto & Avatar (`CFG`)
 
 #### Business Purpose
-Menyimpan aturan foto sebagai konfigurasi yang dapat diubah Admin tanpa perubahan kode.
+Menyimpan aturan foto dan avatar sebagai konfigurasi yang dapat diubah Admin tanpa perubahan kode.
 
 #### Data (Conceptual)
 ```text
@@ -1491,6 +1563,11 @@ updated_at
 | `photo.max_size_mb` | `5` | Ukuran maksimum per file (MB) |
 | `photo.max_per_visit` | `10` | Jumlah maksimum VISIT PHOTO per VISIT |
 | `photo.max_per_master_place` | `20` | Jumlah maksimum MASTER PLACE PHOTO per MASTER |
+| `photo.max_per_my_place` | `10` | Jumlah maksimum MY PLACE PHOTO (foto tinjauan) per MY PLACE |
+| `avatar.allowed_types` | `jpg, png, webp` | Tipe file foto profil yang diizinkan |
+| `avatar.max_size_mb` | `5` | Ukuran maksimum file foto profil (MB) |
+
+Tipe file dan ukuran maksimum MY PLACE PHOTO mengikuti `photo.allowed_types` dan `photo.max_size_mb`. Default `avatar.*` disamakan dengan nilai `photo.*` saat ini, tetapi dikelola terpisah.
 
 #### Ownership
 Shared configuration; hanya Admin (mode Admin) yang dapat mengubah.
@@ -1498,14 +1575,14 @@ Shared configuration; hanya Admin (mode Admin) yang dapat mengubah.
 #### Functional Requirements
 | ID | Requirement | Prioritas | Role |
 |---|---|---|---|
-| FR-CFG-001 | Admin HARUS dapat melihat dan mengubah konfigurasi aturan foto. | Must | Admin |
-| FR-CFG-002 | Sistem HARUS memvalidasi setiap upload VISIT PHOTO dan MASTER PLACE PHOTO terhadap konfigurasi yang berlaku saat upload. | Must | Sistem |
+| FR-CFG-001 | Admin HARUS dapat melihat dan mengubah konfigurasi aturan foto dan avatar. | Must | Admin |
+| FR-CFG-002 | Sistem HARUS memvalidasi setiap upload VISIT PHOTO, MY PLACE PHOTO, MASTER PLACE PHOTO, dan avatar terhadap konfigurasi yang berlaku saat upload. | Must | Sistem |
 | FR-CFG-003 | Sistem HARUS menghapus metadata lokasi GPS (EXIF) dari foto saat upload. | Must | Sistem |
 
 #### Business Rules
-- BR-CFG-001: Perubahan konfigurasi berlaku untuk upload berikutnya; foto yang sudah ada tidak terpengaruh.
+- BR-CFG-001: Perubahan konfigurasi berlaku untuk upload berikutnya; foto dan avatar yang sudah ada tidak terpengaruh.
 - BR-CFG-002: Jika jumlah foto existing ≥ batas baru, foto existing tetap ada dan upload baru ditolak sampai jumlahnya di bawah batas.
-- BR-CFG-003: Aturan foto TIDAK BOLEH di-hard-code di aplikasi.
+- BR-CFG-003: Aturan foto dan avatar TIDAK BOLEH di-hard-code di aplikasi.
 - BR-CFG-004: Riwayat perubahan konfigurasi tidak disimpan; hanya `updated_by` dan `updated_at` terakhir.
 
 #### Validation Rules
@@ -1513,7 +1590,9 @@ Shared configuration; hanya Admin (mode Admin) yang dapat mengubah.
 |---|---|---|
 | photo.allowed_types | Minimal satu tipe file gambar | "Pilih minimal satu tipe file" |
 | photo.max_size_mb | Bilangan > 0 | "Ukuran maksimum tidak valid" |
-| photo.max_per_visit / photo.max_per_master_place | Bilangan bulat ≥ 1 | "Jumlah maksimum tidak valid" |
+| photo.max_per_visit / photo.max_per_my_place / photo.max_per_master_place | Bilangan bulat ≥ 1 | "Jumlah maksimum tidak valid" |
+| avatar.allowed_types | Minimal satu tipe file gambar | "Pilih minimal satu tipe file" |
+| avatar.max_size_mb | Bilangan > 0 | "Ukuran maksimum tidak valid" |
 
 ### 13.18 BACKUP (`BKP`)
 
@@ -1549,6 +1628,52 @@ finished_at NULL
 - BR-BKP-002: File backup memuat data pribadi; hanya Admin yang dapat mengakses/mengunduhnya.
 - BR-BKP-003: Riwayat backup tidak dapat diedit melalui aplikasi.
 - BR-BKP-004: Lokasi penyimpanan, retensi file backup, serta RPO/RTO: `TBD` (OI-32).
+
+### 13.19 MY PLACE PHOTO — Foto Tinjauan (`MPP`)
+
+#### Business Purpose
+Memberikan informasi visual atau penanda pada MY PLACE yang diisi Explorer secara opsional, terpisah dari dokumentasi kunjungan (VISIT PHOTO).
+
+#### Data (Conceptual)
+```text
+my_place_photos
+---------------
+id
+my_place_id
+storage_type        (UPLOAD / EXTERNAL / S3 — sama dengan VISIT PHOTO)
+file_reference      (file upload / external link; mekanisme storage ditentukan SRS)
+caption NULL
+sort_order
+is_primary
+created_at
+updated_at
+```
+
+#### Ownership
+Personal; owner = owner MY PLACE. Admin (mode Admin) read-only untuk kurasi.
+
+#### Functional Requirements
+| ID | Requirement | Prioritas | Role |
+|---|---|---|---|
+| FR-MPP-001 | Explorer HARUS dapat menambahkan satu atau banyak foto tinjauan (upload file atau external link) saat membuat atau mengubah MY PLACE miliknya. | Must | Explorer |
+| FR-MPP-002 | Explorer HARUS dapat menghapus, mengurutkan, dan mengubah caption MY PLACE PHOTO. | Must | Explorer |
+| FR-MPP-003 | Explorer DAPAT menandai maksimal satu MY PLACE PHOTO sebagai primary. | Should | Explorer |
+| FR-MPP-004 | Admin HARUS dapat melihat MY PLACE PHOTO Explorer secara read-only untuk kurasi MASTER PLACE PHOTO (FR-MPH-004). | Must | Admin |
+
+#### Business Rules
+- BR-MPP-001: Foto tinjauan bersifat opsional; MY PLACE tidak wajib memiliki foto.
+- BR-MPP-002: Satu MY PLACE dapat memiliki banyak MY PLACE PHOTO, dibatasi `photo.max_per_my_place`.
+- BR-MPP-003: Maksimal satu primary photo per MY PLACE; primary opsional.
+- BR-MPP-004: Aturan penyimpanan sama dengan VISIT PHOTO: `UPLOAD`, `EXTERNAL` (link), atau `S3`.
+- BR-MPP-005: MY PLACE PHOTO tetap data personal walaupun dijadikan sumber MASTER PLACE PHOTO; menghapusnya TIDAK BOLEH menghapus MASTER PLACE PHOTO.
+- BR-MPP-006: MY PLACE PHOTO tidak termasuk snapshot pengajuan MASTER dan tidak mengubah data MASTER secara otomatis.
+- BR-MPP-007: MY PLACE PHOTO ikut terhapus permanen bila MY PLACE dihapus; keberadaannya tidak menambah syarat DELETE CONSENT.
+
+#### Validation Rules
+Tipe file dan ukuran maksimum mengikuti `photo.allowed_types` dan `photo.max_size_mb`; jumlah maksimum per MY PLACE mengikuti `photo.max_per_my_place` (13.17). External link wajib berupa URL valid. Metadata lokasi GPS (EXIF) dihapus dari file upload.
+
+#### Deletion Behavior
+Hard delete oleh owner — lihat Section 17.
 
 ---
 
@@ -1708,11 +1833,11 @@ State diturunkan dari `expires_at`, `confirmed_at`, dan `cancelled_at`.
 ## 15. Business Rules & Data Integrity Rules
 
 ### 15.1 Ownership & Isolation
-- DR-001: Data personal (MY PLACE, TAG, VISIT, VISIT PHOTO, ITINERARY, ITINERARY PLACE) HARUS terisolasi antar Explorer.
+- DR-001: Data personal (MY PLACE, MY PLACE PHOTO, TAG, VISIT, VISIT PHOTO, ITINERARY, ITINERARY PLACE) HARUS terisolasi antar Explorer.
 - DR-002: Ownership HARUS divalidasi sebelum setiap operasi pada data personal.
 - DR-003: TAG milik User A TIDAK BOLEH digunakan pada MY PLACE milik User B.
 - DR-004: ITINERARY hanya boleh menggunakan MY PLACE milik owner ITINERARY.
-- DR-005: Admin hanya read-only terhadap data personal Explorer yang diperlukan untuk kurasi (MY PLACE, VISIT PHOTO).
+- DR-005: Admin hanya read-only terhadap data personal Explorer yang diperlukan untuk kurasi (MY PLACE, MY PLACE PHOTO, VISIT PHOTO).
 - DR-006: Guest hanya dapat membaca MASTER PLACE `ACTIVE` beserta CATEGORY, rating, dan MASTER PLACE PHOTO.
 - DR-007: Data personal akun ADMIN (mode Explorer) diperlakukan identik dengan data personal Explorer, termasuk isolasi dan ownership.
 - DR-008: Fungsi Admin dan fungsi Explorer TIDAK BOLEH dapat diakses dalam mode yang sama; validasi mode HARUS dilakukan di sisi server.
@@ -1753,9 +1878,10 @@ State diturunkan dari `expires_at`, `confirmed_at`, dan `cancelled_at`.
 - DR-051: Rating MY PLACE dan MASTER PLACE adalah calculated value, bukan input langsung.
 
 ### 15.7 Photo
-- DR-060: Satu VISIT dan satu MASTER PLACE dapat memiliki banyak foto.
-- DR-061: Maksimal satu primary photo per VISIT dan per MASTER PLACE; primary opsional.
-- DR-062: VISIT PHOTO dan MASTER PLACE PHOTO adalah record independen.
+- DR-060: Satu VISIT, satu MY PLACE, dan satu MASTER PLACE dapat memiliki banyak foto.
+- DR-061: Maksimal satu primary photo per VISIT, per MY PLACE, dan per MASTER PLACE; primary opsional.
+- DR-062: VISIT PHOTO, MY PLACE PHOTO, dan MASTER PLACE PHOTO adalah record independen.
+- DR-063: Satu user maksimal memiliki satu avatar; hanya pemilik akun yang dapat mengubahnya.
 
 ### 15.8 TAG & Reference
 - DR-070: `tags.color` menyimpan nilai warna aktual `#RRGGBB`.
@@ -1804,16 +1930,18 @@ Catatan:
 
 | Entitas Dihapus | Jenis Delete | Dampak ke Child / Relasi | History? |
 |---|---|---|---|
-| USER (Explorer) | Soft delete | Tidak dapat login; seluruh data milik user tetap tersimpan namun tidak dapat diakses melalui aplikasi; email & username tetap terkunci (tidak dapat dipakai akun lain); tidak ada cascade | Tidak (tidak ada UNREFER massal) |
+| USER (Explorer) | Soft delete | Tidak dapat login; seluruh data milik user (termasuk avatar) tetap tersimpan namun tidak dapat diakses melalui aplikasi; email & username tetap terkunci (tidak dapat dipakai akun lain); tidak ada cascade | Tidak (tidak ada UNREFER massal) |
 | MASTER PLACE | Soft delete | Seluruh MY PLACE yang mereferensikannya → `UNREFERRED`; data MY PLACE, CATEGORY MY PLACE, VISIT, TAG, FAVORITE, ITINERARY tetap; MASTER PLACE PHOTO & association CATEGORY MASTER tetap tersimpan | Ya, `UNREFERRED` per MY PLACE |
 | MASTER PLACE (inactive) | Bukan delete | Tidak ada perubahan pada MY PLACE | Tidak |
 | CATEGORY | Inactive; hard delete hanya bila belum pernah dipakai | Association existing tetap | Tidak |
-| MY PLACE (tanpa history & tanpa ITINERARY PLACE) | Hard delete, konfirmasi biasa | VISIT, VISIT PHOTO, association TAG & CATEGORY ikut terhapus; MASTER PLACE PHOTO tetap | Tidak (tidak ada UNREFER) |
-| MY PLACE (memiliki history dan/atau ITINERARY PLACE) | Hard delete **hanya dengan DELETE CONSENT** | VISIT, VISIT PHOTO, MASTER RELATION HISTORY, ITINERARY PLACE yang menunjuk MY PLACE ini, association TAG & CATEGORY ikut terhapus; ITINERARY & stop lain tetap; MASTER PLACE PHOTO tetap. Tanpa consent → tidak dihapus, disarankan INACTIVE | Tidak (history justru ikut terhapus) |
+| MY PLACE (tanpa history & tanpa ITINERARY PLACE) | Hard delete, konfirmasi biasa | VISIT, VISIT PHOTO, MY PLACE PHOTO, association TAG & CATEGORY ikut terhapus; MASTER PLACE PHOTO tetap | Tidak (tidak ada UNREFER) |
+| MY PLACE (memiliki history dan/atau ITINERARY PLACE) | Hard delete **hanya dengan DELETE CONSENT** | VISIT, VISIT PHOTO, MY PLACE PHOTO, MASTER RELATION HISTORY, ITINERARY PLACE yang menunjuk MY PLACE ini, association TAG & CATEGORY ikut terhapus; ITINERARY & stop lain tetap; MASTER PLACE PHOTO tetap. Tanpa consent → tidak dihapus, disarankan INACTIVE | Tidak (history justru ikut terhapus) |
 | MY PLACE (inactive) | Bukan delete | Seluruh data tetap; hanya disembunyikan & tidak dapat dipakai untuk aktivitas baru | Tidak |
 | VISIT | Hard delete | VISIT PHOTO ikut terhapus; MY PLACE tetap (kembali `PLAN` bila VISIT terakhir); MASTER PLACE PHOTO tetap | Tidak |
 | VISIT PHOTO | Hard delete | MASTER PLACE PHOTO yang bersumber darinya tetap (referensi sumber dikosongkan) | Tidak |
-| MASTER PLACE PHOTO | Hard delete | Tidak berdampak pada VISIT PHOTO | Tidak |
+| MY PLACE PHOTO | Hard delete | MASTER PLACE PHOTO yang bersumber darinya tetap (referensi sumber dikosongkan) | Tidak |
+| MASTER PLACE PHOTO | Hard delete | Tidak berdampak pada VISIT PHOTO maupun MY PLACE PHOTO | Tidak |
+| AVATAR | Hapus / ganti oleh pemilik akun | File avatar lama dihapus dari penyimpanan; tidak ada riwayat | Tidak |
 | TAG | Hard delete | Hanya association `my_place_tags` terhapus; MY PLACE, VISIT, CATEGORY, FAVORITE tidak terpengaruh | Tidak |
 | TAG COLOR REFERENCE | Inactive | `tags.color` existing tetap | Tidak |
 | ITINERARY | Hard delete | ITINERARY PLACE terhapus; MY PLACE & VISIT tetap; konteks itinerary pada VISIT tidak lagi tersedia | Tidak |
@@ -1914,6 +2042,9 @@ created_at
 | US-030 | Sebagai Admin, saya ingin menjalankan backup dan mengunduh hasilnya, agar data dapat dipulihkan bila terjadi masalah. | FR-BKP-001..004 |
 | US-031 | Sebagai Admin, saya ingin mengatur aturan foto tanpa perubahan kode, agar kapasitas penyimpanan terkendali. | FR-CFG-001..003 |
 | US-032 | Sebagai user, saya ingin memiliki username unik yang dapat saya ganti sendiri, agar saya dapat login tanpa mengetik email. | FR-USR-001, FR-USR-023..024 |
+| US-033 | Sebagai user, saya ingin mengunggah dan mengganti foto profil saya sendiri, agar akun saya mudah dikenali. | FR-USR-025..026 |
+| US-034 | Sebagai Explorer, saya ingin menambahkan foto tinjauan saat membuat atau mengubah MY PLACE, agar saya memiliki penanda visual tempat tersebut. | FR-MYP-015, FR-MPP-001..003 |
+| US-035 | Sebagai Admin, saya ingin menjadikan foto tinjauan MY PLACE sebagai foto MASTER PLACE, agar MASTER PLACE memiliki foto representatif. | FR-MPH-004, FR-MPP-004 |
 
 ### 19.2 Acceptance Criteria
 
@@ -2257,6 +2388,44 @@ When Explorer membuka V1
 Then 10 foto tetap ada
 And upload foto baru ke V1 ditolak sampai jumlah foto di bawah 5
 
+AC-FR-USR-025-01
+Given E1 login dan belum memiliki avatar
+When E1 mengunggah file "profil.png" berukuran 1 MB
+Then avatar E1 tersimpan tanpa metadata GPS dan tampil di profil
+And saat E1 mengunggah avatar baru, file avatar lama dihapus
+
+AC-FR-USR-026-01
+Given konfigurasi avatar.allowed_types = "jpg, png, webp" dan avatar.max_size_mb = 5
+When user mengunggah avatar "profil.gif" atau file berukuran 6 MB
+Then sistem menolak upload dan avatar tidak berubah
+
+AC-FR-USR-025-02
+Given Admin dalam mode ADMIN membuka akun Explorer E1
+When Admin mencoba mengubah atau menghapus avatar E1
+Then sistem menolak
+
+AC-FR-MPP-001-01
+Given Explorer membuat MY PLACE "Cafe ABC" tanpa foto
+When Explorer menyimpan
+Then MY PLACE tersimpan tanpa MY PLACE PHOTO
+
+AC-FR-MPP-001-02
+Given MY PLACE "Cafe ABC" milik E1 dan photo.max_per_my_place = 10
+When E1 menambahkan 2 foto upload dan 1 external link saat mengubah MY PLACE
+Then ketiga foto tersimpan sebagai MY PLACE PHOTO
+And penambahan foto ke-11 ditolak
+
+AC-FR-MPH-004-01
+Given MY PLACE P1 mereferensikan MASTER M1 dan memiliki MY PLACE PHOTO "MPP1"
+When Admin menjadikan MPP1 sebagai MASTER PLACE PHOTO M1
+Then MASTER PLACE PHOTO baru dibuat dengan sumber MPP1
+And bila E1 kemudian menghapus MPP1, MASTER PLACE PHOTO tersebut tetap ada
+
+AC-FR-MPH-004-02
+Given MY PLACE P2 tidak mereferensikan MASTER M1
+When Admin mencoba memakai MY PLACE PHOTO milik P2 untuk M1
+Then sistem menolak
+
 AC-FR-BKP-001-01
 Given Admin dalam mode ADMIN dan tidak ada backup yang berjalan
 When Admin menekan "Backup Sekarang"
@@ -2306,7 +2475,7 @@ Biaya, kuota, API key management, dan caching: ditentukan pada SRS (OI-23). Peny
 | Reference status relasi & action history | ERD | sesuai Section 14.1 & 18.3 | — | Sistem |
 | `ref_tag_colors` (preset) | BRD | 10 | — | Admin |
 | `categories` awal | SPEC-PPJ (dikonfirmasi PO, K-47) | 5 | Generate slug dari name | Admin |
-| `app_settings` (aturan foto) | BRD 13.17 | 4 | — | Admin |
+| `app_settings` (aturan foto & avatar) | BRD 13.17 | 7 | — | Admin |
 | Data legacy | Tidak ada | — | — | — |
 
 **Preset TAG COLOR awal:**
@@ -2337,6 +2506,7 @@ users
  ├── my_places
  │    ├── my_place_categories
  │    ├── my_place_tags
+ │    ├── my_place_photos ──(source, optional)──▶ master_place_photos
  │    ├── visits
  │    │    └── visit_photos
  │    └── my_place_master_histories
@@ -2361,7 +2531,7 @@ users ──< backup_logs (triggered_by)
 app_settings         (konfigurasi aplikasi, dikelola Admin)
 ```
 
-**Core tables:** `users`, `categories`, `master_places`, `master_place_categories`, `my_places`, `my_place_categories`, `tags`, `my_place_tags`, `ref_tag_colors`, `master_place_photos`, `my_place_master_histories`, `visits`, `visit_photos`, `itineraries`, `itinerary_places`, `email_change_requests`, `app_settings`, `backup_logs`.
+**Core tables:** `users`, `categories`, `master_places`, `master_place_categories`, `my_places`, `my_place_categories`, `tags`, `my_place_tags`, `my_place_photos`, `ref_tag_colors`, `master_place_photos`, `my_place_master_histories`, `visits`, `visit_photos`, `itineraries`, `itinerary_places`, `email_change_requests`, `app_settings`, `backup_logs`.
 
 **Relasi yang sengaja tanpa FK:**
 
@@ -2370,7 +2540,7 @@ app_settings         (konfigurasi aplikasi, dikelola Admin)
 | `tags.color` → `ref_tag_colors` | TAG menyimpan nilai warna aktual; reference dapat diubah/dinonaktifkan tanpa merusak TAG existing. |
 | `users.role`, `my_places.master_relation_status`, history `action` → tabel reference | Reference value; tidak menggunakan FK database (sesuai ERD). |
 
-Struktur ini merupakan logical structure. Detail physical schema, UID publik, tipe data, index, dan ON DELETE behavior ditentukan pada ERD (ERD-PPJ-001 v1.2.0, `ERD_PPJ.md`) dan SRS. BRD tidak mengunci database engine tertentu.
+Struktur ini merupakan logical structure. Detail physical schema, UID publik, tipe data, index, dan ON DELETE behavior ditentukan pada ERD (ERD-PPJ-001 v1.3.0, `ERD_PPJ.md`) dan SRS. BRD tidak mengunci database engine tertentu.
 
 ---
 
@@ -2387,7 +2557,7 @@ Struktur ini merupakan logical structure. Detail physical schema, UID publik, ti
 | NFR-I18N-001 | Localization | Bahasa antarmuka & zona waktu tampilan | Bahasa Indonesia (default) & English; zona waktu tampilan WIB (Asia/Jakarta) |
 | NFR-BKP-001 | Backup & Recovery | Backup database & file foto | Manual oleh Admin (Fase 1), terjadwal (Fase 2); RPO/RTO `TBD` (OI-32) |
 | NFR-LOG-001 | Observability | Error logging & monitoring | `TBD` |
-| NFR-FILE-001 | File Upload | Tipe & ukuran maksimum foto; jumlah maksimum foto per VISIT/MASTER | Dapat dikonfigurasi Admin (13.17); default JPG/PNG/WebP, ≤ 5 MB, 10 per VISIT, 20 per MASTER |
+| NFR-FILE-001 | File Upload | Tipe & ukuran maksimum foto dan avatar; jumlah maksimum foto per VISIT/MY PLACE/MASTER | Dapat dikonfigurasi Admin (13.17); default JPG/PNG/WebP, ≤ 5 MB, 10 per VISIT, 10 per MY PLACE, 20 per MASTER; avatar JPG/PNG/WebP ≤ 5 MB |
 | NFR-DATA-001 | Data Integrity | Operasi multi-record (soft delete MASTER + auto UNREFER + history; delete MY PLACE dengan consent) HARUS atomik | Semua atau tidak sama sekali |
 | NFR-MAINT-001 | Maintainability | Struktur data dapat digunakan API/backend dan AI coding agent; detail teknis pada SRS | — |
 
@@ -2413,10 +2583,10 @@ Nilai yang masih `TBD` (scalability, accessibility, observability, RPO/RTO) terc
 | NFR-SEC-012 | File backup memuat data pribadi; hanya Admin yang dapat mengakses/mengunduh melalui kanal aman. |
 | NFR-SEC-013 | Kegagalan login HARUS menampilkan pesan generik yang tidak mengungkap apakah email/username terdaftar. |
 | NFR-PRIV-005 | Lokasi perangkat hanya diakses dengan izin pengguna dan digunakan sebagai titik tengah peta; tidak disimpan kecuali dipilih sebagai pin. |
-| NFR-PRIV-001 | Data pribadi (name, username, email, lokasi MY PLACE, foto VISIT, waktu kunjungan) diklasifikasikan sebagai data sensitif. |
+| NFR-PRIV-001 | Data pribadi (name, username, email, avatar, lokasi MY PLACE, foto tinjauan MY PLACE, foto VISIT, waktu kunjungan) diklasifikasikan sebagai data sensitif. |
 | NFR-PRIV-002 | Penghapusan permanen/anonimisasi data pribadi atas permintaan user: Fase 2. |
-| NFR-PRIV-003 | Metadata lokasi GPS (EXIF) HARUS dihapus dari foto saat upload. |
-| NFR-PRIV-004 | VISIT PHOTO yang dijadikan MASTER PLACE PHOTO menjadi data publik tanpa memerlukan persetujuan/pemberitahuan Explorer; Admin bertanggung jawab atas kelayakan foto yang dipublikasikan. |
+| NFR-PRIV-003 | Metadata lokasi GPS (EXIF) HARUS dihapus dari foto (termasuk avatar dan foto tinjauan) saat upload. |
+| NFR-PRIV-004 | VISIT PHOTO atau MY PLACE PHOTO yang dijadikan MASTER PLACE PHOTO menjadi data publik tanpa memerlukan persetujuan/pemberitahuan Explorer; Admin bertanggung jawab atas kelayakan foto yang dipublikasikan. |
 | NFR-COMP-002 | Aplikasi HARUS mengikuti UU PDP No. 27/2022 (Indonesia). |
 
 **Klasifikasi data:**
@@ -2427,6 +2597,8 @@ Nilai yang masih `TBD` (scalability, accessibility, observability, RPO/RTO) terc
 | MY PLACE, koordinat, TAG, FAVORITE | Personal | Explorer pemilik; Admin (read-only MY PLACE) |
 | VISIT, rating, catatan | Personal | Explorer pemilik |
 | VISIT PHOTO | Personal | Explorer pemilik; Admin (read-only) |
+| MY PLACE PHOTO | Personal | Explorer pemilik; Admin (read-only) |
+| Avatar | Confidential | User ybs; Admin (read-only) |
 | ITINERARY | Personal | Explorer pemilik |
 | MASTER PLACE `ACTIVE`, CATEGORY, MASTER PLACE PHOTO, rating MASTER | Public | Semua, termasuk Guest |
 | MASTER RELATION HISTORY | Internal | Admin; Explorer untuk MY PLACE miliknya |
@@ -2478,7 +2650,7 @@ Tidak ada constraint budget, jadwal, atau tim yang ditetapkan untuk Fase 1.
 |---|---|---|
 | DP-01 | Ketersediaan Google Maps & Google Places API | Pencarian & peta terganggu |
 | DP-02 | Layanan penyimpanan file foto (ditentukan SRS) | Upload foto tidak berfungsi |
-| DP-03 | ERD-PPJ-001 dan SRS-PPJ-001 selaras dengan BRD ini (ERD-PPJ-001 v1.2.0) | Implementasi tidak konsisten |
+| DP-03 | ERD-PPJ-001 dan SRS-PPJ-001 selaras dengan BRD ini (ERD-PPJ-001 v1.3.0) | Implementasi tidak konsisten |
 | DP-04 | Layanan pengiriman email (ditentukan SRS) | Perubahan email tidak dapat dikonfirmasi |
 | DP-05 | Media penyimpanan file backup (ditentukan SRS) | Backup tidak dapat dijalankan |
 
@@ -2503,6 +2675,7 @@ Tidak ada constraint budget, jadwal, atau tim yang ditetapkan untuk Fase 1.
 | RK-13 | Kehilangan data karena backup manual tidak rutin dijalankan | Medium | High | Backup manual + riwayat backup (FR-BKP-001..002); scheduler pada Fase 2 | PO, Tech Lead | OPEN |
 | RK-14 | Email konfirmasi tidak terkirim/masuk spam | Low | Medium | User dapat mengajukan ulang; konfigurasi pengirim email pada SRS (OI-33) | Tech Lead | OPEN |
 | RK-15 | Username lebih mudah ditebak daripada email sehingga percobaan login tidak sah meningkat; username lama yang dipakai akun lain dapat membingungkan | Medium | Medium | Pesan login generik (NFR-SEC-013); pembatasan percobaan login ditetapkan pada SRS (OI-25); username hanya diganti pemilik akun | Tech Lead | OPEN |
+| RK-16 | Volume penyimpanan file bertambah karena avatar dan foto tinjauan MY PLACE | Medium | Medium | Batas tipe, ukuran, dan jumlah melalui `app_settings` (13.17); file avatar lama dihapus saat diganti; kapasitas storage ditetapkan pada SRS (OI-28) | Tech Lead | OPEN |
 
 ---
 
@@ -2546,6 +2719,7 @@ Tidak ada constraint budget, jadwal, atau tim yang ditetapkan untuk Fase 1.
 | OI-34 | Kajian ToS Google Maps Platform atas penyimpanan data Places | 21, 27 | PO, Tech Lead | Sebelum implementasi | OPEN | — |
 | OI-35 | Penyelarasan ERD ke BRD v1.1.0: `users.preferred_language`, `users.must_change_password`, `email_change_requests`, `app_settings`, `backup_logs`, batas panjang & check constraint baru | 13, 23 | Tech Lead | 2026-10-13 | CLOSED | ERD-PPJ-001 v1.1.0 (`ERD_PPJ_v1.1.0.md`) |
 | OI-36 | Penyelarasan ERD ke BRD v1.2.0: kolom `users.username`, unique case-insensitive, check panjang & format | 13.1, 23 | Tech Lead | 2026-10-14 | CLOSED | ERD-PPJ-001 v1.2.0 (`result/v1.2.0/ERD_PPJ_v1.2.0.md`) |
+| OI-37 | Penyelarasan ERD ke BRD v1.3.0: kolom avatar pada `users`, tabel `my_place_photos`, sumber `master_place_photos.source_my_place_photo_id`, key `app_settings` baru | 13.1, 13.11, 13.17, 13.19, 23 | Tech Lead | 2026-10-15 | CLOSED | ERD-PPJ-001 v1.3.0 (`result/v1.3.0/ERD_PPJ_v1.3.0.md`) |
 
 ---
 
@@ -2574,6 +2748,9 @@ Tidak ada constraint budget, jadwal, atau tim yang ditetapkan untuk Fase 1.
 | BO-03 | FR-MYP-007, FR-MST-011, FR-CAT-007 | US-007, US-019 | AC-FR-MYP-007-01, AC-FR-MST-011-01, AC-FR-CAT-007-01 | `TBD` | Planned |
 | BO-02 | FR-VST-001 (validasi `visited_at`) | US-012 | AC-FR-VST-001-02 | `TBD` | Planned |
 | BO-01 | FR-USR-001, FR-USR-023..024 | US-002, US-032 | AC-FR-USR-001-01..02, AC-FR-USR-023-01, AC-FR-USR-024-01..03 | `TBD` | Planned |
+| BO-01 | FR-USR-025..026, FR-CFG-001..002 | US-033 | AC-FR-USR-025-01..02, AC-FR-USR-026-01 | `TBD` | Planned |
+| BO-01 | FR-MYP-015, FR-MPP-001..004 | US-034 | AC-FR-MPP-001-01..02 | `TBD` | Planned |
+| BO-06 | FR-MPH-004 | US-035 | AC-FR-MPH-004-01..02 | `TBD` | Planned |
 
 ---
 
@@ -2620,10 +2797,10 @@ AI coding agent **HARUS** mengikuti prinsip berikut:
 28. Jangan mengubah warna TAG existing karena reference color diubah/dinonaktifkan.
 
 **Photo**
-29. Foto VISIT dan foto MASTER memiliki lifecycle/storage reference independen; MASTER PHOTO bukan alias VISIT PHOTO.
+29. Foto VISIT, foto tinjauan MY PLACE, dan foto MASTER memiliki lifecycle/storage reference independen; MASTER PHOTO bukan alias VISIT PHOTO maupun MY PLACE PHOTO.
 
 **Ownership & Security**
-30. Validasi ownership di sisi server sebelum operasi pada MY PLACE, TAG, VISIT, VISIT PHOTO, dan ITINERARY.
+30. Validasi ownership di sisi server sebelum operasi pada MY PLACE, MY PLACE PHOTO, TAG, VISIT, VISIT PHOTO, dan ITINERARY.
 31. Guest hanya boleh menerima data MASTER PLACE `ACTIVE`.
 32. Jangan izinkan pembuatan akun Admin melalui aplikasi pada Fase 1.
 33. Password random hasil generate harus memuat huruf kecil, huruf besar, angka, dan simbol; jangan simpan password plain text.
@@ -2643,6 +2820,9 @@ AI coding agent **HARUS** mengikuti prinsip berikut:
 47. Jangan hitung VISIT milik user `DELETED` pada rating MASTER.
 48. Login menerima email atau username; identifier yang mengandung `@` dicocokkan dengan email, selain itu dengan username; pesan gagal login generik.
 49. Username 4–20 karakter (huruf, angka, `.`, `_`), disimpan lowercase, unik case-insensitive termasuk user soft-deleted; hanya pemilik akun yang dapat mengganti, berlaku langsung tanpa konfirmasi.
+50. Avatar opsional, satu per user, hanya upload file; validasi terhadap `avatar.allowed_types` & `avatar.max_size_mb`; hapus file lama saat diganti; hanya pemilik akun yang dapat mengubah.
+51. Foto tinjauan MY PLACE opsional dan boleh lebih dari satu; storage sama dengan VISIT PHOTO (UPLOAD/EXTERNAL/S3); batas jumlah `photo.max_per_my_place`; jangan masukkan ke snapshot pengajuan.
+52. MASTER PLACE PHOTO dari MY PLACE PHOTO adalah salinan independen dengan `source_my_place_photo_id`; hanya dari MY PLACE yang mereferensikan MASTER tersebut; satu MASTER PHOTO maksimal satu sumber.
 
 ---
 
@@ -2661,11 +2841,13 @@ EXPLORER
    ├── Create MY PLACE
    │     ├── from Google
    │     ├── from MASTER
-   │     └── New personal place
+   │     ├── New personal place
+   │     └── Foto tinjauan (opsional)
    ├── Manage MY PLACE
    │     ├── CATEGORY (pilih)
    │     ├── TAG
    │     ├── FAVORITE
+   │     ├── Foto tinjauan (MY PLACE PHOTO)
    │     ├── Inactivate / Activate
    │     ├── Delete (consent bila ada history / itinerary)
    │     └── VISIT
@@ -2683,6 +2865,7 @@ EXPLORER
    ├── Login (email atau username)
    ├── Profile
    │     ├── Nama / Username / Password
+   │     ├── Foto profil (avatar)
    │     ├── Email (konfirmasi link)
    │     └── Bahasa (ID / EN)
    └── Filter / Search
@@ -2709,10 +2892,11 @@ ADMIN  (login → mode ADMIN; Switch ⇄ mode EXPLORER = seluruh alur EXPLORER d
    ├── Refer / RE-REFER / UNREFER MY PLACE
    ├── Manage MASTER PHOTOS
    │     ├── Upload
-   │     └── From VISIT PHOTO
+   │     ├── From VISIT PHOTO
+   │     └── From MY PLACE PHOTO
    ├── Manage CATEGORY
    ├── Manage TAG COLOR REFERENCE
-   ├── Manage Photo Settings
+   ├── Manage Photo & Avatar Settings
    └── Backup (manual, unduh)
 
 REFERENCE DATA
@@ -2733,7 +2917,7 @@ REFERENCE DATA
 | Kebutuhan awal | `SPEC-PPJ.md` | Sumber kebutuhan awal; ketentuan "semua tempat itinerary masuk master" digantikan oleh K-02 |
 | BRD v1.0.0 (arsip) | `BRD_PPJ_v1.0.0.md` | Digantikan oleh versi ini |
 | BRD sebelumnya | `BRD_final.md` | Basis BRD v1.0.0 |
-| ERD | `ERD_PPJ.md` (ERD-PPJ-001 v1.2.0) | Logical data model, UID, ON DELETE matrix (arsip: `result/v1.2.0/ERD_PPJ_v1.2.0.md`, `result/v1.1.0/ERD_PPJ_v1.1.0.md`, `result/v1.0.0/ERD_PPJ_v1.0.0.md`, `ERD_final.md`) |
+| ERD | `ERD_PPJ.md` (ERD-PPJ-001 v1.3.0) | Logical data model, UID, ON DELETE matrix (arsip: `result/v1.3.0/ERD_PPJ_v1.3.0.md`, `result/v1.2.0/ERD_PPJ_v1.2.0.md`, `result/v1.1.0/ERD_PPJ_v1.1.0.md`, `result/v1.0.0/ERD_PPJ_v1.0.0.md`, `ERD_final.md`) |
 | Standar BRD | `standard/BRD_standard.md` | Acuan struktur dokumen |
 
 ### 32.2 Contoh Data

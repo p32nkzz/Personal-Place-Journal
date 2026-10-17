@@ -1,14 +1,18 @@
 "use client";
 
+import { Fancybox } from "@fancyapps/ui";
+import "@fancyapps/ui/dist/fancybox/fancybox.css";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
-import { ActiveChip, CategoryChips, MasterStatusChip, RelationChip, TagList, VisitStatusChip } from "~/components/chips";
+import { ActiveChip, CategoryChips, MasterStatusChip, RelationChip, TagList, VisitContextChip, VisitStatusChip } from "~/components/chips";
 import { Icon } from "~/components/Icon";
 import { googlePhotosFor, nearestPlacePhotos, reverseGeocode, type GooglePhoto, type GooglePlaceResult } from "~/components/map/MapView";
-import { Alert, Spinner, StatusChip, Stars } from "~/components/ui";
-import { VisitFormModal } from "~/components/VisitFormModal";
+import { Alert, ConfirmDialog, Spinner, StatusChip, Stars, useErrorMessage, useToast } from "~/components/ui";
+import { Coords, DescQuote, InfoRow, ThumbStrip } from "~/components/PlaceInfo";
+import { VisitFormModal, type VisitInit } from "~/components/VisitFormModal";
 import { useFormat, useT } from "~/lib/i18n";
+import { useMapColors } from "~/components/map/useMapColors";
 import { api } from "~/trpc/react";
 
 export type Viewer = "GUEST" | "EXPLORER" | "ADMIN";
@@ -24,26 +28,41 @@ export type Selection =
       moved?: boolean;
     };
 
-function Header({ label, onClose }: { label: string; onClose: () => void }) {
-  const { t } = useT();
-  return (
-    <div className="row-between">
-      <span className="t-overline muted">{label}</span>
-      <button className="btn btn-ghost btn-sm btn-icon" onClick={onClose} aria-label={t("common.close")}>
-        <Icon name="xmark" />
-      </button>
-    </div>
-  );
-}
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+/** Foto pada pop-up; klik membuka pratinjau Fancybox (dengan caption bila ada). */
 function Photos({ photos, alt }: { photos: { uid: string; url: string; caption: string | null }[]; alt: string }) {
   const [i, setI] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const group = useId();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    Fancybox.bind(el, "a[data-fancybox]", { Hash: false });
+    return () => Fancybox.unbind(el);
+  }, []);
   if (!photos.length) return null;
-  const cur = photos[Math.min(i, photos.length - 1)]!;
+  const idx = Math.min(i, photos.length - 1);
+  const cur = photos[idx]!;
   return (
-    <div className="stack-sm">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={cur.url} alt={cur.caption ?? alt} style={{ width: "100%", height: 170, objectFit: "cover", borderRadius: 8 }} />
+    <div className="stack-sm" ref={ref}>
+      {photos.map((p, n) => (
+        <a
+          key={p.uid}
+          href={p.url}
+          data-fancybox={group}
+          data-caption={p.caption ? escapeHtml(p.caption) : undefined}
+          aria-label={p.caption ?? alt}
+          style={n === idx ? { display: "block", cursor: "zoom-in" } : { display: "none" }}
+        >
+          {n === idx && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cur.url} alt={cur.caption ?? alt} style={{ width: "100%", height: 170, objectFit: "cover", borderRadius: 8, display: "block" }} />
+          )}
+        </a>
+      ))}
+      {cur.caption && <div className="pp-photo-cap">{cur.caption}</div>}
       {photos.length > 1 && (
         <div className="row" style={{ gap: 6 }}>
           {photos.map((p, n) => (
@@ -51,7 +70,7 @@ function Photos({ photos, alt }: { photos: { uid: string; url: string; caption: 
               key={p.uid}
               onClick={() => setI(n)}
               aria-label={p.caption ?? `${n + 1}`}
-              style={{ padding: 0, width: 48, height: 36, borderRadius: 6, overflow: "hidden", cursor: "pointer", border: n === i ? "2px solid var(--color-primary)" : "1px solid var(--color-border)", background: "none" }}
+              style={{ padding: 0, width: 48, height: 36, borderRadius: 6, overflow: "hidden", cursor: "pointer", border: n === idx ? "2px solid var(--color-primary)" : "1px solid var(--color-border)", background: "none" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -63,8 +82,8 @@ function Photos({ photos, alt }: { photos: { uid: string; url: string; caption: 
   );
 }
 
-/** Foto Google Maps untuk tempat tersimpan — nonaktif secara default; tampil setelah chip diklik. */
-function GooglePhotosToggle({
+/** Foto Google Maps untuk tempat tersimpan — hanya dimuat saat tab-nya dibuka. */
+function GooglePhotosPanel({
   placeId,
   lat,
   lng,
@@ -76,12 +95,10 @@ function GooglePhotosToggle({
   fallbackName: string;
 }) {
   const { t } = useT();
-  const [on, setOn] = useState(false);
-  const [state, setState] = useState<"idle" | "loading" | "done">("idle");
+  const [state, setState] = useState<"loading" | "done">("loading");
   const [data, setData] = useState<Awaited<ReturnType<typeof googlePhotosFor>>>(null);
 
   useEffect(() => {
-    if (!on) return;
     let cancelled = false;
     setState("loading");
     void googlePhotosFor(placeId, lat, lng).then((r) => {
@@ -92,31 +109,104 @@ function GooglePhotosToggle({
     return () => {
       cancelled = true;
     };
-  }, [on, placeId, lat, lng]);
+  }, [placeId, lat, lng]);
 
+  if (state === "loading") return <Spinner />;
+  if (!data) return <p className="muted t-small" style={{ margin: 0 }}>{t("map.googlePhotosNone")}</p>;
   return (
     <div className="stack-sm">
-      <div>
-        <button type="button" className="chip" aria-pressed={on} onClick={() => setOn((v) => !v)} title={t("map.googlePhotosHint")}>
-          <Icon name="image" /> {t("map.googlePhotos")}
+      <Photos photos={data.photos.map((ph, i) => ({ uid: `gp${i}`, url: ph.url, caption: null }))} alt={data.name || fallbackName} />
+      <div className="t-caption muted">
+        {data.exact ? (data.name || fallbackName) : t("map.photoNear2", { name: data.name })} · {t("map.photoBy")}{" "}
+        {[...new Map(data.photos.flatMap((ph) => ph.credits).map((c) => [c.name, c])).values()].map((c, i) => (
+          <span key={c.name}>
+            {i > 0 && ", "}
+            {c.href ? <a href={c.href} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>{c.name}</a> : c.name}
+          </span>
+        ))}{" "}
+        · Google Maps
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Foto pada pop-up dikelompokkan dalam tab chip agar pop-up tidak memanjang:
+ * foto milik tempat (MASTER / pantauan) dan foto Google Maps (dimuat saat tab dibuka).
+ */
+function PhotoTabs({
+  ownLabel,
+  photos,
+  placeId,
+  lat,
+  lng,
+  name,
+}: {
+  ownLabel: string;
+  photos: { uid: string; url: string; caption: string | null }[];
+  placeId: string | null;
+  lat: number;
+  lng: number;
+  name: string;
+}) {
+  const { t } = useT();
+  const [tab, setTab] = useState<"own" | "google">("own");
+  return (
+    <div className="stack-sm">
+      <div className="mini-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "own"} className="mini-tab" onClick={() => setTab("own")}>
+          <Icon name="image" fixedWidth={false} /> {ownLabel} <span className="mini-tab-n">{photos.length}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "google"} className="mini-tab" title={t("map.googlePhotosHint")} onClick={() => setTab("google")}>
+          <Icon name="map" fixedWidth={false} /> {t("map.googlePhotos")}
         </button>
       </div>
-      {on && state === "loading" && <Spinner />}
-      {on && state === "done" && !data && <p className="muted t-small" style={{ margin: 0 }}>{t("map.googlePhotosNone")}</p>}
-      {on && data && (
-        <div className="stack-sm">
-          <Photos photos={data.photos.map((ph, i) => ({ uid: `gp${i}`, url: ph.url, caption: null }))} alt={data.name || fallbackName} />
-          <div className="t-caption muted">
-            {data.exact ? (data.name || fallbackName) : t("map.photoNear2", { name: data.name })} · {t("map.photoBy")}{" "}
-            {[...new Map(data.photos.flatMap((ph) => ph.credits).map((c) => [c.name, c])).values()].map((c, i) => (
-              <span key={c.name}>
-                {i > 0 && ", "}
-                {c.href ? <a href={c.href} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline" }}>{c.name}</a> : c.name}
-              </span>
-            ))}{" "}
-            · Google Maps
-          </div>
-        </div>
+      {tab === "own" ? (
+        photos.length ? <Photos photos={photos} alt={name} /> : <p className="muted t-small" style={{ margin: 0 }}>{t("photo.none")}</p>
+      ) : (
+        <GooglePhotosPanel placeId={placeId} lat={lat} lng={lng} fallbackName={name} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------- Blok tampilan ringkas pop-up ------------------------- */
+
+/** Kepala pop-up: penanda jenis (berwarna), tombol aksi kecil, tutup; judul di bawahnya. */
+function PopHead({
+  kind,
+  color,
+  title,
+  favorite,
+  actions,
+  onClose,
+}: {
+  kind: string;
+  color: string;
+  title?: string;
+  favorite?: boolean;
+  actions?: React.ReactNode;
+  onClose: () => void;
+}) {
+  const { t } = useT();
+  return (
+    <div className="pp-head">
+      <div className="pp-head-top">
+        <span className="pp-kind">
+          <i style={{ background: color }} />
+          {kind}
+        </span>
+        <span className="pp-head-actions">
+          {actions}
+          <button type="button" className="pp-icon-btn" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
+            <Icon name="xmark" fixedWidth={false} />
+          </button>
+        </span>
+      </div>
+      {title && (
+        <h2 className="pp-title">
+          {favorite && <Icon name="star" fixedWidth={false} style={{ color: "#eab308" }} />} {title}
+        </h2>
       )}
     </div>
   );
@@ -125,49 +215,61 @@ function GooglePhotosToggle({
 /** Detail lengkap MASTER PLACE langsung pada peta. */
 export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Viewer; onClose: () => void }) {
   const { t } = useT();
+  const colors = useMapColors();
   const { data: m, isLoading } = api.master.get.useQuery({ uid });
   return (
-    <div className="stack-sm">
-      <Header label="MASTER" onClose={onClose} />
+    <div className="pp">
+      <PopHead kind="MASTER" color={colors.master} title={m?.name} onClose={onClose} />
       {isLoading || !m ? (
         <Spinner />
       ) : (
         <>
-          <Photos photos={m.photos} alt={m.name} />
-          <h2 className="t-subhead">{m.name}</h2>
-          <div className="row">
-            <MasterStatusChip status={m.status} />
+          <div className="pp-meta">
+            {/* Status "Aktif" tidak perlu ditampilkan; hanya status selain aktif (mis. nonaktif bagi Admin) yang diberi penanda. */}
+            {m.status !== "ACTIVE" && <MasterStatusChip status={m.status} />}
             <Stars value={m.rating.avg} count={m.rating.count} />
           </div>
-          <GooglePhotosToggle key={m.uid} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} fallbackName={m.name} />
-          <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
-            <dt>{t("common.address")}</dt>
-            <dd>{m.address}</dd>
-            {m.description && (
-              <>
-                <dt>{t("common.description")}</dt>
-                <dd style={{ whiteSpace: "pre-wrap" }}>{m.description}</dd>
-              </>
-            )}
-            <dt>{t("common.category")}</dt>
-            <dd><CategoryChips items={m.categories} /></dd>
-            <dt>{t("common.coordinates")}</dt>
-            <dd className="mono">{m.latitude.toFixed(6)}, {m.longitude.toFixed(6)}</dd>
-          </dl>
-          <div className="row">
+          <PhotoTabs key={m.uid} ownLabel={t("map.tabMasterPhotos")} photos={m.photos} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} name={m.name} />
+          <div className="pp-info">
+            {m.categories.length > 0 && <InfoRow icon="layers" label={t("common.category")}><CategoryChips items={m.categories} /></InfoRow>}
+            <InfoRow icon="map-pin" label={t("common.address")}>{m.address}</InfoRow>
+            {m.description && <DescQuote text={m.description} />}
+            <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={m.latitude} lng={m.longitude} placeId={m.googlePlaceId} googleLink streetView name={m.name} /></InfoRow>
+          </div>
+          <div className="pp-actions">
             {viewer === "EXPLORER" && m.status === "ACTIVE" && (
-              <Link className="btn btn-primary btn-sm" href={`/places/new?master=${m.uid}`}>
+              <Link className="btn btn-primary btn-sm" href={`/places/new?master=${m.uid}&from=map`}>
                 <Icon name="plus" /> {t("map.saveAsMine")}
               </Link>
             )}
-            {viewer === "ADMIN" && (
-              <Link className="btn btn-secondary btn-sm" href={`/admin/masters/${m.uid}`}>
-                <Icon name="gear" /> {t("common.manage")}
-              </Link>
-            )}
+            <Link className="btn btn-secondary btn-sm" href={viewer === "ADMIN" ? `/admin/masters/${m.uid}?from=map` : `/masters/${m.uid}?from=map`}>
+              <Icon name="circle-info" /> {t("map.viewDetail")}
+            </Link>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Pager ringkas (sebelumnya/berikutnya + posisi) untuk daftar di dalam pop-up. */
+function MiniPager({ page, pageSize, total, onPage }: { page: number; pageSize: number; total: number; onPage: (n: number) => void }) {
+  const { t } = useT();
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(total, page * pageSize);
+  return (
+    <div className="pp-pager">
+      <span className="pp-pager-info">{t("table.showing", { from, to, total })}</span>
+      <span className="pp-pager-nav">
+        <button type="button" className="pp-icon-btn" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label={t("table.prev")} title={t("table.prev")}>
+          <Icon name="angle-left" fixedWidth={false} />
+        </button>
+        <b>{page}/{pages}</b>
+        <button type="button" className="pp-icon-btn" disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label={t("table.next")} title={t("table.next")}>
+          <Icon name="angle-right" fixedWidth={false} />
+        </button>
+      </span>
     </div>
   );
 }
@@ -177,123 +279,207 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
   const { t } = useT();
   const fmt = useFormat();
   const utils = api.useUtils();
-  const { data: p, isLoading } = api.place.get.useQuery({ uid });
-  const [visitOpen, setVisitOpen] = useState(false);
+  const colors = useMapColors();
+  const { data: p, isLoading, error: loadError } = api.place.get.useQuery({ uid }, { retry: false });
+  // Catat baru ({}) atau ubah ({ visit }) kunjungan dari pop-up.
+  const [visitModal, setVisitModal] = useState<null | { visit?: VisitInit }>(null);
+  const [delVisit, setDelVisit] = useState<string | null>(null);
+  const toast = useToast();
+  const errMsg = useErrorMessage();
+  const [tab, setTab] = useState<"visits" | "history">("visits");
+  // Kunjungan dipaging di server; ukuran halaman dari Pengaturan (visit.page_size), sama dengan halaman detail.
+  const [visitPage, setVisitPage] = useState(1);
+  const vq = api.place.visits.useQuery({ uid, page: visitPage }, { placeholderData: (prev) => prev });
+  const visitTotal = vq.data?.total ?? p?.visits.length ?? 0;
+  const refreshVisits = () => {
+    void utils.place.get.invalidate({ uid });
+    void utils.place.visits.invalidate({ uid });
+    void utils.place.list.invalidate();
+  };
+  // Tandai/lepas favorit langsung dari pop-up (warna pin di peta ikut berubah).
+  const fav = api.place.setFavorite.useMutation({
+    onSuccess: (_r, vars) => {
+      void utils.place.get.invalidate({ uid });
+      void utils.place.list.invalidate();
+      toast.push(vars.isFavorite ? t("place.favoriteAdded") : t("place.favoriteRemoved"), "success");
+    },
+    onError: (e) => toast.push(errMsg(e), "error"),
+  });
+  const delVisitMut = api.visit.delete.useMutation({
+    onSuccess: () => {
+      // Halaman terakhir menjadi kosong setelah hapus: mundur satu halaman.
+      if (vq.data && vq.data.rows.length === 1 && visitPage > 1) setVisitPage(visitPage - 1);
+      refreshVisits();
+      setDelVisit(null);
+      toast.push(t("common.deleted"), "success");
+    },
+    onError: (e) => {
+      setDelVisit(null);
+      toast.push(errMsg(e), "error");
+    },
+  });
 
   return (
-    <div className="stack-sm">
-      <Header label={t("nav.myPlaces")} onClose={onClose} />
-      {isLoading || !p ? (
+    <div className="pp">
+      <PopHead
+        kind={t("nav.myPlaces")}
+        color={p?.isFavorite ? colors.favorite : colors.mine}
+        title={p?.name}
+        favorite={p?.isFavorite}
+        onClose={onClose}
+        actions={
+          p && (
+            <>
+              <button
+                type="button"
+                className={`pp-icon-btn pp-fav${p.isFavorite ? " is-on" : ""}`}
+                aria-pressed={p.isFavorite}
+                disabled={fav.isPending}
+                title={p.isFavorite ? t("place.unmarkFavorite") : t("place.markFavorite")}
+                aria-label={p.isFavorite ? t("place.unmarkFavorite") : t("place.markFavorite")}
+                onClick={() => fav.mutate({ uid: p.uid, isFavorite: !p.isFavorite })}
+              >
+                <Icon name={p.isFavorite ? "star" : "star-regular"} fixedWidth={false} />
+              </button>
+              <Link className="pp-icon-btn" href={`/places/${p.uid}/edit?from=map`} title={t("common.edit")} aria-label={t("common.edit")}>
+                <Icon name="pen" fixedWidth={false} />
+              </Link>
+            </>
+          )
+        }
+      />
+      {loadError && !p ? (
+        <div className="pp-gone">
+          <Alert kind="warning">{(loadError as { message?: string }).message === "NOT_FOUND" ? t("place.alreadyDeleted") : t("err.GENERIC")}</Alert>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>{t("common.close")}</button>
+        </div>
+      ) : isLoading || !p ? (
         <Spinner />
       ) : (
         <>
-          <h2 className="t-subhead">
-            {p.isFavorite && <Icon name="star" style={{ color: "#f59e0b" }} />} {p.name}
-          </h2>
-          <div className="row">
+          <div className="pp-meta">
             <VisitStatusChip status={p.visitStatus} />
             <RelationChip status={p.masterRelationStatus} />
             {!p.isActive && <ActiveChip active={false} />}
+            <Stars value={p.rating.avg} count={p.rating.count} />
           </div>
-          <Stars value={p.rating.avg} count={p.rating.count} />
-          <GooglePhotosToggle key={p.uid} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} fallbackName={p.name} />
-          <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
-            <dt>{t("common.address")}</dt>
-            <dd>{p.address ?? "—"}</dd>
-            {p.description && (
-              <>
-                <dt>{t("common.description")}</dt>
-                <dd style={{ whiteSpace: "pre-wrap" }}>{p.description}</dd>
-              </>
+          <PhotoTabs key={p.uid} ownLabel={t("place.reviewPhotos")} photos={p.photos} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} name={p.name} />
+          <div className="pp-info">
+            {(p.categories.length > 0 || p.tags.length > 0) && (
+              <InfoRow icon="layers" label={`${t("common.category")} / ${t("nav.tags")}`}>
+                <span className="pp-chips">
+                  {p.categories.length > 0 && <CategoryChips items={p.categories} />}
+                  {p.tags.length > 0 && <TagList items={p.tags} />}
+                </span>
+              </InfoRow>
             )}
-            <dt>{t("common.category")}</dt>
-            <dd><CategoryChips items={p.categories} /></dd>
-            {p.tags.length > 0 && (
-              <>
-                <dt>{t("nav.tags")}</dt>
-                <dd><TagList items={p.tags} /></dd>
-              </>
-            )}
-            <dt>{t("common.coordinates")}</dt>
-            <dd className="mono">{p.latitude.toFixed(6)}, {p.longitude.toFixed(6)}</dd>
+            <InfoRow icon="map-pin" label={t("common.address")}>{p.address ?? "—"}</InfoRow>
+            {p.description && <DescQuote text={p.description} />}
             {p.master && (
-              <>
-                <dt>MASTER</dt>
-                <dd>
-                  <Link href={`/masters/${p.master.uid}`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{p.master.name}</Link>{" "}
-                  {p.master.status === "INACTIVE" && <StatusChip tone="neutral">{t("master.inactive")}</StatusChip>}
-                </dd>
-              </>
+              <InfoRow icon="link" label="MASTER">
+                <Link href={`/masters/${p.master.uid}?${new URLSearchParams({ from: "map-place", place: p.uid, lat: String(p.latitude), lng: String(p.longitude) })}`} className="pp-a">{p.master.name}</Link>
+                {p.master.status === "INACTIVE" && <> <StatusChip tone="neutral">{t("master.inactive")}</StatusChip></>}
+              </InfoRow>
             )}
             {p.itineraries.length > 0 && (
-              <>
-                <dt>{t("nav.itineraries")}</dt>
-                <dd>
-                  {p.itineraries.map((i, n) => (
-                    <span key={i.uid}>
-                      {n > 0 && ", "}
-                      <Link href={`/itineraries/${i.uid}`} style={{ color: "var(--color-primary)" }}>{i.name}</Link>
-                    </span>
-                  ))}
-                </dd>
-              </>
+              <InfoRow icon="route" label={t("nav.itineraries")}>
+                {p.itineraries.map((i, n) => (
+                  <span key={i.uid}>
+                    {n > 0 && ", "}
+                    <Link href={`/itineraries/${i.uid}`} className="pp-a">{i.name}</Link>
+                  </span>
+                ))}
+              </InfoRow>
             )}
-          </dl>
+            <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={p.latitude} lng={p.longitude} placeId={p.googlePlaceId} googleLink streetView name={p.name} /></InfoRow>
+          </div>
 
-          <hr className="divider" style={{ margin: "4px 0" }} />
-          <div className="t-overline muted">{t("visit.title")} ({p.visits.length})</div>
-          {!p.visits.length ? (
-            <p className="muted t-small" style={{ margin: 0 }}>{t("visit.empty")}</p>
-          ) : (
-            <ul className="timeline" style={{ gap: 12 }}>
-              {p.visits.map((v) => (
-                <li key={v.uid}>
-                  <div><b>{fmt.dateTime(v.visitedAt)}</b></div>
-                  <div className="row">
-                    <Stars value={v.rating} />
-                    {v.context === "PLANNED" && <StatusChip tone="info">{t("visit.planned")}</StatusChip>}
-                    {v.context === "UNEXPECTED" && <StatusChip tone="warning">{t("visit.unexpected")}</StatusChip>}
-                  </div>
-                  {v.note && <div className="t-small" style={{ whiteSpace: "pre-wrap" }}>{v.note}</div>}
-                  {v.photos.length > 0 && <div style={{ marginTop: 6 }}><Photos photos={v.photos} alt={p.name} /></div>}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {p.history.length > 0 && (
-            <>
-              <div className="t-overline muted">{t("relation.history")}</div>
-              <ul className="timeline" style={{ gap: 8 }}>
+          {/* Kunjungan & riwayat dalam tab agar pop-up tidak memanjang */}
+          <div className="pp-section">
+            <div className="mini-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={tab === "visits"} className="mini-tab" onClick={() => setTab("visits")}>
+                <Icon name="calendar" fixedWidth={false} /> {t("visit.title")} <span className="mini-tab-n">{visitTotal}</span>
+              </button>
+              {p.history.length > 0 && (
+                <button type="button" role="tab" aria-selected={tab === "history"} className="mini-tab" onClick={() => setTab("history")}>
+                  <Icon name="history" fixedWidth={false} /> {t("relation.history")} <span className="mini-tab-n">{p.history.length}</span>
+                </button>
+              )}
+            </div>
+            {tab === "visits" ? (
+              !visitTotal ? (
+                <p className="muted t-small" style={{ margin: 0 }}>{t("visit.empty")}</p>
+              ) : (
+                <ul className="pp-visits pp-timeline">
+                  {(vq.data?.rows ?? []).map((v, i) => (
+                    <li key={v.uid} className={`pp-tl-${v.context.toLowerCase()}${i === 0 && (vq.data?.page ?? 1) === 1 ? " is-latest" : ""}`}>
+                      <div className="pd-visit-top">
+                        <div className="pp-visit-top">
+                          <b>{fmt.dateTime(v.visitedAt)}</b>
+                          <Stars value={v.rating} />
+                          {v.context !== "STANDALONE" && <VisitContextChip context={v.context} />}
+                        </div>
+                        <span className="pd-visit-actions pp-visit-actions">
+                          <button type="button" className="pp-icon-btn" title={t("common.edit")} aria-label={t("common.edit")} onClick={() => setVisitModal({ visit: { uid: v.uid, visitedAt: v.visitedAt, rating: v.rating, note: v.note } })}>
+                            <Icon name="pen" fixedWidth={false} />
+                          </button>
+                          <button type="button" className="pp-icon-btn is-danger" title={t("common.delete")} aria-label={t("common.delete")} onClick={() => setDelVisit(v.uid)}>
+                            <Icon name="trash" fixedWidth={false} />
+                          </button>
+                        </span>
+                      </div>
+                      {v.note && <div className="pp-note">{v.note}</div>}
+                      <ThumbStrip photos={v.photos} />
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : (
+              <ul className="pp-history">
                 {p.history.map((h) => (
                   <li key={h.uid}>
                     <b>{t(`history.${h.action}`)}</b> <span className="muted t-caption">{fmt.dateTime(h.performedAt)}</span>
-                    {h.reason && <div className="t-small">{h.reason}</div>}
+                    {h.reason && <div className="pp-note">{h.reason}</div>}
                   </li>
                 ))}
               </ul>
-            </>
-          )}
+            )}
+            {tab === "visits" && vq.data && vq.data.total > vq.data.pageSize && (
+              <MiniPager page={vq.data.page} pageSize={vq.data.pageSize} total={vq.data.total} onPage={setVisitPage} />
+            )}
+          </div>
 
-          <div className="row" style={{ marginTop: 4 }}>
+          <div className="pp-actions">
             {p.isActive && (
-              <button className="btn btn-primary btn-sm" onClick={() => setVisitOpen(true)}>
+              <button className="btn btn-primary btn-sm" onClick={() => setVisitModal({})}>
                 <Icon name="plus" /> {t("visit.add")}
               </button>
             )}
-            <Link className="btn btn-secondary btn-sm" href={`/places/${p.uid}/edit`}>
-              <Icon name="pen" /> {t("common.edit")}
+            <Link className="btn btn-secondary btn-sm" href={`/places/${p.uid}?from=map`}>
+              <Icon name="circle-info" /> {t("map.viewDetail")}
             </Link>
           </div>
 
-          {visitOpen && (
+          {visitModal && (
             <VisitFormModal
               placeUid={p.uid}
-              onClose={() => setVisitOpen(false)}
-              onSaved={() => {
-                void utils.place.get.invalidate({ uid });
-                void utils.place.list.invalidate();
-              }}
+              visit={visitModal.visit}
+              // Foto diambil dari data terbaru agar unggah/hapus langsung terlihat di dialog.
+              photos={visitModal.visit ? (vq.data?.rows.find((r) => r.uid === visitModal.visit!.uid)?.photos ?? []) : undefined}
+              onPhotosChanged={refreshVisits}
+              onClose={() => setVisitModal(null)}
+              onSaved={refreshVisits}
+            />
+          )}
+          {delVisit && (
+            <ConfirmDialog
+              title={t("visit.deleteTitle")}
+              message={<p style={{ margin: 0 }}>{t("visit.deleteText")}</p>}
+              danger
+              confirmLabel={t("common.delete")}
+              busy={delVisitMut.isPending}
+              onClose={() => setDelVisit(null)}
+              onConfirm={() => delVisitMut.mutate({ uid: delVisit })}
             />
           )}
         </>
@@ -321,6 +507,7 @@ export function PinPopup({
   onClose: () => void;
 }) {
   const { t } = useT();
+  const colors = useMapColors();
   const [geo, setGeo] = useState<{ address: string; placeId: string } | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "failed">("idle");
   const [nearPhotos, setNearPhotos] = useState<{ name: string; distance: number; photos: GooglePhoto[] } | null>(null);
@@ -369,8 +556,8 @@ export function PinPopup({
   });
 
   return (
-    <div className="stack-sm">
-      <Header label={t("map.pin")} onClose={onClose} />
+    <div className="pp">
+      <PopHead kind={t("map.pin")} color={colors.newPin} title={placeName ?? t("map.manualPin")} onClose={onClose} />
       {fromSearch && !!sel.google?.photos?.length && (
         <div className="stack-sm">
           <Photos
@@ -409,31 +596,33 @@ export function PinPopup({
           </div>
         </div>
       )}
-      <h2 className="t-subhead">{placeName ?? t("map.manualPin")}</h2>
-      {!fromSearch && nearPhotos && (
-        <div className="t-caption muted" style={{ marginTop: -4 }}>{t("map.nearestPlace", { d: nearPhotos.distance })}</div>
-      )}
-      <dl className="kv" style={{ margin: 0, gridTemplateColumns: "96px 1fr" }}>
-        <dt>{t("common.address")}</dt>
-        <dd>
+      {/* Kartu info seperti detail MASTER, hanya baris yang relevan untuk titik baru (alamat, tempat terdekat, koordinat). */}
+      <div className="pp-info">
+        <InfoRow icon="map-pin" label={t("common.address")}>
           {address ?? (state === "loading" ? <Spinner label={t("map.findingAddress")} /> : <span className="muted">{t("map.addressUnknown")}</span>)}
-        </dd>
-        <dt>{t("common.coordinates")}</dt>
-        <dd className="mono">{sel.lat.toFixed(6)}, {sel.lng.toFixed(6)}</dd>
-      </dl>
+        </InfoRow>
+        {!fromSearch && nearPhotos && (
+          <InfoRow icon="circle-info" label={t("map.nearestPlaceLabel")}>
+            <span className="muted">{t("map.nearestPlace", { d: nearPhotos.distance })}</span>
+          </InfoRow>
+        )}
+        <InfoRow icon="pin" label={t("common.coordinates")}>
+          <Coords lat={sel.lat} lng={sel.lng} placeId={fromSearch ? sel.google!.googlePlaceId : geo?.placeId} googleLink streetView name={placeName} />
+        </InfoRow>
+      </div>
       {viewer !== "GUEST" && (
-        <p className="helper" style={{ margin: 0 }}>
+        <p className="pp-tip">
           <Icon name="pin" fixedWidth={false} /> {t("map.dragHint")}
         </p>
       )}
-      <div className="row">
+      <div className="pp-actions">
         {viewer === "EXPLORER" && (
-          <Link className="btn btn-primary btn-sm" href={`/places/new?${params}`}>
+          <Link className="btn btn-primary btn-sm" href={`/places/new?${params}&from=map`}>
             <Icon name="plus" /> {t("map.addAsMine")}
           </Link>
         )}
         {viewer === "ADMIN" && (
-          <Link className="btn btn-primary btn-sm" href={`/admin/masters/new?${params}`}>
+          <Link className="btn btn-primary btn-sm" href={`/admin/masters/new?${params}&from=map`}>
             <Icon name="plus" /> {t("map.createMaster")}
           </Link>
         )}
