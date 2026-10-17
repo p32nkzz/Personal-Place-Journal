@@ -107,9 +107,9 @@ export function validateSetting(key: string, value: string): string | null {
 
 /** Warna pin peta (app_settings); kunci yang belum ada memakai warna bawaan. */
 export const MAP_COLOR_DEFAULTS = {
-  "map.color_master": "#111827",
-  "map.color_mine": "#CA8A04",
-  "map.color_favorite": "#FACC15",
+  "map.color_master": "#3730A3",
+  "map.color_mine": "#C026D3",
+  "map.color_favorite": "#F59E0B",
   "map.color_new_pin": "#DC2626",
 } as const;
 
