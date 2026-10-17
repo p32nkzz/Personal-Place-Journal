@@ -1628,3 +1628,101 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
 
 /* Pop-up peta: tempat sudah tidak ada */
 .pp-gone { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-bottom: 12px; }
+
+/* ---------- Kamera foto pantauan (layar penuh) ---------- */
+.cam { position: fixed; inset: 0; z-index: 3000; display: flex; flex-direction: column; background: #05070b; color: #f8fafc; }
+.cam-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 10px; }
+.cam-title { display: inline-flex; align-items: center; gap: 8px; font: 600 14px/1.2 var(--font-headline); }
+.cam-count { padding: 2px 8px; border-radius: 999px; background: rgb(255 255 255 / 0.14); font: 600 11px/1.5 var(--font-body); }
+.cam-icon { display: inline-grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; background: rgb(255 255 255 / 0.12); color: #fff; font-size: 16px; cursor: pointer; transition: background 140ms ease, transform 140ms ease; }
+.cam-icon:hover:not(:disabled) { background: rgb(255 255 255 / 0.22); }
+.cam-icon:active:not(:disabled) { transform: scale(0.94); }
+.cam-icon:disabled { opacity: 0.4; cursor: default; }
+.cam-icon.is-ghost { background: none; }
+.cam-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+.cam-video, .cam-shot { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.cam-video.is-mirror { transform: scaleX(-1); }
+.cam-msg { position: absolute; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e1; }
+.cam-msg-box { position: static; flex-direction: column; max-width: 340px; padding: 20px; border-radius: 16px; background: rgb(255 255 255 / 0.06); text-align: center; line-height: 1.5; }
+.cam-msg-box > svg { font-size: 22px; color: #fbbf24; }
+.cam-msg-box p { margin: 0; }
+.cam-flash { position: absolute; inset: 0; background: #fff; opacity: 0.85; animation: cam-flash 180ms ease-out forwards; pointer-events: none; }
+@keyframes cam-flash { to { opacity: 0; } }
+.cam-bottom { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 16px 16px max(18px, env(safe-area-inset-bottom)); }
+.cam-side { flex: 1; display: flex; justify-content: center; }
+.cam-shutter { display: inline-grid; place-items: center; width: 74px; height: 74px; padding: 0; border: 4px solid #fff; border-radius: 50%; background: transparent; cursor: pointer; }
+.cam-shutter span { width: 58px; height: 58px; border-radius: 50%; background: #fff; transition: transform 120ms ease; }
+.cam-shutter:active:not(:disabled) span { transform: scale(0.9); }
+.cam-shutter:disabled { opacity: 0.35; cursor: default; }
+.cam-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid rgb(255 255 255 / 0.25); border-radius: 999px; background: rgb(255 255 255 / 0.1); color: #fff; font: 600 13px var(--font-body); cursor: pointer; }
+.cam-pill:hover { background: rgb(255 255 255 / 0.18); }
+.cam-pill.is-primary { background: var(--color-primary); border-color: var(--color-primary); }
+.cam-pill.is-primary:hover { background: var(--color-primary-hover); }
+
+/* ---------- Bar aksi tambah foto (Unggah · Kamera · Link) ---------- */
+.ph-addrow { display: flex; align-items: center; gap: 8px; }
+.ph-addbar { display: inline-flex; align-items: stretch; border: 1px solid var(--color-border-input); border-radius: 12px; background: var(--color-surface); overflow: hidden; box-shadow: var(--shadow-subtle); }
+.ph-add { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 14px; border: 0; background: none; color: var(--color-text-muted); font: 600 12.5px/1 var(--font-body); white-space: nowrap; cursor: pointer; transition: background 140ms ease, color 140ms ease; }
+.ph-add + .ph-add { border-left: 1px solid var(--color-border); }
+.ph-add > svg { font-size: 12px; color: var(--color-primary); }
+.ph-add:hover:not(:disabled) { background: var(--color-tint); color: var(--color-primary); }
+.ph-add[aria-pressed="true"] { background: var(--color-tint-active); color: var(--color-primary); }
+.ph-add:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.ph-add:disabled { opacity: 0.45; cursor: not-allowed; }
+.ph-addbusy { color: var(--color-primary); }
+.ph-linkbox { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px dashed var(--color-border-input); border-radius: 12px; background: var(--color-background); }
+.ph-linkbox .textarea { min-height: 60px; font-size: 13px; }
+.ph-linkbox-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ph-linkbox-foot .helper { flex: 1; min-width: 0; font-size: 11.5px; }
+.ph-linkbox-foot .btn { flex-shrink: 0; }
+@media (max-width: 560px) {
+  .ph-addrow { width: 100%; }
+  .ph-addbar { display: flex; flex: 1; }
+  .ph-add { flex: 1; padding: 0 8px; }
+  .ph-linkbox-foot { flex-direction: column; align-items: stretch; }
+}
+
+/* Kamera: pratinjau memenuhi layar; bar atas/bawah melayang dengan gradasi tipis (bukan blok hitam). */
+.cam { display: block; background: #000; }
+.cam-stage { position: absolute; inset: 0; }
+.cam-video { object-fit: cover; }
+.cam-shot { object-fit: cover; }
+.cam-top, .cam-bottom { position: absolute; left: 0; right: 0; z-index: 2; }
+.cam-top { top: 0; padding-bottom: 28px; background: linear-gradient(to bottom, rgb(0 0 0 / 0.55), rgb(0 0 0 / 0.25) 60%, transparent); }
+.cam-bottom { bottom: 0; padding-top: 36px; background: linear-gradient(to top, rgb(0 0 0 / 0.6), rgb(0 0 0 / 0.25) 60%, transparent); }
+.cam-title, .cam-icon, .cam-pill { text-shadow: 0 1px 2px rgb(0 0 0 / 0.35); }
+.cam-icon { background: rgb(0 0 0 / 0.32); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.cam-pill { background: rgb(0 0 0 / 0.35); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.cam-shutter { box-shadow: 0 2px 12px rgb(0 0 0 / 0.35); }
+
+/* Kamera: galeri thumbnail, pratinjau & keterangan di dalam dialog */
+.cam-bottom { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.cam-controls { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.cam-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; }
+.cam-strip::-webkit-scrollbar { display: none; }
+.cam-thumb { position: relative; flex: 0 0 auto; width: 54px; height: 54px; padding: 0; border: 2px solid rgb(255 255 255 / 0.7); border-radius: 12px; overflow: hidden; background: #111; cursor: pointer; box-shadow: 0 2px 8px rgb(0 0 0 / 0.35); transition: transform 140ms ease, border-color 140ms ease; }
+.cam-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam-thumb:hover { transform: translateY(-1px); border-color: #fff; }
+.cam-thumb.is-active { border-color: var(--color-secondary); box-shadow: 0 0 0 2px var(--color-primary), 0 2px 8px rgb(0 0 0 / 0.35); }
+.cam-thumb.is-busy { cursor: default; }
+.cam-thumb.is-busy img { opacity: 0.45; }
+.cam-thumb.is-busy > svg { position: absolute; inset: 0; margin: auto; color: #fff; font-size: 16px; }
+.cam-thumb-cap { position: absolute; right: 3px; bottom: 3px; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: rgb(0 0 0 / 0.6); color: #fff; font-size: 8px; }
+.cam-nav { position: absolute; top: 50%; z-index: 3; display: inline-grid; place-items: center; width: 40px; height: 40px; margin-top: -20px; padding: 0; border: 0; border-radius: 50%; background: rgb(0 0 0 / 0.35); color: #fff; font-size: 16px; cursor: pointer; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.cam-nav.is-prev { left: 10px; }
+.cam-nav.is-next { right: 10px; }
+.cam-nav:hover { background: rgb(0 0 0 / 0.5); }
+.cam-edit { display: flex; flex-direction: column; gap: 10px; }
+.cam-caption { display: flex; gap: 8px; }
+.cam-input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border: 1px solid rgb(255 255 255 / 0.28); border-radius: 999px; background: rgb(0 0 0 / 0.4); color: #fff; font: 400 14px var(--font-body); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.cam-input::placeholder { color: rgb(255 255 255 / 0.6); }
+.cam-input:focus { outline: none; border-color: var(--color-secondary); box-shadow: 0 0 0 2px rgb(72 202 228 / 0.35); }
+.cam-edit-actions { display: flex; justify-content: space-between; gap: 8px; }
+.cam-pill:disabled { opacity: 0.45; cursor: default; }
+.cam-pill.is-danger { color: #fecaca; border-color: rgb(248 113 113 / 0.5); }
+.cam-pill.is-danger.is-confirm { background: #dc2626; border-color: #dc2626; color: #fff; }
+.cam-error { display: flex; align-items: center; gap: 8px; align-self: center; padding: 6px 12px; border-radius: 999px; background: rgb(220 38 38 / 0.85); color: #fff; font-size: 12.5px; }
+.cam-shot { object-fit: contain; }
+
+/* Pop-up peta: keterangan foto lebih kecil & lembut */
+.pp-photo-cap { margin-top: -2px; font-size: 11px; line-height: 1.45; font-style: italic; color: var(--color-text-subtle); overflow-wrap: anywhere; }

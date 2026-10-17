@@ -246,6 +246,7 @@ export default function PlaceDetailPage() {
                             kind="visit"
                             photos={v.photos}
                             canEdit
+                            camera
                             uploadEndpoint="/api/upload/visit-photo"
                             parentField="visitUid"
                             parentUid={v.uid}

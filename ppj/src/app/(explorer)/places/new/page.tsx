@@ -19,6 +19,7 @@ function NewPlace() {
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
+  const [captions, setCaptions] = useState<Map<File | string, string>>(new Map());
   const addPhotoUrl = api.place.addExternalPhoto.useMutation();
   const photoMax = api.settings.photoRules.useQuery().data?.maxPerMyPlace;
 
@@ -64,7 +65,10 @@ function NewPlace() {
       if (files.length) {
         // Foto pantauan diunggah setelah MY PLACE tersimpan; kegagalan tidak membatalkan penyimpanan.
         try {
-          await uploadPhotos("/api/upload/my-place-photo", "placeUid", r.uid, files);
+          // Berkas berketerangan diunggah satu per satu (keterangan per foto); sisanya sekaligus.
+          const plain = files.filter((f) => !captions.get(f));
+          for (const f of files.filter((x) => captions.get(x))) await uploadPhotos("/api/upload/my-place-photo", "placeUid", r.uid, [f], captions.get(f));
+          if (plain.length) await uploadPhotos("/api/upload/my-place-photo", "placeUid", r.uid, plain);
         } catch (e) {
           const key = `err.${(e as Error).message}`;
           toast.push(t(key) !== key ? t(key) : t("photo.uploadFailedAfterSave"), "error");
@@ -74,7 +78,7 @@ function NewPlace() {
         let failed = 0;
         for (const url of urls) {
           try {
-            await addPhotoUrl.mutateAsync({ placeUid: r.uid, url });
+            await addPhotoUrl.mutateAsync({ placeUid: r.uid, url, caption: captions.get(url) || undefined });
           } catch {
             failed++;
           }
@@ -133,7 +137,7 @@ function NewPlace() {
           return `/?${q.toString()}`;
         }}
         showFavorite
-        photoSlot={<PendingPhotoPicker files={files} urls={urls} onFiles={setFiles} onUrls={setUrls} />}
+        photoSlot={<PendingPhotoPicker files={files} urls={urls} onFiles={setFiles} onUrls={setUrls} captions={captions} onCaptions={setCaptions} />}
         pickedGoogleUrls={urls}
         onPickGooglePhoto={(u) => setUrls((x) => (x.includes(u) || (photoMax != null && files.length + x.length >= photoMax) ? x : [...x, u]))}
         onSubmit={(v) => {

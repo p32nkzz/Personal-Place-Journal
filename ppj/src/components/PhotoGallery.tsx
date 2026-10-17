@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 
+import { CameraCapture } from "~/components/CameraCapture";
+import { PhotoAddBar } from "~/components/PhotoAddBar";
 import { Alert, ConfirmDialog, Modal, useErrorMessage, useToast } from "~/components/ui";
 import { Icon } from "~/components/Icon";
 import { useT } from "~/lib/i18n";
@@ -44,6 +46,7 @@ const CAPTION_MAX = 32;
 export function PhotoGallery({
   photos,
   canEdit,
+  camera = false,
   uploadEndpoint,
   parentField,
   parentUid,
@@ -59,6 +62,8 @@ export function PhotoGallery({
 }: {
   photos: GalleryPhoto[];
   canEdit: boolean;
+  /** Tampilkan tombol "Kamera" (ambil foto langsung dari kamera perangkat; diunggah per jepretan). */
+  camera?: boolean;
   uploadEndpoint?: string;
   parentField?: "visitUid" | "masterUid" | "placeUid";
   parentUid?: string;
@@ -90,6 +95,8 @@ export function PhotoGallery({
   const [editCap, setEditCap] = useState<GalleryPhoto | null>(null);
   const [capText, setCapText] = useState("");
   const [urlOpen, setUrlOpen] = useState(false);
+  // Kamera: tiap jepretan langsung diunggah; foto dapat dipratinjau, diberi keterangan & dihapus dari dialog.
+  const [camOpen, setCamOpen] = useState(false);
   const [url, setUrl] = useState("");
   const [urlCaption, setUrlCaption] = useState("");
   // Foto yang sedang dikerjakan dari dalam pratinjau (untuk membuka kembali pratinjau sesudahnya).
@@ -214,33 +221,54 @@ export function PhotoGallery({
       )}
       {canEdit && !compact && (
         <>
-          <div className="row">
-            {uploadEndpoint && parentField && parentUid && (
-              <>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  hidden
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files ?? []);
-                    e.target.value = "";
-                    if (files.length) void run(() => uploadPhotos(uploadEndpoint, parentField, parentUid, files), t("photo.uploaded"));
-                  }}
-                />
-                <button type="button" className="btn btn-secondary btn-sm" disabled={busy || full} onClick={() => fileRef.current?.click()}>
-                  <Icon name="upload" /> {t("photo.upload")}
-                </button>
-              </>
-            )}
-            {onAddUrl && (
-              <button type="button" className="btn btn-ghost btn-sm" disabled={busy || full} onClick={() => setUrlOpen(true)}>
-                <Icon name="link" /> {t("photo.addUrl")}
-              </button>
-            )}
-            {busy && <Icon name="refresh" spin />}
-          </div>
+          {uploadEndpoint && parentField && parentUid && (
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                e.target.value = "";
+                if (files.length) void run(() => uploadPhotos(uploadEndpoint, parentField, parentUid, files), t("photo.uploaded"));
+              }}
+            />
+          )}
+          <PhotoAddBar
+            disabled={busy || full}
+            busy={busy}
+            onUpload={uploadEndpoint && parentField && parentUid ? () => fileRef.current?.click() : undefined}
+            onCamera={camera && uploadEndpoint && parentField && parentUid ? () => setCamOpen(true) : undefined}
+            onLink={onAddUrl ? () => setUrlOpen(true) : undefined}
+          />
+          {camOpen && uploadEndpoint && parentField && parentUid && (
+            <CameraCapture
+              items={photos.map((p) => ({ key: p.uid, src: p.url, caption: p.caption }))}
+              max={limit}
+              onCapture={async (f) => {
+                await uploadPhotos(uploadEndpoint, parentField, parentUid, [f]);
+                onChanged();
+              }}
+              onDelete={
+                onDelete
+                  ? async (uid) => {
+                      await onDelete(uid);
+                      onChanged();
+                    }
+                  : undefined
+              }
+              onCaption={
+                onCaption
+                  ? async (uid, caption) => {
+                      await onCaption(uid, caption);
+                      onChanged();
+                    }
+                  : undefined
+              }
+              onClose={() => setCamOpen(false)}
+            />
+          )}
           {rules.data && (
             <p className="helper" style={{ margin: 0 }}>
               {t("photo.rulesHint", {

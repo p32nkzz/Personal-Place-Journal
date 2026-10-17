@@ -62,7 +62,7 @@ function Photos({ photos, alt }: { photos: { uid: string; url: string; caption: 
           )}
         </a>
       ))}
-      {cur.caption && <div className="t-caption muted">{cur.caption}</div>}
+      {cur.caption && <div className="pp-photo-cap">{cur.caption}</div>}
       {photos.length > 1 && (
         <div className="row" style={{ gap: 6 }}>
           {photos.map((p, n) => (

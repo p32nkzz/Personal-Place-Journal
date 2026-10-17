@@ -24,6 +24,7 @@ export function MyPlacePhotos({
       kind="my"
       photos={photos}
       canEdit
+      camera
       uploadEndpoint="/api/upload/my-place-photo"
       parentField="placeUid"
       parentUid={placeUid}

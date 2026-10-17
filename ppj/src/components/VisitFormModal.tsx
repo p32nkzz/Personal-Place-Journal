@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { PendingPhotoPicker } from "~/components/PendingPhotoPicker";
 import { uploadPhotos } from "~/components/PhotoGallery";
 import { Alert, Field, Modal, StarInput, useErrorMessage, useToast } from "~/components/ui";
 import { useT, useZonedInput } from "~/lib/i18n";
@@ -40,15 +41,33 @@ export function VisitFormModal({
   const [note, setNote] = useState(visit?.note ?? "");
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [urls, setUrls] = useState<string[]>([]);
+  const [captions, setCaptions] = useState<Map<File | string, string>>(new Map());
+  const maxPerVisit = api.settings.photoRules.useQuery().data?.maxPerVisit;
+  const addUrl = api.visit.addExternalPhoto.useMutation();
 
   const ok = async (uid: string) => {
     if (files.length) {
       try {
-        await uploadPhotos("/api/upload/visit-photo", "visitUid", uid, files);
+        // Berkas berketerangan diunggah satu per satu (keterangan per foto); sisanya sekaligus.
+        const plain = files.filter((f) => !captions.get(f));
+        for (const f of files.filter((x) => captions.get(x))) await uploadPhotos("/api/upload/visit-photo", "visitUid", uid, [f], captions.get(f));
+        if (plain.length) await uploadPhotos("/api/upload/visit-photo", "visitUid", uid, plain);
       } catch (e) {
         const key = `err.${(e as Error).message}`;
         toast.push(t(key) !== key ? t(key) : t("photo.uploadFailedAfterSave"), "error");
       }
+    }
+    if (urls.length) {
+      let failed = 0;
+      for (const url of urls) {
+        try {
+          await addUrl.mutateAsync({ visitUid: uid, url, caption: captions.get(url) || undefined });
+        } catch {
+          failed++;
+        }
+      }
+      if (failed) toast.push(t("photo.urlFailedAfterSave", { n: failed }), "error");
     }
     toast.push(t("common.saved"), "success");
     onSaved();
@@ -106,9 +125,18 @@ export function VisitFormModal({
           <textarea id="v-note" className="textarea" maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
         {!visit && (
-          <Field label={t("visit.photos")} htmlFor="v-files" helper={t("visit.photosHint")}>
-            <input id="v-files" className="input" type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
-          </Field>
+          <div className="field">
+            <span className="label">{t("visit.photos")}</span>
+            <PendingPhotoPicker
+              files={files}
+              urls={urls}
+              onFiles={setFiles}
+              onUrls={setUrls}
+              captions={captions}
+              onCaptions={setCaptions}
+              max={maxPerVisit}
+            />
+          </div>
         )}
       </div>
     </Modal>
