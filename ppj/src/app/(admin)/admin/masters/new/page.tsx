@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 import { MasterForm, type MasterFormValues } from "~/components/MasterForm";
-import { PendingPhotoPicker } from "~/components/PendingPhotoPicker";
+import { PendingPhotoPicker, savePendingPhotos, type PendingKey } from "~/components/PendingPhotoPicker";
 import { uploadPhotos } from "~/components/PhotoGallery";
 import { Alert, Spinner, useErrorMessage, useToast } from "~/components/ui";
 import { useT } from "~/lib/i18n";
@@ -23,6 +23,7 @@ function NewMaster() {
   const [files, setFiles] = useState<File[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
   const [captions, setCaptions] = useState<Map<File | string, string>>(new Map());
+  const [primary, setPrimary] = useState<PendingKey | null>(null);
   const photoMax = api.settings.photoRules.useQuery().data?.maxPerMasterPlace;
   const addPhotoUrl = api.master.addExternalPhoto.useMutation();
 
@@ -57,27 +58,21 @@ function NewMaster() {
   const create = api.master.create.useMutation({
     onSuccess: async (r, vars) => {
       toast.push(t("common.saved"), "success");
-      if (files.length) {
-        // Kegagalan unggah tidak membatalkan MASTER yang sudah tersimpan; berketerangan diunggah satu per satu.
-        try {
-          const plain = files.filter((f) => !captions.get(f));
-          for (const f of files.filter((x) => captions.get(x))) await uploadPhotos("/api/upload/master-photo", "masterUid", r.uid, [f], captions.get(f));
-          if (plain.length) await uploadPhotos("/api/upload/master-photo", "masterUid", r.uid, plain);
-        } catch (e) {
-          const key = `err.${(e as Error).message}`;
+      if (files.length || urls.length) {
+        // Foto MASTER diproses setelah MASTER tersimpan (foto utama lebih dulu); kegagalan tidak membatalkan penyimpanan.
+        const res = await savePendingPhotos({
+          files,
+          urls,
+          captions,
+          primary,
+          uploadFile: (f, caption) => uploadPhotos("/api/upload/master-photo", "masterUid", r.uid, [f], caption),
+          addUrl: (url, caption) => addPhotoUrl.mutateAsync({ masterUid: r.uid, url, caption }),
+        });
+        if (res.fileError) {
+          const key = `err.${res.fileError}`;
           toast.push(t(key) !== key ? t(key) : t("master.photoUploadFailedAfterSave"), "error");
         }
-      }
-      if (urls.length) {
-        let failed = 0;
-        for (const url of urls) {
-          try {
-            await addPhotoUrl.mutateAsync({ masterUid: r.uid, url, caption: captions.get(url) || undefined });
-          } catch {
-            failed++;
-          }
-        }
-        if (failed) toast.push(t("master.photoUrlFailedAfterSave", { n: failed }), "error");
+        if (res.urlFailed) toast.push(t("master.photoUrlFailedAfterSave", { n: res.urlFailed }), "error");
       }
       await utils.master.invalidate();
       // Setelah simpan kembali ke asal: Peta (pop-up MASTER baru terbuka), daftar MASTER, atau detail (bawaan).
@@ -105,7 +100,7 @@ function NewMaster() {
       <MasterForm
         initial={initial}
         busy={create.isPending}
-        photoSlot={<PendingPhotoPicker files={files} urls={urls} onFiles={setFiles} onUrls={setUrls} captions={captions} onCaptions={setCaptions} max={photoMax} cameraTitle={t("master.cameraTitle")} />}
+        photoSlot={<PendingPhotoPicker files={files} urls={urls} onFiles={setFiles} onUrls={setUrls} captions={captions} onCaptions={setCaptions} max={photoMax} cameraTitle={t("master.cameraTitle")} primary={primary} onPrimary={setPrimary} />}
         pickedGoogleUrls={urls}
         onPickGooglePhoto={(u) => setUrls((x) => (x.includes(u) || (photoMax != null && files.length + x.length >= photoMax) ? x : [...x, u]))}
         error={error}

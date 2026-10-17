@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
-import { PendingPhotoPicker } from "~/components/PendingPhotoPicker";
+import { PendingPhotoPicker, savePendingPhotos, type PendingKey } from "~/components/PendingPhotoPicker";
 import { uploadPhotos } from "~/components/PhotoGallery";
 import { PlaceForm, type PlaceFormValues } from "~/components/PlaceForm";
 import { Spinner, useErrorMessage, useToast } from "~/components/ui";
@@ -20,6 +20,7 @@ function NewPlace() {
   const [files, setFiles] = useState<File[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
   const [captions, setCaptions] = useState<Map<File | string, string>>(new Map());
+  const [primary, setPrimary] = useState<PendingKey | null>(null);
   const addPhotoUrl = api.place.addExternalPhoto.useMutation();
   const photoMax = api.settings.photoRules.useQuery().data?.maxPerMyPlace;
 
@@ -62,28 +63,21 @@ function NewPlace() {
   const create = api.place.create.useMutation({
     onSuccess: async (r, vars) => {
       toast.push(t("common.saved"), "success");
-      if (files.length) {
-        // Foto pantauan diunggah setelah MY PLACE tersimpan; kegagalan tidak membatalkan penyimpanan.
-        try {
-          // Berkas berketerangan diunggah satu per satu (keterangan per foto); sisanya sekaligus.
-          const plain = files.filter((f) => !captions.get(f));
-          for (const f of files.filter((x) => captions.get(x))) await uploadPhotos("/api/upload/my-place-photo", "placeUid", r.uid, [f], captions.get(f));
-          if (plain.length) await uploadPhotos("/api/upload/my-place-photo", "placeUid", r.uid, plain);
-        } catch (e) {
-          const key = `err.${(e as Error).message}`;
+      if (files.length || urls.length) {
+        // Foto pantauan diproses setelah MY PLACE tersimpan (foto utama lebih dulu); kegagalan tidak membatalkan penyimpanan.
+        const res = await savePendingPhotos({
+          files,
+          urls,
+          captions,
+          primary,
+          uploadFile: (f, caption) => uploadPhotos("/api/upload/my-place-photo", "placeUid", r.uid, [f], caption),
+          addUrl: (url, caption) => addPhotoUrl.mutateAsync({ placeUid: r.uid, url, caption }),
+        });
+        if (res.fileError) {
+          const key = `err.${res.fileError}`;
           toast.push(t(key) !== key ? t(key) : t("photo.uploadFailedAfterSave"), "error");
         }
-      }
-      if (urls.length) {
-        let failed = 0;
-        for (const url of urls) {
-          try {
-            await addPhotoUrl.mutateAsync({ placeUid: r.uid, url, caption: captions.get(url) || undefined });
-          } catch {
-            failed++;
-          }
-        }
-        if (failed) toast.push(t("photo.urlFailedAfterSave", { n: failed }), "error");
+        if (res.urlFailed) toast.push(t("photo.urlFailedAfterSave", { n: res.urlFailed }), "error");
       }
       // Segarkan daftar MY PLACE (peta, daftar, opsi) setelah foto terunggah agar tempat baru langsung muncul di tujuan redirect.
       await utils.place.invalidate();
@@ -137,7 +131,7 @@ function NewPlace() {
           return `/?${q.toString()}`;
         }}
         showFavorite
-        photoSlot={<PendingPhotoPicker files={files} urls={urls} onFiles={setFiles} onUrls={setUrls} captions={captions} onCaptions={setCaptions} />}
+        photoSlot={<PendingPhotoPicker files={files} urls={urls} onFiles={setFiles} onUrls={setUrls} captions={captions} onCaptions={setCaptions} primary={primary} onPrimary={setPrimary} />}
         pickedGoogleUrls={urls}
         onPickGooglePhoto={(u) => setUrls((x) => (x.includes(u) || (photoMax != null && files.length + x.length >= photoMax) ? x : [...x, u]))}
         onSubmit={(v) => {

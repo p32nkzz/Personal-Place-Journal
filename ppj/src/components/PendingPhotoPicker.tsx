@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CameraCapture, type CamItem } from "~/components/CameraCapture";
+import { Modal } from "~/components/ui";
 import { Icon } from "~/components/Icon";
 import { PhotoAddBar } from "~/components/PhotoAddBar";
 import { usePhotoGuard } from "~/components/usePhotoGuard";
@@ -19,6 +20,45 @@ export const isHttpUrl = (s: string) => {
   }
 };
 
+export type PendingKey = File | string;
+
+/**
+ * Simpan foto tertunda setelah record dibuat. Foto UTAMA diproses lebih dulu (server menjadikan foto
+ * pertama sebagai utama), lalu sisanya sesuai urutan; keterangan per foto ikut tersimpan.
+ * Kegagalan tidak membatalkan record: dikembalikan untuk diberitahukan ke pengguna.
+ */
+export async function savePendingPhotos(o: {
+  files: File[];
+  urls: string[];
+  captions: Map<PendingKey, string>;
+  primary: PendingKey | null;
+  uploadFile: (f: File, caption?: string) => Promise<unknown>;
+  addUrl: (url: string, caption?: string) => Promise<unknown>;
+}) {
+  const items: PendingKey[] = [...o.files, ...o.urls];
+  const first = o.primary && items.includes(o.primary) ? o.primary : null;
+  const ordered = first ? [first, ...items.filter((x) => x !== first)] : items;
+  let fileError: string | null = null;
+  let urlFailed = 0;
+  for (const it of ordered) {
+    const caption = o.captions.get(it) || undefined;
+    if (typeof it === "string") {
+      try {
+        await o.addUrl(it, caption);
+      } catch {
+        urlFailed++;
+      }
+    } else {
+      try {
+        await o.uploadFile(it, caption);
+      } catch (e) {
+        fileError ??= (e as Error).message || "UPLOAD_FAILED";
+      }
+    }
+  }
+  return { fileError, urlFailed };
+}
+
 /**
  * Foto pantauan sebelum MY PLACE tersimpan: kombinasi berkas unggahan dan link eksternal
  * (termasuk foto Google Maps yang dipilih). Diproses setelah record dibuat.
@@ -32,6 +72,8 @@ export function PendingPhotoPicker({
   onCaptions,
   max: maxProp,
   cameraTitle,
+  primary,
+  onPrimary,
 }: {
   files: File[];
   urls: string[];
@@ -44,6 +86,9 @@ export function PendingPhotoPicker({
   max?: number;
   /** Judul dialog kamera (bawaan: "Ambil foto pantauan"). */
   cameraTitle?: string;
+  /** Foto utama terpilih (berkas atau URL); bawaan foto pertama. */
+  primary?: PendingKey | null;
+  onPrimary?: (k: PendingKey) => void;
 }) {
   const { t } = useT();
   const rules = api.settings.photoRules.useQuery();
@@ -54,6 +99,9 @@ export function PendingPhotoPicker({
   const [text, setText] = useState("");
   const [skipped, setSkipped] = useState(0);
   const [camOpen, setCamOpen] = useState(false);
+  // Ubah keterangan foto tertunda (dialog).
+  const [capKey, setCapKey] = useState<PendingKey | null>(null);
+  const [capText, setCapText] = useState("");
   const max = maxProp ?? rules.data?.maxPerMyPlace;
   const total = files.length + urls.length;
   const room = max != null ? Math.max(0, max - total) : Infinity;
@@ -95,29 +143,64 @@ export function PendingPhotoPicker({
     return () => map.forEach((u) => URL.revokeObjectURL(u));
   }, []);
 
+  const keyOfSrc = (src: string): PendingKey => [...cache.current].find(([, u]) => u === src)?.[0] ?? src;
+  const primaryKey: PendingKey | null =
+    primary && (files.includes(primary as File) || urls.includes(primary as string)) ? primary : (files[0] ?? urls[0] ?? null);
+  const remove = (k: PendingKey) => {
+    if (typeof k === "string") onUrls(urlsRef.current.filter((x) => x !== k));
+    else onFiles(filesRef.current.filter((x) => x !== k));
+    if (captionsRef.current?.has(k) && onCaptions) {
+      const next = new Map(captionsRef.current);
+      next.delete(k);
+      onCaptions(next);
+    }
+  };
+  const openCaption = (k: PendingKey) => {
+    setCapKey(k);
+    setCapText(captionsRef.current?.get(k) ?? "");
+  };
+  const saveCaption = () => {
+    if (capKey == null || !onCaptions) return;
+    const next = new Map(captionsRef.current);
+    if (capText.trim()) next.set(capKey, capText.trim());
+    else next.delete(capKey);
+    onCaptions(next);
+    setCapKey(null);
+  };
+
   // Foto untuk dialog kamera: berkas (pratinjau lokal) lalu link; kunci = URL pratinjau / URL link.
   const camItems: CamItem[] = [
     ...files.map((f, i) => ({ key: previews[i]!, src: previews[i]!, caption: captions?.get(f) ?? null })),
     ...urls.map((u) => ({ key: u, src: u, caption: captions?.get(u) ?? null })),
   ];
 
-  // Pratinjau seluruh foto terpilih (berkas dulu, lalu link); dapat menghapus langsung dari pratinjau.
-  const preview = (index: number) =>
+  // Pratinjau seluruh foto terpilih (berkas dulu, lalu link) dengan aksi Jadikan utama · Ubah keterangan · Hapus.
+  const preview = (index: number) => {
+    let current = primaryKey;
     openPhotoPreview(
       [...previews.map((src, i) => ({ src, caption: captions?.get(files[i]!) ?? files[i]!.name })), ...urls.map((src) => ({ src, caption: captions?.get(src) ?? src }))],
       index,
-      {
-        label: t("common.delete"),
-        danger: true,
-        removeAfter: true,
-        // Pratinjau tetap terbuka setelah hapus, jadi pakai nilai terbaru (ref), bukan closure saat dibuka.
-        onAction: (item) => {
-          const file = [...cache.current].find(([, u]) => u === item.src)?.[0];
-          if (file) onFiles(filesRef.current.filter((x) => x !== file));
-          else onUrls(urlsRef.current.filter((x) => x !== item.src));
-        },
-      },
+      undefined,
+      [
+        ...(onPrimary
+          ? [{
+              label: t("photo.setPrimaryTip"),
+              doneLabel: t("photo.primaryTip"),
+              iconOnly: "primary" as const,
+              keepOpen: true,
+              isDone: (item: { src: string }) => keyOfSrc(item.src) === current,
+              onAction: (item: { src: string }) => {
+                current = keyOfSrc(item.src);
+                onPrimary(current);
+              },
+            }]
+          : []),
+        ...(onCaptions ? [{ label: t("common.edit"), tone: "edit" as const, onAction: (item: { src: string }) => openCaption(keyOfSrc(item.src)) }] : []),
+        // Pratinjau tertutup setelah hapus; pakai nilai terbaru (ref), bukan closure saat dibuka.
+        { label: t("common.delete"), danger: true, onAction: (item: { src: string }) => remove(keyOfSrc(item.src)) },
+      ],
     );
+  };
 
   const addUrls = () => {
     const lines = text.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
@@ -133,35 +216,52 @@ export function PendingPhotoPicker({
         <p className="muted t-small" style={{ margin: 0 }}>{t("photo.none")}</p>
       ) : (
         <div className="photo-grid">
-          {files.map((f, i) => (
-            <div key={`f-${f.name}-${i}`} className="photo">
-              <button type="button" aria-label={t("photo.view")} onClick={() => preview(i)} style={{ all: "unset", cursor: "zoom-in", display: "block", width: "100%", height: "100%" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={previews[i]} alt={f.name} />
-              </button>
-              <div className="photo-actions">
-                <button type="button" className="btn" onClick={() => onFiles(files.filter((_, j) => j !== i))}>
-                  <Icon name="trash" /> {t("common.delete")}
-                </button>
-              </div>
-            </div>
-          ))}
-          {urls.map((u, n) => (
-            <div key={`u-${u}`} className="photo">
-              <button type="button" aria-label={t("photo.view")} onClick={() => preview(files.length + n)} style={{ all: "unset", cursor: "zoom-in", display: "block", width: "100%", height: "100%" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={u} alt="" loading="lazy" referrerPolicy="no-referrer" />
-              </button>
-              <div className="photo-actions">
-                <button type="button" className="btn" onClick={() => onUrls(urls.filter((x) => x !== u))}>
-                  <Icon name="trash" /> {t("common.delete")}
-                </button>
-              </div>
-              <div style={{ position: "absolute", top: 6, left: 6, background: "rgb(15 23 42 / 0.6)", color: "#fff", fontSize: 11, padding: "2px 6px", borderRadius: 4 }}>
-                <Icon name="link" fixedWidth={false} /> URL
-              </div>
-            </div>
-          ))}
+          {[...files.map((f, i) => ({ k: f as PendingKey, src: previews[i]!, isUrl: false, idx: i })), ...urls.map((u, n) => ({ k: u as PendingKey, src: u, isUrl: true, idx: files.length + n }))].map(
+            ({ k, src, isUrl, idx }) => {
+              const cap = captions?.get(k);
+              const isPrimary = k === primaryKey;
+              return (
+                <div key={isUrl ? `u-${src}` : `f-${src}`} className="photo">
+                  <button type="button" aria-label={cap ?? t("photo.view")} onClick={() => preview(idx)} style={{ all: "unset", cursor: "zoom-in", display: "block", width: "100%", height: "100%" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={cap ?? ""} loading="lazy" referrerPolicy={isUrl ? "no-referrer" : undefined} />
+                  </button>
+                  <div className="photo-badge row" style={{ gap: 4 }}>
+                    {isPrimary && onPrimary && (
+                      <span className="photo-primary" title={t("photo.primaryTip")} aria-label={t("photo.primaryTip")}>
+                        <Icon name="thumbtack" fixedWidth={false} />
+                      </span>
+                    )}
+                    {isUrl && (
+                      <span className="pp-url-badge">
+                        <Icon name="link" fixedWidth={false} /> URL
+                      </span>
+                    )}
+                  </div>
+                  <div className="photo-actions">
+                    {!isPrimary && onPrimary && (
+                      <button type="button" className="ph-btn ph-primary" title={t("photo.setPrimaryTip")} aria-label={t("photo.setPrimaryTip")} onClick={() => onPrimary(k)}>
+                        <Icon name="thumbtack" fixedWidth={false} />
+                      </button>
+                    )}
+                    {onCaptions && (
+                      <button type="button" className="ph-btn ph-edit" title={t("photo.caption")} aria-label={t("photo.caption")} onClick={() => openCaption(k)}>
+                        <Icon name="pen" fixedWidth={false} />
+                      </button>
+                    )}
+                    <button type="button" className="ph-btn ph-del" title={t("common.delete")} aria-label={t("common.delete")} onClick={() => remove(k)}>
+                      <Icon name="trash" fixedWidth={false} />
+                    </button>
+                  </div>
+                  {cap && (
+                    <div className="photo-caption" title={cap} style={{ bottom: 46 }}>
+                      {cap.length > 32 ? `${cap.slice(0, 32).trimEnd()}…` : cap}
+                    </div>
+                  )}
+                </div>
+              );
+            },
+          )}
         </div>
       )}
 
@@ -196,11 +296,7 @@ export function PendingPhotoPicker({
             if (msg) throw new Error(msg);
             onFiles([...filesRef.current, f]);
           }}
-          onDelete={(key) => {
-            const file = [...cache.current].find(([, u]) => u === key)?.[0];
-            if (file) onFiles(filesRef.current.filter((x) => x !== file));
-            else onUrls(urlsRef.current.filter((x) => x !== key));
-          }}
+          onDelete={(key) => remove(keyOfSrc(key))}
           onCaption={
             onCaptions
               ? (key, caption) => {
@@ -241,6 +337,22 @@ export function PendingPhotoPicker({
           {t("photo.rulesHint", { types: rules.data.allowedTypes.join(", ").toUpperCase(), size: rules.data.maxSizeMb, max: max ?? "—" })}
           {full && ` ${t("photo.limitReached")}`}
         </p>
+      )}
+      {capKey != null && (
+        <Modal
+          title={t("photo.caption")}
+          onClose={() => setCapKey(null)}
+          actions={
+            <>
+              <button type="button" className="btn btn-secondary" onClick={() => setCapKey(null)}>{t("common.cancel")}</button>
+              <button type="button" className="btn btn-primary" onClick={saveCaption}>
+                <Icon name="save" /> {t("common.save")}
+              </button>
+            </>
+          }
+        >
+          <textarea className="textarea" rows={3} maxLength={2000} autoFocus value={capText} placeholder={t("photo.caption")} aria-label={t("photo.caption")} onChange={(e) => setCapText(e.target.value)} />
+        </Modal>
       )}
     </div>
   );

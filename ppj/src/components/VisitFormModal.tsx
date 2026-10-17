@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { DateField } from "~/components/DateField";
-import { PendingPhotoPicker } from "~/components/PendingPhotoPicker";
+import { PendingPhotoPicker, savePendingPhotos, type PendingKey } from "~/components/PendingPhotoPicker";
 import { PhotoGallery, uploadPhotos, type GalleryPhoto } from "~/components/PhotoGallery";
 import { Alert, Field, Modal, StarInput, useErrorMessage, useToast } from "~/components/ui";
 import { useT, useZonedInput } from "~/lib/i18n";
@@ -49,33 +49,28 @@ export function VisitFormModal({
   const [files, setFiles] = useState<File[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
   const [captions, setCaptions] = useState<Map<File | string, string>>(new Map());
+  const [primary, setPrimary] = useState<PendingKey | null>(null);
   const maxPerVisit = api.settings.photoRules.useQuery().data?.maxPerVisit;
   const addUrl = api.visit.addExternalPhoto.useMutation();
   const delPhoto = api.visit.deletePhoto.useMutation();
   const capPhoto = api.visit.updatePhotoCaption.useMutation();
 
   const ok = async (uid: string) => {
-    if (files.length) {
-      try {
-        // Berkas berketerangan diunggah satu per satu (keterangan per foto); sisanya sekaligus.
-        const plain = files.filter((f) => !captions.get(f));
-        for (const f of files.filter((x) => captions.get(x))) await uploadPhotos("/api/upload/visit-photo", "visitUid", uid, [f], captions.get(f));
-        if (plain.length) await uploadPhotos("/api/upload/visit-photo", "visitUid", uid, plain);
-      } catch (e) {
-        const key = `err.${(e as Error).message}`;
+    if (files.length || urls.length) {
+      // Foto kunjungan diproses setelah kunjungan tersimpan (foto utama lebih dulu).
+      const res = await savePendingPhotos({
+        files,
+        urls,
+        captions,
+        primary,
+        uploadFile: (f, caption) => uploadPhotos("/api/upload/visit-photo", "visitUid", uid, [f], caption),
+        addUrl: (url, caption) => addUrl.mutateAsync({ visitUid: uid, url, caption }),
+      });
+      if (res.fileError) {
+        const key = `err.${res.fileError}`;
         toast.push(t(key) !== key ? t(key) : t("photo.uploadFailedAfterSave"), "error");
       }
-    }
-    if (urls.length) {
-      let failed = 0;
-      for (const url of urls) {
-        try {
-          await addUrl.mutateAsync({ visitUid: uid, url, caption: captions.get(url) || undefined });
-        } catch {
-          failed++;
-        }
-      }
-      if (failed) toast.push(t("photo.urlFailedAfterSave", { n: failed }), "error");
+      if (res.urlFailed) toast.push(t("photo.urlFailedAfterSave", { n: res.urlFailed }), "error");
     }
     toast.push(t("common.saved"), "success");
     onSaved();
@@ -165,6 +160,8 @@ export function VisitFormModal({
               onCaptions={setCaptions}
               max={maxPerVisit}
               cameraTitle={t("visit.cameraTitle")}
+              primary={primary}
+              onPrimary={setPrimary}
             />
           </div>
         )}
