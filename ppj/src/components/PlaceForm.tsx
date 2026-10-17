@@ -46,6 +46,7 @@ export function PlaceForm({
   onSubmit,
   cancelHref,
   showFavorite,
+  followMap = { name: true, address: true },
   photoSlot,
   onPickGooglePhoto,
   pickedGoogleUrls,
@@ -61,6 +62,8 @@ export function PlaceForm({
   /** Tujuan tombol Batal; boleh fungsi dari nilai form saat ini. */
   cancelHref: string | ((v: PlaceFormValues) => string);
   showFavorite?: boolean;
+  /** Nilai awal switch "Ikuti peta" per field. Form ubah: nama OFF (tidak tertimpa), alamat ON. */
+  followMap?: { name: boolean; address: boolean };
   /** Konten foto pantauan (galeri saat ubah, pemilih berkas saat buat). */
   photoSlot?: React.ReactNode;
   /** Memilih foto Google Maps sebagai foto pantauan (disimpan sebagai link eksternal). */
@@ -71,7 +74,9 @@ export function PlaceForm({
   const [v, setV] = useState<PlaceFormValues>(initial);
   const [touched, setTouched] = useState(false);
   // Saat ON, nama & alamat form mengikuti hasil pencarian / pin peta. Koordinat selalu mengikuti pin.
-  const [follow, setFollow] = useState(true);
+  // "Ikuti peta" per field: nama & alamat masing-masing dapat mengikuti hasil pencarian / pin peta.
+  const [followName, setFollowName] = useState(followMap.name);
+  const [followAddress, setFollowAddress] = useState(followMap.address);
   const [resolving, setResolving] = useState(false);
   const [showPhotos, setShowPhotos] = useState(true);
   const reqRef = useRef(0);
@@ -130,7 +135,7 @@ export function PlaceForm({
       [k]: x[k].includes(uid) ? x[k].filter((i) => i !== uid) : [...x[k], uid],
     }));
 
-  // Pin baru atau digeser: koordinat DAN Google Place ID selalu diperbarui; nama & alamat hanya bila switch ON.
+  // Pin baru atau digeser: koordinat DAN Google Place ID selalu diperbarui; nama/alamat hanya bila switch field-nya ON.
   // ID lama dikosongkan seketika (agar tidak tertinggal di titik yang sudah berbeda) lalu diisi hasil pencarian titik baru.
   const movePin = (lat: number, lng: number) => {
     const latitude = Number(lat.toFixed(7));
@@ -138,13 +143,15 @@ export function PlaceForm({
     setV((x) => ({ ...x, latitude, longitude, googlePlaceId: null }));
     const req = ++reqRef.current;
     setResolving(true);
-    void Promise.all([reverseGeocode(lat, lng), follow ? nearestPlacePhotos(lat, lng) : Promise.resolve(null)]).then(([addr, near]) => {
+    // Tempat terdekat tetap dicari walau nama tidak diikuti: place id-nya dipakai untuk Google ID.
+    void Promise.all([reverseGeocode(lat, lng), nearestPlacePhotos(lat, lng)]).then(([addr, near]) => {
       if (req !== reqRef.current) return; // pin sudah berpindah lagi
       setResolving(false);
       setV((x) => ({
         ...x,
         googlePlaceId: near?.placeId ?? addr?.placeId ?? null,
-        ...(follow ? { address: addr?.address ?? x.address, name: near?.name ?? x.name } : {}),
+        ...(followAddress ? { address: addr?.address ?? x.address } : {}),
+        ...(followName ? { name: near?.name ?? x.name } : {}),
       }));
     });
   };
@@ -238,8 +245,8 @@ export function PlaceForm({
               setV((x) => ({
                 ...x,
                 googlePlaceId: g.googlePlaceId,
-                name: follow ? g.name || x.name : x.name || g.name,
-                address: follow ? g.address || x.address : x.address || g.address,
+                name: followName ? g.name || x.name : x.name || g.name,
+                address: followAddress ? g.address || x.address : x.address || g.address,
                 latitude: g.lat,
                 longitude: g.lng,
               }));
@@ -254,6 +261,15 @@ export function PlaceForm({
               onMapClick={movePin}
               onMarkerDragEnd={(_id, lat, lng) => movePin(lat, lng)}
             />
+          </div>
+
+          {/* Petunjuk pin (dan status pencarian alamat) di atas field koordinat */}
+          <div className="pf-hint-row pf-hint-top">
+            {resolving ? (
+              <span className="pf-hint"><Icon name="refresh" spin fixedWidth={false} /> {t("place.resolving")}</span>
+            ) : (
+              <span className="pf-hint">{t("place.pinHint")}</span>
+            )}
           </div>
 
           <div className="pf-coords">
@@ -274,13 +290,6 @@ export function PlaceForm({
               >
                 <Icon name="street-view" fixedWidth={false} />
               </button>
-            )}
-          </div>
-          <div className="pf-hint-row">
-            {resolving ? (
-              <span className="pf-hint"><Icon name="refresh" spin fixedWidth={false} /> {t("place.resolving")}</span>
-            ) : (
-              <span className="pf-hint">{t("place.pinHint")}</span>
             )}
           </div>
           {svOpen && hasCoord && (
@@ -318,17 +327,6 @@ export function PlaceForm({
             <div className="pf-head">
               <h2 className="pf-title"><span className="pf-step">2</span>{t("place.formDetail")}</h2>
               <div className="pf-tools">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={follow}
-                  className="switch-btn"
-                  title={t("place.followMapHint")}
-                  onClick={() => setFollow((f) => !f)}
-                >
-                  <span className="switch-track" aria-hidden><span className="switch-thumb" /></span>
-                  {t("place.followMap")}
-                </button>
                 {showFavorite && (
                   <button
                     type="button"
@@ -343,12 +341,28 @@ export function PlaceForm({
               </div>
             </div>
 
-            <Field label={t("common.name")} required htmlFor="name" error={nameError}>
-              <input id="name" className="input" maxLength={255} value={v.name} aria-invalid={!!nameError} onChange={(e) => set("name", e.target.value)} />
-            </Field>
-            <Field label={t("common.address")} htmlFor="address">
-              <textarea id="address" className="textarea" rows={2} maxLength={2000} value={v.address} onChange={(e) => set("address", e.target.value)} />
-            </Field>
+            <div className="field">
+              <div className="pf-label-row">
+                <label className="label" htmlFor="name">
+                  {t("common.name")}
+                  <span className="req" aria-hidden>*</span>
+                </label>
+                <FollowSwitch on={followName} onToggle={() => setFollowName((f) => !f)} hint={t("place.followNameHint")} field={t("common.name")} />
+              </div>
+              <input id="name" className={`input${followName ? " is-following" : ""}`} maxLength={255} value={v.name} aria-invalid={!!nameError} onChange={(e) => set("name", e.target.value)} />
+              {nameError && (
+                <div className="helper helper-error" role="alert">
+                  <Icon name="warning" fixedWidth={false} /> {nameError}
+                </div>
+              )}
+            </div>
+            <div className="field">
+              <div className="pf-label-row">
+                <label className="label" htmlFor="address">{t("common.address")}</label>
+                <FollowSwitch on={followAddress} onToggle={() => setFollowAddress((f) => !f)} hint={t("place.followAddressHint")} field={t("common.address")} />
+              </div>
+              <textarea id="address" className={`textarea${followAddress ? " is-following" : ""}`} rows={2} maxLength={2000} value={v.address} onChange={(e) => set("address", e.target.value)} />
+            </div>
             <Field label={t("common.description")} htmlFor="desc">
               <textarea id="desc" className="textarea" rows={3} maxLength={2000} placeholder={t("common.max2000")} value={v.description} onChange={(e) => set("description", e.target.value)} />
             </Field>
@@ -432,3 +446,22 @@ export function PlaceForm({
   );
 }
 
+/** Switch mini "Ikuti peta" di samping label field: saat ON, nilai field mengikuti pencarian / pin peta. */
+function FollowSwitch({ on, onToggle, hint, field }: { on: boolean; onToggle: () => void; hint: string; field: string }) {
+  const { t } = useT();
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`${t("place.followMap")}: ${field}`}
+      title={hint}
+      className="pf-follow"
+      onClick={onToggle}
+    >
+      <Icon name="map-pin" fixedWidth={false} />
+      <span>{t("place.followMap")}</span>
+      <span className="pf-follow-track" aria-hidden><span className="pf-follow-thumb" /></span>
+    </button>
+  );
+}

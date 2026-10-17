@@ -10,6 +10,7 @@ import {
 } from "~/components/map/MapView";
 import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
 import { useMapColors } from "~/components/map/useMapColors";
+import { useCategoryPageSize } from "~/components/useCategoryPageSize";
 import { GoogleId, StreetViewDialog } from "~/components/PlaceInfo";
 import { Alert, Field } from "~/components/ui";
 import { useT } from "~/lib/i18n";
@@ -53,6 +54,9 @@ export function MasterForm({
   const [svOpen, setSvOpen] = useState(false);
   const { location } = useDeviceLocation(initial.latitude == null);
   const cats = api.categories.adminList.useQuery();
+  // Chip kategori dimuat bertahap (jumlah awal/per muat dari Pengaturan), sama dengan form MY PLACE.
+  const catPage = useCategoryPageSize();
+  const [catShown, setCatShown] = useState(0);
   const mapColors = useMapColors();
   useEffect(() => setV(initial), [initial]);
 
@@ -70,6 +74,11 @@ export function MasterForm({
 
   // CATEGORY nonaktif hanya ditampilkan bila sudah melekat; yang baru harus aktif.
   const visibleCats = (cats.data ?? []).filter((c) => c.isActive || v.categoryUids.includes(c.uid));
+
+  // Item terpilih selalu tampil walau di luar jumlah termuat, agar pilihan tidak "hilang".
+  const catLimit = Math.max(catShown, catPage);
+  const catVisible = visibleCats.filter((c, i) => i < catLimit || v.categoryUids.includes(c.uid));
+  const catHidden = visibleCats.length - catVisible.length;
 
   const toggle = (uid: string) =>
     setV((x) => ({
@@ -162,13 +171,19 @@ export function MasterForm({
           <div className="field">
             <span className="label">{t("common.category")}</span>
             <div className="pf-chips">
-              {visibleCats.map((c) => (
+              {catVisible.map((c) => (
                 <button type="button" key={c.uid} className="cat pick" aria-pressed={v.categoryUids.includes(c.uid)} onClick={() => toggle(c.uid)}>
                   <Icon name={v.categoryUids.includes(c.uid) ? "circle-check" : "layers"} fixedWidth={false} />
                   {c.name}
                   {!c.isActive && ` (${t("common.inactive")})`}
                 </button>
               ))}
+              {catHidden > 0 && (
+                <button type="button" className="chip pf-more" onClick={() => setCatShown(catLimit + catPage)} title={t("place.loadMoreInfo", { n: catHidden })}>
+                  <Icon name="plus" fixedWidth={false} /> {t("place.loadMore", { n: Math.min(catPage, catHidden) })}
+                  <span className="pf-more-n">{t("place.remaining", { n: catHidden })}</span>
+                </button>
+              )}
               {cats.data && !visibleCats.length && <span className="muted t-small">—</span>}
             </div>
           </div>

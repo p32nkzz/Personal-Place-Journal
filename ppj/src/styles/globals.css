@@ -1604,3 +1604,24 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
   .map-full .map-filters .cat-dd.is-compact .cat-dd-btn[data-active] { background: var(--color-primary); color: #fff; }
   .map-full .map-filters:not(.is-collapsed) { gap: 6px; }
 }
+
+/* Form MY PLACE: petunjuk pin di atas koordinat; petunjuk pilih foto Google Maps */
+.pf-hint-row.pf-hint-top { margin: 0; }
+.gp-hint { display: flex; gap: 6px; align-items: flex-start; margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--color-text-muted); }
+.gp-hint svg { margin-top: 2px; font-size: 10.5px; color: var(--color-primary); flex-shrink: 0; }
+
+/* Form MY PLACE: "Ikuti peta" per field (nama / alamat) — switch mini di kanan label */
+.pf-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; margin-bottom: 6px; }
+.pf-label-row .label { margin: 0; }
+.pf-follow { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 4px 0 9px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-subtle); font: 600 11px/1 var(--font-body); cursor: pointer; white-space: nowrap; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; }
+.pf-follow > svg { font-size: 10px; }
+.pf-follow:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.pf-follow:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.pf-follow[aria-checked="true"] { background: var(--color-tint); border-color: var(--color-tertiary); color: var(--color-primary); }
+.pf-follow-track { position: relative; width: 24px; height: 14px; border-radius: 999px; background: #cbd5e1; transition: background 160ms ease; }
+.pf-follow-thumb { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(15 23 42 / 0.25); transition: transform 160ms ease; }
+.pf-follow[aria-checked="true"] .pf-follow-track { background: var(--color-primary); }
+.pf-follow[aria-checked="true"] .pf-follow-thumb { transform: translateX(10px); }
+/* Field yang sedang mengikuti peta: aksen tipis di kiri agar terbaca tanpa mengganggu. */
+.pf .input.is-following, .pf .textarea.is-following { box-shadow: inset 3px 0 0 var(--color-secondary); }
+@media (max-width: 340px) { .pf-follow > span:not(.pf-follow-track) { display: none; } .pf-follow { padding-left: 8px; } }

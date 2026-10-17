@@ -59,6 +59,12 @@ export function GooglePhotoPreview({
   const credits = [...new Map(data.photos.flatMap((ph) => ph.credits).map((c) => [c.name, c])).values()];
   return (
     <div className="stack-sm">
+      {/* Hanya saat pemilihan foto pantauan dimungkinkan (form) dan fotonya tersedia. */}
+      {onPick && (
+        <p className="gp-hint">
+          <Icon name="circle-info" fixedWidth={false} /> {t("place.googlePhotoPickHint")}
+        </p>
+      )}
       <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}>
         {data.photos.map((ph, i) => (
           <div key={i} style={{ position: "relative" }}>

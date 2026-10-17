@@ -107,7 +107,8 @@ export default function MasterEditPage() {
             </div>
             {m.description && <DescQuote text={m.description} side />}
             <div className="pd-meta">
-              <MasterStatusChip status={m.status} />
+              {/* ACTIVE/INACTIVE sudah terwakili tombol Nonaktifkan/Aktifkan; hanya status Dihapus yang ditampilkan. */}
+              {deleted && <MasterStatusChip status={m.status} />}
               <button type="button" className={`vstat ms-ref${refCount ? "" : " is-zero"}`} title={t("master.referencedBy")} onClick={() => setTab("refs")}>
                 <span className="vstat-n">
                   <Icon name="link" fixedWidth={false} />

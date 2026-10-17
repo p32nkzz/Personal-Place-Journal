@@ -50,10 +50,18 @@ export default function EditPlacePage() {
     onError: (e) => setError(errMsg(e)),
   });
   const update = api.place.update.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (_r, vars) => {
       await utils.place.invalidate();
       toast.push(t("common.saved"), "success");
-      router.push(fromList ? "/places" : `/places/${uid}`);
+      // Setelah simpan kembali ke asal: Peta (pop-up tempat ini terbuka, memakai koordinat terbaru),
+      // daftar MY PLACE, atau halaman detail.
+      router.push(
+        fromMap
+          ? `/?${new URLSearchParams({ my: uid, lat: String(vars.latitude), lng: String(vars.longitude) })}`
+          : fromList
+            ? "/places"
+            : `/places/${uid}`,
+      );
     },
     onError: (e) => setError(errMsg(e)),
   });
@@ -93,6 +101,7 @@ export default function EditPlacePage() {
               : `/places/${uid}`
         }
         showFavorite
+        followMap={{ name: false, address: true }}
         pickedGoogleUrls={p.photos.map((x) => x.url)}
         onPickGooglePhoto={(url) => addPhotoUrl.mutate({ placeUid: uid, url })}
         photoSlot={<MyPlacePhotos placeUid={uid} photos={p.photos} onChanged={() => void utils.place.get.invalidate({ uid })} />}
