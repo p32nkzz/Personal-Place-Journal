@@ -87,9 +87,8 @@ export function AppShell({
         { href: "/tags", label: t("nav.tags") },
       );
     }
-  } else if (!user) {
-    nav.push({ href: "/", label: t("nav.map"), exact: true });
   }
+  // Pengunjung publik (belum masuk) tidak melihat menu navigasi; Peta tetap terbuka lewat logo/beranda.
 
   const isActive = (n: NavLeaf) =>
     n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + "/");
@@ -237,17 +236,19 @@ export function AppShell({
                 <Icon name="key" /> {t("nav.login")}
               </Link>
             )}
-            <button
-              className="btn btn-ghost btn-sm btn-icon menu-toggle"
-              aria-label="Menu"
-              aria-expanded={open}
-              onClick={() => setOpen((o) => !o)}
-            >
-              <Icon name={open ? "xmark" : "bars"} />
-            </button>
+            {nav.length > 0 && (
+              <button
+                className="btn btn-ghost btn-sm btn-icon menu-toggle"
+                aria-label="Menu"
+                aria-expanded={open}
+                onClick={() => setOpen((o) => !o)}
+              >
+                <Icon name={open ? "xmark" : "bars"} />
+              </button>
+            )}
           </div>
         </div>
-        {open && (
+        {open && nav.length > 0 && (
           <nav className="nav-mobile" aria-label="Mobile">
             {nav.map((n) =>
               "children" in n ? (
