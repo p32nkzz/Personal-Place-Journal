@@ -871,7 +871,6 @@ body > .select2-container { width: auto !important; min-width: 0 !important; }
   .map-full.has-gsearch .map-filters { top: 72px; }
   .map-filters .map-search { flex: 1 1 200px; width: auto !important; min-width: 0; }
   .map-filter-toggle { display: inline-flex; }
-  .map-filters:not(.is-open) > :not(.map-search):not(.map-filter-toggle):not(.map-filters-spin) { display: none; }
   .map-filters .cat-dd.is-compact .cat-dd-panel { left: 0; right: auto; }
   .map-popup { top: 72px; }
   .map-full.has-gsearch .map-popup { top: 132px; max-height: calc(100% - 200px); }
@@ -1528,3 +1527,80 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
   .pf-coords .pp-gid.is-field { order: 10; flex: 1 1 100%; max-width: none; }
 }
 .pe-back { display: flex; width: fit-content; margin: 0 0 6px; }
+
+/* ---------- Peta: bar atas (cari Google + Pin bebas + tombol filter) & panel filter yang dapat disembunyikan ---------- */
+.map-bar { display: flex; align-items: flex-start; gap: 8px; width: min(560px, calc(100% - 24px)); }
+.map-bar.is-guest { width: auto; }
+.map-bar-search { flex: 1 1 auto; min-width: 0; }
+.map-bar .switch-btn.map-bar-pin { flex-shrink: 0; min-height: 50px; padding: 0 14px; gap: 8px; border-radius: 14px; border: 1px solid rgb(226 232 240 / 0.9); background: rgb(255 255 255 / 0.95); box-shadow: 0 8px 24px rgb(15 23 42 / 0.12); font-size: 12.5px; white-space: nowrap; }
+.map-bar .switch-btn.map-bar-pin .switch-track { width: 30px; height: 17px; }
+.map-bar .switch-btn.map-bar-pin .switch-thumb { width: 13px; height: 13px; }
+.map-bar .switch-btn.map-bar-pin[aria-checked="true"] .switch-thumb { transform: translateX(13px); }
+.map-bar-filter { position: relative; flex-shrink: 0; display: inline-grid; place-items: center; width: 50px; height: 50px; padding: 0; border: 1px solid rgb(226 232 240 / 0.9); border-radius: 14px; background: rgb(255 255 255 / 0.95); color: var(--color-text-muted); font-size: 16px; box-shadow: 0 8px 24px rgb(15 23 42 / 0.12); cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease; }
+.map-bar-filter:hover { color: var(--color-primary); border-color: var(--color-primary); }
+.map-bar-filter[aria-pressed="true"] { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.map-bar-filter:focus-visible, .map-bar .switch-btn.map-bar-pin:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.map-bar-badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #f59e0b; color: #fff; font: 700 10px/18px var(--font-body); text-align: center; box-shadow: 0 0 0 2px #fff; }
+/* Lebar menengah & sempit: bar penuh di atas; panel filter (bila tampil) di bawahnya. */
+@media (max-width: 1180px) {
+  .map-bar { right: 12px; width: auto; }
+  .map-full .map-filters { top: 72px; }
+  .map-full .map-popup { top: 72px; }
+  .map-full.has-filters .map-popup { top: 132px; max-height: calc(100% - 200px); }
+}
+@media (max-width: 720px) {
+  .map-bar { gap: 6px; }
+  .map-bar .switch-btn.map-bar-pin { min-height: 44px; padding: 0 10px; gap: 6px; font-size: 12px; border-radius: 12px; }
+  .map-bar-filter { width: 44px; height: 44px; font-size: 15px; border-radius: 12px; }
+  .map-full .map-filters { top: 64px; }
+}
+@media (max-width: 400px) {
+  /* Ponsel sangat sempit: label "Pin bebas" disembunyikan, cukup switch (judul tetap lewat tooltip). */
+  .map-bar-pin-label { display: none; }
+  .map-bar-pin-ico { display: inline-block !important; }
+}
+.map-bar-pin-ico { display: none; font-size: 12px; color: var(--color-text-subtle); }
+.map-bar .switch-btn.map-bar-pin[aria-checked="true"] .map-bar-pin-ico { color: var(--color-primary); }
+
+/* ---------- Peta: posisi tombol filter (pengunjung / login, penuh / responsif) ---------- */
+.map-filters .map-bar-filter.in-panel { width: 36px; height: 36px; border-radius: 999px; font-size: 13px; box-shadow: none; }
+/* Panel disembunyikan: hanya tombol filter yang tersisa, sendiri di pojok kanan atas peta. */
+.map-filters.is-collapsed { padding: 0; gap: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.map-filters.is-collapsed > :not(.in-panel) { display: none !important; }
+.map-filters.is-collapsed .map-bar-filter.in-panel { width: 50px; height: 50px; border-radius: 14px; font-size: 16px; box-shadow: 0 8px 24px rgb(15 23 42 / 0.12); }
+.map-bar-filter.in-bar { display: none; }
+@media (max-width: 1180px) {
+  /* Login: tombol pindah ke bar atas (satu baris dengan cari Google & Pin bebas). */
+  .map-bar-filter.in-bar { display: inline-grid; }
+  .map-filters.is-auth .map-bar-filter.in-panel { display: none; }
+  .map-filters.is-auth.is-collapsed { display: none; }
+  /* Pengunjung: field filter + tombol satu baris di atas; kategori/TAG di baris berikutnya. */
+  .map-full.is-guest .map-filters { top: 12px; }
+  .map-full.is-guest .map-filters.is-collapsed { left: auto; right: 12px; }
+  .map-full.is-guest .map-popup { top: 72px; }
+  .map-full.is-guest.has-filters .map-popup { top: 120px; }
+}
+@media (max-width: 720px) {
+  .map-filters.is-collapsed .map-bar-filter.in-panel { width: 44px; height: 44px; font-size: 15px; border-radius: 12px; }
+  .map-full.is-guest .map-filters { top: 12px; }
+}
+
+/* ---------- Peta responsif: group filter selalu satu baris ---------- */
+@media (max-width: 1180px) {
+  .map-full .map-filters:not(.is-collapsed) { flex-wrap: nowrap; align-items: center; }
+  .map-full .map-filters:not(.is-collapsed) .map-search { flex: 1 1 0; width: auto !important; min-width: 0; }
+  .map-full .map-filters:not(.is-collapsed) .cat-dd { position: static; flex: 0 1 auto; min-width: 0; }
+  .map-full .map-filters:not(.is-collapsed) .cat-dd.is-compact .cat-dd-btn { max-width: 150px; }
+  .map-full .map-filters:not(.is-collapsed) .map-bar-filter.in-panel { flex-shrink: 0; }
+  /* Dropdown dibuka di bawah group filter selebar group-nya (tidak keluar layar). */
+  .map-full .map-filters .cat-dd.is-compact .cat-dd-panel { left: 0; right: 0; top: calc(100% + 6px); width: auto; max-width: 360px; }
+}
+@media (max-width: 720px) {
+  /* Ponsel: Kategori & TAG hanya ikon (+ penanda aktif) agar muat satu baris; nama lengkap lewat tooltip/aria-label. */
+  .map-full .map-filters .cat-dd.is-compact .cat-dd-btn { width: 36px; min-width: 36px; padding: 0; justify-content: center; gap: 0; }
+  .map-full .map-filters .cat-dd.is-compact .cat-dd-label,
+  .map-full .map-filters .cat-dd.is-compact .cat-dd-btn > svg:last-child { display: none; }
+  .map-full .map-filters .cat-dd.is-compact .cat-dd-icon { font-size: 13px; opacity: 1; }
+  .map-full .map-filters .cat-dd.is-compact .cat-dd-btn[data-active] { background: var(--color-primary); color: #fff; }
+  .map-full .map-filters:not(.is-collapsed) { gap: 6px; }
+}

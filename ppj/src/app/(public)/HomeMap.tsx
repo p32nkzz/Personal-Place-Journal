@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   GooglePlaceSearch,
@@ -62,8 +62,44 @@ export function HomeMap({
   // Pin bebas default OFF agar peta nyaman digeser tanpa memunculkan pin baru.
   const [freePin, setFreePin] = useState(initialFreePin);
   const [showMaster, setShowMaster] = useState(true);
-  // Layar sempit: kontrol filter selain pencarian nama dilipat di balik tombol "Filter".
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Panel filter tampil/sembunyi lewat tombol ikon filter. Bawaan: tersembunyi (peta lebih luas);
+  // pilihan user diingat per perangkat.
+  const [showFilters, setShowFilters] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("ppj.map.filters") === "1") setShowFilters(true);
+    } catch {
+      // penyimpanan tidak tersedia: tetap tersembunyi
+    }
+  }, []);
+  const toggleFilters = () =>
+    setShowFilters((s) => {
+      try {
+        localStorage.setItem("ppj.map.filters", s ? "0" : "1");
+      } catch {
+        // abaikan
+      }
+      return !s;
+    });
+  const activeFilters = categoryUids.length + tagUids.length + (q.trim() ? 1 : 0);
+  // Tombol filter dirender di dua tempat; CSS memilih yang tampil:
+  //  - "in-bar"   : satu baris dengan cari Google & Pin bebas (login, layar responsif).
+  //  - "in-panel" : di kanan field filter (layar penuh, atau pengunjung); saat panel disembunyikan
+  //                 tombol ini tinggal sendiri di pojok kanan atas peta.
+  const filterBtn = (where: "in-bar" | "in-panel") => (
+    <button
+      type="button"
+      className={`map-bar-filter ${where}`}
+      aria-pressed={showFilters}
+      aria-controls="map-filters"
+      title={t("map.filters")}
+      aria-label={t("map.filters")}
+      onClick={toggleFilters}
+    >
+      <Icon name="filter" fixedWidth={false} />
+      {!showFilters && activeFilters > 0 && <span className="map-bar-badge">{activeFilters}</span>}
+    </button>
+  );
   const [sel, setSel] = useState<Selection | null>(
     initialMy ? { kind: "my", uid: initialMy.uid } : initialPin ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng } : null,
   );
@@ -194,7 +230,7 @@ export function HomeMap({
   const matchRest = needle && allMatches.length > matches.length ? notLoaded(allMatches.slice(matches.length)) : "";
 
   return (
-    <div className={`map-full${canPin ? " has-gsearch" : ""}${sel ? " has-popup" : ""}`}>
+    <div className={`map-full${canPin ? " has-bar" : " is-guest"}${sel ? " has-popup" : ""}${showFilters ? " has-filters" : ""}`}>
       <MapView
         className="map-box"
         satelliteToggle
@@ -211,20 +247,39 @@ export function HomeMap({
         onMapClick={canPin && freePin ? (lat, lng) => setSel({ kind: "pin", lat, lng }) : undefined}
       />
 
-      {/* Kiri atas: pencarian Google */}
+      {/* Kiri atas (login): pencarian Google, pin bebas, dan tombol filter (layar responsif) */}
       {canPin && (
-        <div className="map-float map-tl">
-          <GooglePlaceSearch
-            placeholder={t("map.googlePlaceholder")}
-            origin={location ?? center}
-            autoNearby={initialNearby}
-            onSelect={(g) => select({ kind: "pin", lat: g.lat, lng: g.lng, google: g }, g.lat, g.lng)}
-          />
+        <div className="map-float map-tl map-bar">
+          <div className="map-bar-search">
+            <GooglePlaceSearch
+              placeholder={t("map.googlePlaceholder")}
+              origin={location ?? center}
+              autoNearby={initialNearby}
+              onSelect={(g) => select({ kind: "pin", lat: g.lat, lng: g.lng, google: g }, g.lat, g.lng)}
+            />
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={freePin}
+            className="switch-btn map-bar-pin"
+            title={t("map.freePinHint")}
+            onClick={() => {
+              setFreePin((v) => !v);
+              // Mematikan fitur menghapus pin manual yang sedang tampil (hasil pencarian tetap).
+              if (freePin) setSel((s) => (s?.kind === "pin" && !s.google ? null : s));
+            }}
+          >
+            <span className="switch-track" aria-hidden><span className="switch-thumb" /></span>
+            <Icon name="pin" fixedWidth={false} className="map-bar-pin-ico" aria-hidden />
+            <span className="map-bar-pin-label">{t("map.freePin")}</span>
+          </button>
+          {filterBtn("in-bar")}
         </div>
       )}
 
-      {/* Kanan atas: pencarian data, kategori, chip jenis tempat */}
-      <div className={`map-float map-tr map-filters${filtersOpen ? " is-open" : ""}`}>
+      {/* Panel filter: pencarian data, kategori, TAG, [tombol filter di paling kanan] — mengikuti state tombol filter */}
+      <div id="map-filters" className={`map-float map-tr map-filters${showFilters ? "" : " is-collapsed"}${canPin ? " is-auth" : ""}`}>
         <div
           className="map-search"
           style={{ width: 300, maxWidth: "100%" }}
@@ -339,37 +394,10 @@ export function HomeMap({
             </div>
           )}
         </div>
-        <button
-          type="button"
-          className="map-filter-toggle"
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((o) => !o)}
-          title={t("map.filters")}
-        >
-          <Icon name="layers" fixedWidth={false} /> {t("map.filters")}
-          {categoryUids.length + tagUids.length > 0 && <span className="cat-dd-badge">{categoryUids.length + tagUids.length}</span>}
-          <Icon name={filtersOpen ? "chevron-up" : "chevron-down"} fixedWidth={false} style={{ fontSize: 10 }} />
-        </button>
         <CategoryMultiSelect compact categories={cats.data ?? []} value={categoryUids} onChange={setCategoryUids} />
         {explorer && <TagMultiSelect compact tags={tags.data ?? []} value={tagUids} onChange={setTagUids} />}
-        {canPin && (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={freePin}
-            className="switch-btn"
-            title={t("map.freePinHint")}
-            onClick={() => {
-              setFreePin((v) => !v);
-              // Mematikan fitur menghapus pin manual yang sedang tampil (hasil pencarian tetap).
-              if (freePin) setSel((s) => (s?.kind === "pin" && !s.google ? null : s));
-            }}
-          >
-            <span className="switch-track" aria-hidden><span className="switch-thumb" /></span>
-            {t("map.freePin")}
-          </button>
-        )}
         {(masters.isLoading || (explorer && mine.isLoading)) && <Icon name="refresh" spin className="map-filters-spin" />}
+        {filterBtn("in-panel")}
       </div>
 
       {/* Popup detail + aksi */}

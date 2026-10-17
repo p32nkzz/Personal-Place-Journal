@@ -63,6 +63,7 @@ import {
   faStreetView,
   faEnvelope,
   faRotateLeft,
+  faFilter,
 } from "@fortawesome/free-solid-svg-icons";
 import { faCircle as faCircleRegular, faStar as faStarRegular } from "@fortawesome/free-regular-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -108,6 +109,7 @@ const ICONS = {
   pin: faLocationDot,
   thumbtack: faThumbtack,
   "street-view": faStreetView,
+  filter: faFilter,
   envelope: faEnvelope,
   restore: faRotateLeft,
   search: faMagnifyingGlass,
