@@ -74,7 +74,8 @@ export function CameraCapture({
     const code = (e as Error)?.message ?? "";
     const key = `err.${code}`;
     const tr = t(key);
-    return tr !== key ? tr : t("err.GENERIC");
+    // Kode error server diterjemahkan; pesan yang sudah jadi (mis. validasi foto) ditampilkan apa adanya.
+    return tr !== key ? tr : code && !/^[A-Z][A-Z0-9_]+$/.test(code) ? code : t("err.GENERIC");
   };
 
   const stop = useCallback(() => {

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Suspense, useEffect, useRef, useState } from "react";
 
+import { usePhotoGuard } from "~/components/usePhotoGuard";
 import { Avatar } from "~/components/Avatar";
 import { Icon } from "~/components/Icon";
 import { Select } from "~/components/Select";
@@ -36,6 +37,7 @@ function Profile() {
   const [conf, setConf] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const avatarGuard = usePhotoGuard("avatar");
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
@@ -155,12 +157,20 @@ function Profile() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
+                  accept={avatarGuard.accept}
                   hidden
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     e.target.value = "";
-                    if (f) void uploadAvatar(f);
+                    if (!f) return;
+                    // Tolak di sisi klien: format/ukuran di luar aturan avatar di Pengaturan.
+                    const msg = avatarGuard.check(f);
+                    if (msg) {
+                      setErr("avatar", msg);
+                      toast.push(msg, "error");
+                      return;
+                    }
+                    void uploadAvatar(f);
                   }}
                 />
                 <button type="button" className="btn btn-secondary btn-sm" disabled={avatarBusy || removeAvatar.isPending} onClick={() => fileRef.current?.click()}>

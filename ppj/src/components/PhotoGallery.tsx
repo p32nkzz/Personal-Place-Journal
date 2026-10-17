@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { CameraCapture } from "~/components/CameraCapture";
 import { PhotoAddBar } from "~/components/PhotoAddBar";
+import { usePhotoGuard } from "~/components/usePhotoGuard";
 import { Alert, ConfirmDialog, Modal, useErrorMessage, useToast } from "~/components/ui";
 import { Icon } from "~/components/Icon";
 import { useT } from "~/lib/i18n";
@@ -88,6 +89,7 @@ export function PhotoGallery({
   const errMsg = useErrorMessage();
   const rules = api.settings.photoRules.useQuery(undefined, { enabled: canEdit });
   const fileRef = useRef<HTMLInputElement>(null);
+  const guard = usePhotoGuard();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [view, setView] = useState<GalleryPhoto | null>(null);
@@ -225,11 +227,12 @@ export function PhotoGallery({
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept={guard.accept}
               multiple
               hidden
               onChange={(e) => {
-                const files = Array.from(e.target.files ?? []);
+                // Tolak di sisi klien: format/ukuran di luar aturan Pengaturan (dengan notifikasi).
+                const files = guard.filter(Array.from(e.target.files ?? []));
                 e.target.value = "";
                 if (files.length) void run(() => uploadPhotos(uploadEndpoint, parentField, parentUid, files), t("photo.uploaded"));
               }}
@@ -247,6 +250,8 @@ export function PhotoGallery({
               items={photos.map((p) => ({ key: p.uid, src: p.url, caption: p.caption }))}
               max={limit}
               onCapture={async (f) => {
+                const msg = guard.check(f);
+                if (msg) throw new Error(msg);
                 await uploadPhotos(uploadEndpoint, parentField, parentUid, [f]);
                 onChanged();
               }}

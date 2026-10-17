@@ -16,7 +16,7 @@ import {
 } from "~/server/db/schema";
 import { fail, isDuplicateError, notFound } from "~/server/lib/errors";
 import { newUid } from "~/server/lib/ids";
-import { getCategoryPageSize, getTagPageSize, getMapColors, getMapSearchConfig, getPhotoRules, getTimezone, SETTING_DEFAULTS, validateSetting } from "~/server/lib/settings";
+import { getAvatarRules, getCategoryPageSize, getTagPageSize, getMapColors, getMapSearchConfig, getPhotoRules, getTimezone, SETTING_DEFAULTS, validateSetting } from "~/server/lib/settings";
 import { slugify } from "~/server/lib/slug";
 import { hexColorSchema, longTextSchema, nameSchema } from "~/server/lib/validation";
 
@@ -294,6 +294,8 @@ export const settingsRouter = createTRPCRouter({
   categoryPageSize: publicProcedure.query(async () => ({ pageSize: await getCategoryPageSize() })),
 
   photoRules: activeProcedure.query(() => getPhotoRules()),
+  /** Aturan avatar (format & ukuran) untuk validasi di sisi klien sebelum unggah. */
+  avatarRules: activeProcedure.query(() => getAvatarRules()),
 
   list: adminProcedure.query(({ ctx }) =>
     ctx.db.select().from(appSettings).orderBy(asc(appSettings.key)),

@@ -1766,3 +1766,6 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
 
 /* Pop-up peta: tombol ubah/hapus kunjungan ringkas */
 .pp-visit-actions .pp-icon-btn { width: 26px; height: 26px; font-size: 11px; }
+
+/* Notifikasi (mis. foto ditolak) tetap terlihat di atas dialog kamera & popover */
+.toasts { z-index: 3500; }

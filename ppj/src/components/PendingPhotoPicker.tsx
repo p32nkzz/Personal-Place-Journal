@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CameraCapture, type CamItem } from "~/components/CameraCapture";
 import { Icon } from "~/components/Icon";
 import { PhotoAddBar } from "~/components/PhotoAddBar";
+import { usePhotoGuard } from "~/components/usePhotoGuard";
 import { useT } from "~/lib/i18n";
 import { openPhotoPreview } from "~/lib/photoPreview";
 import { api } from "~/trpc/react";
@@ -46,6 +47,7 @@ export function PendingPhotoPicker({
   const ref = useRef<HTMLInputElement>(null);
   // Isian link eksternal dibuka/tutup dari tombol "Link" pada bar aksi.
   const [linkOpen, setLinkOpen] = useState(false);
+  const guard = usePhotoGuard();
   const [text, setText] = useState("");
   const [skipped, setSkipped] = useState(0);
   const [camOpen, setCamOpen] = useState(false);
@@ -163,11 +165,12 @@ export function PendingPhotoPicker({
       <input
         ref={ref}
         type="file"
-        accept="image/*"
+        accept={guard.accept}
         multiple
         hidden
         onChange={(e) => {
-          const picked = Array.from(e.target.files ?? []);
+          // Tolak di sisi klien: format/ukuran di luar aturan Pengaturan (dengan notifikasi).
+          const picked = guard.filter(Array.from(e.target.files ?? []));
           e.target.value = "";
           onFiles([...files, ...picked.slice(0, room === Infinity ? undefined : room)]);
         }}
@@ -184,7 +187,11 @@ export function PendingPhotoPicker({
           items={camItems}
           max={max}
           // Pakai nilai terbaru (ref): beberapa jepretan dapat ditambahkan selama kamera terbuka.
-          onCapture={(f) => onFiles([...filesRef.current, f])}
+          onCapture={(f) => {
+            const msg = guard.check(f);
+            if (msg) throw new Error(msg);
+            onFiles([...filesRef.current, f]);
+          }}
           onDelete={(key) => {
             const file = [...cache.current].find(([, u]) => u === key)?.[0];
             if (file) onFiles(filesRef.current.filter((x) => x !== file));
