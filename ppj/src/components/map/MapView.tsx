@@ -746,7 +746,7 @@ export async function nearestPlacePhotos(
   lat: number,
   lng: number,
   radius = 60,
-): Promise<{ name: string; distance: number; photos: GooglePhoto[] } | null> {
+): Promise<{ name: string; placeId: string | null; distance: number; photos: GooglePhoto[] } | null> {
   for (let i = 0; i < 50 && !(typeof google !== "undefined" && google.maps?.importLibrary); i++) {
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -785,6 +785,7 @@ export async function nearestPlacePhotos(
     }
     return {
       name: best.r.name!,
+      placeId: best.r.place_id ?? null,
       distance: Math.round(best.d),
       photos: photos.slice(0, 6).map((ph) => ({
         url: ph.getUrl({ maxWidth: 640 }),

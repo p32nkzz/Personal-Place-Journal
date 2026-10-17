@@ -130,23 +130,41 @@ export function PlaceForm({
       [k]: x[k].includes(uid) ? x[k].filter((i) => i !== uid) : [...x[k], uid],
     }));
 
-  // Pin baru atau digeser: koordinat selalu diperbarui; nama & alamat hanya bila switch ON.
+  // Pin baru atau digeser: koordinat DAN Google Place ID selalu diperbarui; nama & alamat hanya bila switch ON.
+  // ID lama dikosongkan seketika (agar tidak tertinggal di titik yang sudah berbeda) lalu diisi hasil pencarian titik baru.
   const movePin = (lat: number, lng: number) => {
     const latitude = Number(lat.toFixed(7));
     const longitude = Number(lng.toFixed(7));
-    setV((x) => ({ ...x, latitude, longitude }));
-    if (!follow) return;
+    setV((x) => ({ ...x, latitude, longitude, googlePlaceId: null }));
     const req = ++reqRef.current;
     setResolving(true);
-    void Promise.all([reverseGeocode(lat, lng), nearestPlacePhotos(lat, lng)]).then(([addr, near]) => {
+    void Promise.all([reverseGeocode(lat, lng), follow ? nearestPlacePhotos(lat, lng) : Promise.resolve(null)]).then(([addr, near]) => {
       if (req !== reqRef.current) return; // pin sudah berpindah lagi
       setResolving(false);
       setV((x) => ({
         ...x,
-        address: addr?.address ?? x.address,
-        name: near?.name ?? x.name,
+        googlePlaceId: near?.placeId ?? addr?.placeId ?? null,
+        ...(follow ? { address: addr?.address ?? x.address, name: near?.name ?? x.name } : {}),
       }));
     });
+  };
+
+  // Koordinat diketik manual: ID lama tidak berlaku lagi; cari ulang setelah berhenti mengetik.
+  const idTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (idTimer.current && clearTimeout(idTimer.current)), []);
+  const resolveIdLater = (lat: number | null, lng: number | null) => {
+    if (idTimer.current) clearTimeout(idTimer.current);
+    const req = ++reqRef.current;
+    setResolving(false);
+    if (lat == null || lng == null || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+    idTimer.current = setTimeout(() => {
+      setResolving(true);
+      void Promise.all([reverseGeocode(lat, lng), nearestPlacePhotos(lat, lng)]).then(([addr, near]) => {
+        if (req !== reqRef.current) return;
+        setResolving(false);
+        setV((x) => ({ ...x, googlePlaceId: near?.placeId ?? addr?.placeId ?? null }));
+      });
+    }, 700);
   };
 
   const markers = useMemo(
@@ -178,8 +196,11 @@ export function PlaceForm({
       </button>
     );
 
-  const coordInput = (k: "latitude" | "longitude") => (e: React.ChangeEvent<HTMLInputElement>) =>
-    set(k, e.target.value === "" || Number.isNaN(Number(e.target.value)) ? null : Number(e.target.value));
+  const coordInput = (k: "latitude" | "longitude") => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value === "" || Number.isNaN(Number(e.target.value)) ? null : Number(e.target.value);
+    setV((x) => ({ ...x, [k]: val, googlePlaceId: null }));
+    resolveIdLater(k === "latitude" ? val : v.latitude, k === "longitude" ? val : v.longitude);
+  };
 
   return (
     <form
