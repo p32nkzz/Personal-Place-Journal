@@ -1786,3 +1786,13 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
   .map-pin { transition: none; }
   .map-popup, .pp-swap { animation: none; }
 }
+
+/* ---------- Tombol melayang "kembali ke lokasi saya" (semua peta) ---------- */
+.map-locate-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; margin: 0 10px 10px 0; padding: 0; border: 0; border-radius: 50%; background: #fff; color: var(--color-primary); font-size: 16px; box-shadow: 0 2px 8px rgb(15 23 42 / 0.25); cursor: pointer; transition: transform 140ms ease, background 140ms ease; }
+.map-locate-btn:hover:not(:disabled) { background: var(--color-tint); transform: translateY(-1px); }
+.map-locate-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.map-locate-btn:disabled { cursor: progress; }
+@media (max-width: 720px) {
+  /* Menu Peta di ponsel: tetap di atas legenda melayang. */
+  .map-full .map-locate-btn { margin-bottom: 60px; }
+}

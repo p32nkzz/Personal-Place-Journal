@@ -13,7 +13,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "~/components/Icon";
-import { Alert, Modal } from "~/components/ui";
+import { Alert, Modal, useToast } from "~/components/ui";
 import { useT } from "~/lib/i18n";
 import { setSatellite, useSatellite } from "./mapType";
 import { readableOn } from "./colors";
@@ -203,6 +203,51 @@ function Controller({
   return null;
 }
 
+/**
+ * Tombol melayang "kembali ke lokasi saya": ambil lokasi perangkat terbaru lalu kamera terbang halus
+ * ke sana dengan zoom bawaan dari Pengaturan. Bila gagal (izin ditolak dsb.) memakai lokasi terakhir
+ * yang diketahui, atau memberi tahu bahwa lokasi tidak tersedia.
+ */
+function LocateControl({ known, onLocated }: { known: DeviceLocation; onLocated: (l: { lat: number; lng: number }) => void }) {
+  const map = useMap();
+  const { t } = useT();
+  const toast = useToast();
+  const { defaultZoom } = useMapSearchConfig();
+  const [busy, setBusy] = useState(false);
+  const go = (l: { lat: number; lng: number }) => {
+    if (map) void flyTo(map, l, defaultZoom, () => false);
+  };
+  const locate = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      if (known) go(known);
+      else toast.push(t("map.locateFail"), "error");
+      return;
+    }
+    setBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const l = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setBusy(false);
+        onLocated(l);
+        go(l);
+      },
+      () => {
+        setBusy(false);
+        if (known) go(known);
+        else toast.push(t("map.locateFail"), "error");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  };
+  return (
+    <MapControl position={ControlPosition.RIGHT_BOTTOM}>
+      <button type="button" className="map-locate-btn" onClick={locate} disabled={busy} title={t("map.locateMe")} aria-label={t("map.locateMe")}>
+        <Icon name={busy ? "refresh" : "crosshairs"} spin={busy} fixedWidth={false} />
+      </button>
+    </MapControl>
+  );
+}
+
 export function MapView({
   markers = [],
   lines = [],
@@ -237,6 +282,9 @@ export function MapView({
   const { pinScale, pinScaleActive } = useMapSearchConfig();
   const satellite = useSatellite();
   const toggleSatellite = () => setSatellite(!satellite);
+  // Lokasi dari tombol "lokasi saya" (dipakai bila halaman tidak mengirim lokasi perangkat).
+  const [located, setLocated] = useState<DeviceLocation>(null);
+  const here = located ?? deviceLocation;
   if (!KEY) {
     return (
       <div className={className} style={{ display: "grid", placeItems: "center", padding: 24, textAlign: "center" }}>
@@ -282,6 +330,7 @@ export function MapView({
           </MapControl>
         )}
         <Controller markers={markers} focus={focus} fit={fit} deviceLocation={deviceLocation} />
+        <LocateControl known={here} onLocated={setLocated} />
         <Lines lines={lines} />
         {markers.map((m) => (
           <AdvancedMarker
@@ -308,8 +357,8 @@ export function MapView({
             />
           </AdvancedMarker>
         ))}
-        {deviceLocation && (
-          <AdvancedMarker position={deviceLocation} title={t("map.you")} zIndex={0}>
+        {here && (
+          <AdvancedMarker position={here} title={t("map.you")} zIndex={0}>
             <div
               style={{
                 width: 16,
