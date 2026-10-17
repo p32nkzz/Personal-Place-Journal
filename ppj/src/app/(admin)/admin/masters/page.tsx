@@ -114,7 +114,7 @@ function Masters() {
         ) : (
           <ul className="list">
             {data.rows.map((m) => (
-              <li key={m.uid} className="pl-row">
+              <li key={m.uid} className={`pl-row${m.status === "INACTIVE" ? " is-inactive" : ""}`} title={m.status === "INACTIVE" ? t("masterStatus.INACTIVE") : undefined}>
                 <div className="pl-thumb-cell">
                   <PlaceThumb href={`/admin/masters/${m.uid}`} name={m.name} lat={m.latitude} lng={m.longitude} photos={m.photos} />
                 </div>

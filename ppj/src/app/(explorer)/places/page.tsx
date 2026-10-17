@@ -142,7 +142,7 @@ function Places() {
         ) : (
           <ul className="list">
             {data.rows.map((p) => (
-              <li key={p.uid} className="pl-row">
+              <li key={p.uid} className={`pl-row${p.isActive ? "" : " is-inactive"}`} title={p.isActive ? undefined : t("common.inactive")}>
                 <div className="pl-thumb-cell">
                   <PlaceThumb href={`/places/${p.uid}`} name={p.name} lat={p.latitude} lng={p.longitude} photos={p.photos} />
                 </div>
