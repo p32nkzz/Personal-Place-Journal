@@ -225,7 +225,8 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
       ) : (
         <>
           <div className="pp-meta">
-            <MasterStatusChip status={m.status} />
+            {/* Status "Aktif" tidak perlu ditampilkan; hanya status selain aktif (mis. nonaktif bagi Admin) yang diberi penanda. */}
+            {m.status !== "ACTIVE" && <MasterStatusChip status={m.status} />}
             <Stars value={m.rating.avg} count={m.rating.count} />
           </div>
           <PhotoTabs key={m.uid} ownLabel={t("map.tabMasterPhotos")} photos={m.photos} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} name={m.name} />
@@ -295,6 +296,15 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
     void utils.place.visits.invalidate({ uid });
     void utils.place.list.invalidate();
   };
+  // Tandai/lepas favorit langsung dari pop-up (warna pin di peta ikut berubah).
+  const fav = api.place.setFavorite.useMutation({
+    onSuccess: (_r, vars) => {
+      void utils.place.get.invalidate({ uid });
+      void utils.place.list.invalidate();
+      toast.push(vars.isFavorite ? t("place.favoriteAdded") : t("place.favoriteRemoved"), "success");
+    },
+    onError: (e) => toast.push(errMsg(e), "error"),
+  });
   const delVisitMut = api.visit.delete.useMutation({
     onSuccess: () => {
       // Halaman terakhir menjadi kosong setelah hapus: mundur satu halaman.
@@ -319,9 +329,22 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
         onClose={onClose}
         actions={
           p && (
-            <Link className="pp-icon-btn" href={`/places/${p.uid}/edit?from=map`} title={t("common.edit")} aria-label={t("common.edit")}>
-              <Icon name="pen" fixedWidth={false} />
-            </Link>
+            <>
+              <button
+                type="button"
+                className={`pp-icon-btn pp-fav${p.isFavorite ? " is-on" : ""}`}
+                aria-pressed={p.isFavorite}
+                disabled={fav.isPending}
+                title={p.isFavorite ? t("place.unmarkFavorite") : t("place.markFavorite")}
+                aria-label={p.isFavorite ? t("place.unmarkFavorite") : t("place.markFavorite")}
+                onClick={() => fav.mutate({ uid: p.uid, isFavorite: !p.isFavorite })}
+              >
+                <Icon name={p.isFavorite ? "star" : "star-regular"} fixedWidth={false} />
+              </button>
+              <Link className="pp-icon-btn" href={`/places/${p.uid}/edit?from=map`} title={t("common.edit")} aria-label={t("common.edit")}>
+                <Icon name="pen" fixedWidth={false} />
+              </Link>
+            </>
           )
         }
       />

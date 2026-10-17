@@ -1796,3 +1796,8 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
   /* Menu Peta di ponsel: tetap di atas legenda melayang. */
   .map-full .map-locate-btn { margin-bottom: 60px; }
 }
+
+/* Pop-up peta: tombol favorit MY PLACE */
+.pp-icon-btn.pp-fav:hover { color: #d97706; border-color: #f59e0b; background: #fffbeb; }
+.pp-icon-btn.pp-fav.is-on { color: #eab308; border-color: #fcd34d; background: #fef9c3; }
+
