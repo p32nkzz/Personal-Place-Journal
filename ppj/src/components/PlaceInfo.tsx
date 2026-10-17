@@ -115,6 +115,34 @@ export function StreetViewDialog({ lat, lng, title, onClose }: { lat: number; ln
 }
 
 /** Koordinat ringkas + tombol salin. */
+/** Google Place ID (tempat valid hasil pencarian / pin di peta) yang dapat disalin. */
+export function GoogleId({ id, className }: { id: string; className?: string }) {
+  const { t } = useT();
+  const [copied, setCopied] = useState(false);
+  return (
+    <span className={`pp-gid${className ? ` ${className}` : ""}`}>
+      <span className="pp-gid-label">{t("map.googleId")}</span>
+      <code className="pp-gid-val" title={id}>{id}</code>
+      <button
+        type="button"
+        className={`pp-gid-copy${copied ? " is-done" : ""}`}
+        title={copied ? t("common.copied") : t("common.copy")}
+        aria-label={`${t("common.copy")}: ${t("map.googleId")}`}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void navigator.clipboard?.writeText(id).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          });
+        }}
+      >
+        <Icon name={copied ? "circle-check" : "copy"} fixedWidth={false} />
+      </button>
+    </span>
+  );
+}
+
 export function Coords({
   lat,
   lng,
@@ -154,6 +182,7 @@ export function Coords({
           <Icon name={copied ? "circle-check" : "copy"} fixedWidth={false} /> {copied ? t("common.copied") : t("common.copy")}
         </button>
       </span>
+      {placeId && <GoogleId id={placeId} />}
       {(googleLink || streetView) && (
         <span className="pp-links">
           {googleLink && (

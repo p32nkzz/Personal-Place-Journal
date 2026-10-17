@@ -24,8 +24,11 @@ export function HomeMap({
   initialFreePin = false,
   initialPin = null,
   initialMy = null,
+  initialNearby = false,
 }: {
   viewer: Viewer;
+  /** Daftar lokasi terdekat langsung terbuka (dari tombol "Tambah dari peta"). */
+  initialNearby?: boolean;
   /** Pin bebas langsung aktif (kembali dari form tempat baru). */
   initialFreePin?: boolean;
   /** Pin yang dipasang sejak awal (koordinat dari form tempat baru). */
@@ -214,6 +217,7 @@ export function HomeMap({
           <GooglePlaceSearch
             placeholder={t("map.googlePlaceholder")}
             origin={location ?? center}
+            autoNearby={initialNearby}
             onSelect={(g) => select({ kind: "pin", lat: g.lat, lng: g.lng, google: g }, g.lat, g.lng)}
           />
         </div>

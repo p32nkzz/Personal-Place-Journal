@@ -175,7 +175,7 @@ export default function PlaceDetailPage() {
             </div>
           </div>
           <div className="pd-actions">
-            <Link className="btn btn-secondary btn-sm" href={`/places/${uid}/edit`}>
+            <Link className="btn btn-secondary btn-sm" href={`/places/${uid}/edit?from=detail`}>
               <Icon name="pen" /> {t("common.edit")}
             </Link>
             {p.isActive ? (

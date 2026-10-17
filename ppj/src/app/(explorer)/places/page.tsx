@@ -79,7 +79,7 @@ function Places() {
             </div>
             {/* Tombol tambah data sebaris dengan pencarian (tata letak sama dengan daftar MASTER/Pengguna) */}
             <div className="fl-btns">
-              <Link href="/" className="btn btn-map"><Icon name="map-pin" /> {t("place.addFromMap")}</Link>
+              <Link href="/?add=1" className="btn btn-map"><Icon name="map-pin" /> {t("place.addFromMap")}</Link>
               <Link href="/places/new" className="btn btn-primary"><Icon name="plus" /> {t("place.new")}</Link>
             </div>
           </div>
@@ -226,7 +226,7 @@ function Places() {
                   </div>
                   {/* Aksi baris: ubah (biru), aktif/nonaktif (kuning/hijau), hapus (merah) */}
                   <div className="pl-actions">
-                    <Link href={`/places/${p.uid}/edit`} className="ph-btn ph-edit" title={t("common.edit")} aria-label={`${t("common.edit")}: ${p.name}`}>
+                    <Link href={`/places/${p.uid}/edit?from=list`} className="ph-btn ph-edit" title={t("common.edit")} aria-label={`${t("common.edit")}: ${p.name}`}>
                       <Icon name="pen" fixedWidth={false} />
                     </Link>
                     <button

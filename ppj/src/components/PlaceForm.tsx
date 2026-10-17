@@ -12,7 +12,7 @@ import {
   type GooglePlaceResult,
 } from "~/components/map/MapView";
 import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
-import { StreetViewDialog } from "~/components/PlaceInfo";
+import { GoogleId, StreetViewDialog } from "~/components/PlaceInfo";
 import { useCategoryPageSize } from "~/components/useCategoryPageSize";
 import { useTagPageSize } from "~/components/useTagPageSize";
 import { GooglePhotoPreview } from "~/components/GooglePhotoPreview";
@@ -240,6 +240,8 @@ export function PlaceForm({
             <input id="lat" className="input mono" inputMode="decimal" value={v.latitude ?? ""} aria-invalid={!!coordError} aria-label={t("common.latitude")} onChange={coordInput("latitude")} />
             <label htmlFor="lng">Lng<span className="req" aria-hidden>*</span></label>
             <input id="lng" className="input mono" inputMode="decimal" value={v.longitude ?? ""} aria-invalid={!!coordError} aria-label={t("common.longitude")} onChange={coordInput("longitude")} />
+            {/* Google Place ID hanya bila titik berasal dari tempat Google yang valid. */}
+            {hasCoord && v.googlePlaceId && <GoogleId id={v.googlePlaceId} className="is-field" />}
             {/* Street View: hanya bila titik sudah dipilih; panorama dibuka di dialog. */}
             {hasCoord && (
               <button

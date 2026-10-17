@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { Icon } from "~/components/Icon";
 import { MyPlacePhotos } from "~/components/MyPlacePhotos";
 import { PlaceForm, type PlaceFormValues } from "~/components/PlaceForm";
 import { Alert, EmptyState, Spinner, useErrorMessage, useToast } from "~/components/ui";
@@ -13,7 +15,11 @@ export default function EditPlacePage() {
   const { uid } = useParams<{ uid: string }>();
   const { t } = useT();
   const router = useRouter();
-  const fromMap = useSearchParams().get("from") === "map";
+  // Asal halaman menentukan tujuan Batal/Simpan: Peta, daftar MY PLACE, atau detail (bawaan).
+  const from = useSearchParams().get("from");
+  const fromMap = from === "map";
+  const fromList = from === "list";
+  const fromDetail = !fromMap && !fromList;
   const toast = useToast();
   const errMsg = useErrorMessage();
   const utils = api.useUtils();
@@ -47,7 +53,7 @@ export default function EditPlacePage() {
     onSuccess: async () => {
       await utils.place.invalidate();
       toast.push(t("common.saved"), "success");
-      router.push(`/places/${uid}`);
+      router.push(fromList ? "/places" : `/places/${uid}`);
     },
     onError: (e) => setError(errMsg(e)),
   });
@@ -59,6 +65,11 @@ export default function EditPlacePage() {
     <div className="container page">
       <div className="page-head">
         <div>
+          {fromDetail && (
+            <Link href="/places" className="pd-back pe-back">
+              <Icon name="arrow-left" fixedWidth={false} /> {t("nav.myPlaces")}
+            </Link>
+          )}
           <h1>{t("place.edit")}</h1>
           <p>{p.name}</p>
         </div>
@@ -73,8 +84,14 @@ export default function EditPlacePage() {
         submitLabel={t("common.save")}
         busy={update.isPending}
         error={error}
-        // Dari Peta: Batal kembali ke Peta dengan pop-up tempat ini terbuka; selain itu ke halaman detail.
-        cancelHref={fromMap ? `/?${new URLSearchParams({ my: uid, lat: String(p.latitude), lng: String(p.longitude) })}` : `/places/${uid}`}
+        // Batal kembali ke asal: Peta (pop-up tempat ini terbuka), daftar MY PLACE, atau halaman detail.
+        cancelHref={
+          fromMap
+            ? `/?${new URLSearchParams({ my: uid, lat: String(p.latitude), lng: String(p.longitude) })}`
+            : fromList
+              ? "/places"
+              : `/places/${uid}`
+        }
         showFavorite
         pickedGoogleUrls={p.photos.map((x) => x.url)}
         onPickGooglePhoto={(url) => addPhotoUrl.mutate({ placeUid: uid, url })}

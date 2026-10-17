@@ -10,7 +10,7 @@ import {
 } from "~/components/map/MapView";
 import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
 import { useMapColors } from "~/components/map/useMapColors";
-import { StreetViewDialog } from "~/components/PlaceInfo";
+import { GoogleId, StreetViewDialog } from "~/components/PlaceInfo";
 import { Alert, Field } from "~/components/ui";
 import { useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
@@ -127,6 +127,7 @@ export function MasterForm({
             <input id="m-lat" className="input mono" inputMode="decimal" value={v.latitude ?? ""} aria-invalid={!!errs.coord} aria-label={t("common.latitude")} onChange={coordInput("latitude")} />
             <label htmlFor="m-lng">Lng<span className="req" aria-hidden>*</span></label>
             <input id="m-lng" className="input mono" inputMode="decimal" value={v.longitude ?? ""} aria-invalid={!!errs.coord} aria-label={t("common.longitude")} onChange={coordInput("longitude")} />
+            {hasCoord && v.googlePlaceId && <GoogleId id={v.googlePlaceId} className="is-field" />}
             {hasCoord && (
               <button type="button" className="pf-sv" title={t("map.streetView")} aria-label={t("map.streetView")} onClick={() => setSvOpen(true)}>
                 <Icon name="street-view" fixedWidth={false} />
@@ -135,7 +136,6 @@ export function MasterForm({
           </div>
           <div className="pf-hint-row">
             <span className="pf-hint">{t("place.pinHint")}</span>
-            {v.googlePlaceId && <span className="pf-hint mono">Google ID: {v.googlePlaceId}</span>}
           </div>
           {errs.coord && (
             <div className="helper helper-error" role="alert" style={{ marginTop: -4 }}>

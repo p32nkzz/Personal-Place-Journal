@@ -328,10 +328,12 @@ function GoogleSearchInner({
   onSelect,
   placeholder,
   origin,
+  autoNearby = false,
 }: {
   onSelect: (p: GooglePlaceResult) => void;
   placeholder: string;
   origin?: { lat: number; lng: number } | null;
+  autoNearby?: boolean;
 }) {
   const { t } = useT();
   const places = useMapsLibrary("places");
@@ -348,6 +350,9 @@ function GoogleSearchInner({
   const [notFound, setNotFound] = useState<string | null>(null);
   const token = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const detailService = useRef<google.maps.places.PlacesService | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Mode "langsung tampilkan lokasi terdekat" (mis. dari tombol "Tambah dari peta") sampai user berinteraksi.
+  const auto = useRef(autoNearby);
 
   const fromGeocode = (r: google.maps.GeocoderResult): Suggestion => ({
     id: r.place_id,
@@ -412,6 +417,28 @@ function GoogleSearchInner({
       },
     );
   };
+
+  // Buka saran terdekat tanpa memfokuskan input (keyboard ponsel tidak muncul); ikuti titik asal
+  // yang bisa berubah saat lokasi perangkat didapat.
+  useEffect(() => {
+    if (!auto.current || !places || !origin) return;
+    setNearbyOpen(true);
+    loadNearby();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [places, origin?.lat, origin?.lng]);
+
+  // Saat dibuka tanpa fokus, klik di luar area pencarian menutup daftar.
+  useEffect(() => {
+    if (!nearbyOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        auto.current = false;
+        setNearbyOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [nearbyOpen]);
 
   useEffect(() => {
     if (!places || q.trim().length < 3) {
@@ -488,6 +515,7 @@ function GoogleSearchInner({
   }, [places, geocoding, q]);
 
   const finish = (r: GooglePlaceResult) => {
+    auto.current = false;
     token.current = null;
     setItems([]);
     setNearbyOpen(false);
@@ -569,6 +597,7 @@ function GoogleSearchInner({
 
   return (
     <div
+      ref={boxRef}
       className="map-search"
       onBlur={(e) => {
         // Tutup saran terdekat saat fokus keluar dari area pencarian.
@@ -593,6 +622,7 @@ function GoogleSearchInner({
             e.preventDefault();
             setActive((i) => (i <= 0 ? list.length - 1 : i - 1));
           } else if (e.key === "Escape") {
+            auto.current = false;
             setItems([]);
             setNearbyOpen(false);
             setActive(-1);
@@ -672,16 +702,19 @@ export function GooglePlaceSearch({
   onSelect,
   placeholder,
   origin,
+  autoNearby,
 }: {
   onSelect: (p: GooglePlaceResult) => void;
   placeholder: string;
   /** Titik asal saran lokasi terdekat (lokasi perangkat atau pusat peta). */
   origin?: { lat: number; lng: number } | null;
+  /** Langsung tampilkan daftar lokasi terdekat saat halaman dibuka. */
+  autoNearby?: boolean;
 }) {
   if (!KEY) return null;
   return (
     <APIProvider apiKey={KEY}>
-      <GoogleSearchInner onSelect={onSelect} placeholder={placeholder} origin={origin} />
+      <GoogleSearchInner onSelect={onSelect} placeholder={placeholder} origin={origin} autoNearby={autoNearby} />
     </APIProvider>
   );
 }
