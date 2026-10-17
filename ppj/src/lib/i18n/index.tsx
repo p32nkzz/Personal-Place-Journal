@@ -77,6 +77,23 @@ export function tzShortName(tz: string, locale: string, at: Date = new Date()) {
   }
 }
 
+/**
+ * Format tanggal/waktu dengan pemisah jam ":" di semua bahasa (locale id-ID bawaan memakai ".",
+ * mis. "10.16"). Hanya literal di antara jam–menit–detik yang diganti; bagian tanggal tidak tersentuh.
+ */
+export function formatWithColon(f: Intl.DateTimeFormat, d: Date) {
+  const parts = f.formatToParts(d);
+  return parts
+    .map((p, i) =>
+      p.type === "literal" &&
+      (parts[i - 1]?.type === "hour" || parts[i - 1]?.type === "minute") &&
+      (parts[i + 1]?.type === "minute" || parts[i + 1]?.type === "second")
+        ? ":"
+        : p.value,
+    )
+    .join("");
+}
+
 export function useFormat() {
   const { lang, timezone: TZ } = useT();
   const locale = lang === "ID" ? "id-ID" : "en-GB";
@@ -84,15 +101,19 @@ export function useFormat() {
     () => ({
       dateTime: (d: Date | string | null | undefined) =>
         d
-          ? new Intl.DateTimeFormat(locale, {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-              timeZone: TZ,
-              timeZoneName: "short",
-            }).format(new Date(d))
+          ? formatWithColon(
+              new Intl.DateTimeFormat(locale, {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hourCycle: "h23",
+                timeZone: TZ,
+                timeZoneName: "short",
+              }),
+              new Date(d),
+            )
           : "—",
       date: (d: Date | string | null | undefined) => {
         if (!d) return "—";

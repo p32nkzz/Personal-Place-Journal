@@ -9,7 +9,7 @@ import { useMapColors } from "~/components/map/useMapColors";
 import { Select } from "~/components/Select";
 import { SettingRow, SettingsShell } from "~/components/SettingRow";
 import { Alert, Spinner, useErrorMessage, useToast } from "~/components/ui";
-import { tzOffsetMs, useFormat, useT } from "~/lib/i18n";
+import { formatWithColon, tzOffsetMs, useFormat, useT } from "~/lib/i18n";
 import { useUrlState } from "~/lib/useUrlState";
 import { api } from "~/trpc/react";
 
@@ -401,11 +401,14 @@ function GeneralSettings() {
   const dirty = value !== timezone;
   const preview = (() => {
     try {
-      return new Intl.DateTimeFormat(lang === "ID" ? "id-ID" : "en-GB", {
-        dateStyle: "full",
-        timeStyle: "long",
-        timeZone: value,
-      }).format(now);
+      return formatWithColon(
+        new Intl.DateTimeFormat(lang === "ID" ? "id-ID" : "en-GB", {
+          dateStyle: "full",
+          timeStyle: "long",
+          timeZone: value,
+        }),
+        now,
+      );
     } catch {
       return "—";
     }

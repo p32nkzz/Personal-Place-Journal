@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 
 import { Icon } from "~/components/Icon";
-import { useT } from "~/lib/i18n";
+import { formatWithColon, useT } from "~/lib/i18n";
 
 type Mode = "date" | "time" | "datetime";
 
@@ -83,9 +83,9 @@ export function DateField({
   const asUtc = (date: string, time = "00:00") => new Date(`${date}T${time}:00Z`);
   const label =
     mode === "time"
-      ? cur.time && fmt.time.format(asUtc("2000-01-01", cur.time))
+      ? cur.time && formatWithColon(fmt.time, asUtc("2000-01-01", cur.time))
       : mode === "datetime"
-        ? cur.date && `${fmt.date.format(asUtc(cur.date))}, ${fmt.time.format(asUtc(cur.date, cur.time || "00:00"))}`
+        ? cur.date && `${fmt.date.format(asUtc(cur.date))}, ${formatWithColon(fmt.time, asUtc(cur.date, cur.time || "00:00"))}`
         : cur.date && fmt.date.format(asUtc(cur.date));
 
   // Senin sebagai awal minggu (lazim untuk ID & EN-GB).
