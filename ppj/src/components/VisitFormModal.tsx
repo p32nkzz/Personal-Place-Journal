@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { DateField } from "~/components/DateField";
 import { PendingPhotoPicker } from "~/components/PendingPhotoPicker";
 import { uploadPhotos } from "~/components/PhotoGallery";
 import { Alert, Field, Modal, StarInput, useErrorMessage, useToast } from "~/components/ui";
@@ -116,7 +117,7 @@ export function VisitFormModal({
         {error && <Alert kind="error">{error}</Alert>}
         {itineraryUid && !itineraryPlaceUid && !visit && <Alert kind="info">{t("visit.unexpectedNote")}</Alert>}
         <Field label={t("visit.visitedAt")} required htmlFor="v-at" helper={t("visit.visitedAtHint", { tz: zi.tz })}>
-          <input id="v-at" className="input" type="datetime-local" max={zi.nowInput()} value={visitedAt} onChange={(e) => setVisitedAt(e.target.value)} />
+          <DateField id="v-at" mode="datetime" max={zi.nowInput()} value={visitedAt} onChange={setVisitedAt} />
         </Field>
         <Field label={t("visit.rating")}>
           <StarInput value={rating} onChange={setRating} />

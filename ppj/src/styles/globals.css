@@ -1726,3 +1726,40 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
 
 /* Pop-up peta: keterangan foto lebih kecil & lembut */
 .pp-photo-cap { margin-top: -2px; font-size: 11px; line-height: 1.45; font-style: italic; color: var(--color-text-subtle); overflow-wrap: anywhere; }
+
+/* ---------- Pemilih tanggal/waktu (mengikuti bahasa aktif) ---------- */
+.dp-input { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer; }
+.dp-input .dp-ico { flex-shrink: 0; font-size: 13px; color: var(--color-primary); }
+.dp-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-input.is-empty .dp-value { color: var(--color-placeholder); }
+.dp-input[aria-expanded="true"] { border-color: var(--color-primary); box-shadow: var(--ring-focus); }
+.dp-pop { position: fixed; z-index: 2500; width: 300px; max-width: calc(100vw - 16px); padding: 12px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface); box-shadow: var(--shadow-overlay); animation: dp-in 120ms ease-out; }
+@keyframes dp-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.dp-pop.is-up { animation-name: dp-in-up; }
+@keyframes dp-in-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.dp-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+.dp-month { font: 700 14px/1.2 var(--font-headline); color: var(--color-text); text-transform: capitalize; }
+.dp-nav { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--color-border); border-radius: 50%; background: var(--color-surface); color: var(--color-text-muted); font-size: 12px; cursor: pointer; }
+.dp-nav:hover { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-tint); }
+.dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dp-wd { padding: 4px 0; font: 600 10.5px/1 var(--font-body); color: var(--color-text-subtle); text-align: center; text-transform: capitalize; }
+.dp-day { height: 36px; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--color-text); font: 500 13px var(--font-body); cursor: pointer; transition: background 120ms ease; }
+.dp-day:hover:not(:disabled) { background: var(--color-tint); color: var(--color-primary); }
+.dp-day.is-today { box-shadow: inset 0 0 0 1px var(--color-tertiary); color: var(--color-primary); font-weight: 700; }
+.dp-day.is-sel { background: var(--color-primary); color: #fff; font-weight: 700; box-shadow: none; }
+.dp-day:disabled { color: var(--color-border-input); cursor: not-allowed; }
+.dp-day:focus-visible, .dp-nav:focus-visible, .dp-link:focus-visible, .dp-done:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.dp-time { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); color: var(--color-text-muted); font-size: 12.5px; }
+.dp-pop > .dp-time:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.dp-time > svg { font-size: 12px; color: var(--color-primary); }
+.dp-time-label { margin-right: auto; font-weight: 600; }
+.dp-sel { height: 34px; padding: 0 8px; border: 1px solid var(--color-border-input); border-radius: 8px; background: var(--color-surface); color: var(--color-text); font: 600 13px var(--font-mono); cursor: pointer; }
+.dp-colon { font-weight: 700; color: var(--color-text-muted); }
+.dp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+.dp-foot-right { display: inline-flex; align-items: center; gap: 10px; }
+.dp-link { padding: 0; border: 0; background: none; color: var(--color-primary); font: 600 12.5px var(--font-body); cursor: pointer; }
+.dp-link.is-muted { color: var(--color-text-subtle); }
+.dp-link:hover { text-decoration: underline; }
+.dp-done { height: 30px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--color-primary); color: #fff; font: 600 12.5px var(--font-body); cursor: pointer; }
+.dp-done:hover { background: var(--color-primary-hover); }
+.dp-input[data-invalid] { border-color: var(--color-error); box-shadow: var(--ring-error); }

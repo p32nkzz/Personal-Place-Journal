@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
+import { DateField } from "~/components/DateField";
 import { ItineraryForm } from "~/components/ItineraryForm";
 import { MapView, type MapLine, type MapMarker } from "~/components/map/MapView";
 import {
@@ -355,10 +356,10 @@ function StopModal({
         )}
         <div className="form-grid cols-2">
           <Field label={t("itinerary.plannedDate")} htmlFor="stop-d">
-            <input id="stop-d" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateField id="stop-d" value={date} onChange={setDate} clearable />
           </Field>
           <Field label={t("itinerary.plannedTime")} htmlFor="stop-t">
-            <input id="stop-t" className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            <DateField id="stop-t" mode="time" value={time} onChange={setTime} clearable />
           </Field>
         </div>
         <Field label={t("itinerary.planNote")} htmlFor="stop-n" helper={t("itinerary.planNoteHint")}>

@@ -7,6 +7,17 @@ export type MessageKey = string;
 
 const id: Record<string, string> = {
   /* common */
+  "date.pick": "Pilih tanggal",
+  "date.pickTime": "Pilih waktu",
+  "date.today": "Hari ini",
+  "date.now": "Sekarang",
+  "date.clear": "Kosongkan",
+  "date.done": "Selesai",
+  "date.prevMonth": "Bulan sebelumnya",
+  "date.nextMonth": "Bulan berikutnya",
+  "date.time": "Jam",
+  "date.hour": "Jam",
+  "date.minute": "Menit",
   "common.retry": "Coba lagi",
   "common.actions": "Aksi",
   "common.active": "Aktif",
@@ -740,6 +751,17 @@ const id: Record<string, string> = {
 
 const en: Record<string, string> = {
   /* common */
+  "date.pick": "Pick a date",
+  "date.pickTime": "Pick a time",
+  "date.today": "Today",
+  "date.now": "Now",
+  "date.clear": "Clear",
+  "date.done": "Done",
+  "date.prevMonth": "Previous month",
+  "date.nextMonth": "Next month",
+  "date.time": "Time",
+  "date.hour": "Hour",
+  "date.minute": "Minute",
   "common.retry": "Try again",
   "common.actions": "Actions",
   "common.active": "Active",
