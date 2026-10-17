@@ -43,7 +43,20 @@ export default function CurationDetailPage() {
   };
 
   if (isLoading) return <Spinner />;
-  if (!p) return <EmptyState title={t("place.notFound")} action={<Link href="/admin/curation" className="btn btn-primary">{t("nav.curation")}</Link>} />;
+  if (!p)
+    return (
+      <div className="container page">
+        <EmptyState
+          title={t("common.notFound")}
+          text={t("curation.notFoundHint")}
+          action={
+            <Link href="/admin/curation" className="btn btn-primary">
+              <Icon name="arrow-left" /> {t("nav.curation")}
+            </Link>
+          }
+        />
+      </div>
+    );
 
   const referred = p.masterRelationStatus === "REFERRED";
 
