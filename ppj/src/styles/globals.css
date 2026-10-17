@@ -1763,3 +1763,6 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
 .dp-done { height: 30px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--color-primary); color: #fff; font: 600 12.5px var(--font-body); cursor: pointer; }
 .dp-done:hover { background: var(--color-primary-hover); }
 .dp-input[data-invalid] { border-color: var(--color-error); box-shadow: var(--ring-error); }
+
+/* Pop-up peta: tombol ubah/hapus kunjungan ringkas */
+.pp-visit-actions .pp-icon-btn { width: 26px; height: 26px; font-size: 11px; }

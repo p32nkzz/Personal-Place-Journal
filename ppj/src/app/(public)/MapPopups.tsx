@@ -8,9 +8,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ActiveChip, CategoryChips, MasterStatusChip, RelationChip, TagList, VisitContextChip, VisitStatusChip } from "~/components/chips";
 import { Icon } from "~/components/Icon";
 import { googlePhotosFor, nearestPlacePhotos, reverseGeocode, type GooglePhoto, type GooglePlaceResult } from "~/components/map/MapView";
-import { Alert, Spinner, StatusChip, Stars } from "~/components/ui";
+import { Alert, ConfirmDialog, Spinner, StatusChip, Stars, useErrorMessage, useToast } from "~/components/ui";
 import { Coords, DescQuote, InfoRow, ThumbStrip } from "~/components/PlaceInfo";
-import { VisitFormModal } from "~/components/VisitFormModal";
+import { VisitFormModal, type VisitInit } from "~/components/VisitFormModal";
 import { useFormat, useT } from "~/lib/i18n";
 import { useMapColors } from "~/components/map/useMapColors";
 import { api } from "~/trpc/react";
@@ -280,12 +280,34 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
   const utils = api.useUtils();
   const colors = useMapColors();
   const { data: p, isLoading, error: loadError } = api.place.get.useQuery({ uid }, { retry: false });
-  const [visitOpen, setVisitOpen] = useState(false);
+  // Catat baru ({}) atau ubah ({ visit }) kunjungan dari pop-up.
+  const [visitModal, setVisitModal] = useState<null | { visit?: VisitInit }>(null);
+  const [delVisit, setDelVisit] = useState<string | null>(null);
+  const toast = useToast();
+  const errMsg = useErrorMessage();
   const [tab, setTab] = useState<"visits" | "history">("visits");
   // Kunjungan dipaging di server; ukuran halaman dari Pengaturan (visit.page_size), sama dengan halaman detail.
   const [visitPage, setVisitPage] = useState(1);
   const vq = api.place.visits.useQuery({ uid, page: visitPage }, { placeholderData: (prev) => prev });
   const visitTotal = vq.data?.total ?? p?.visits.length ?? 0;
+  const refreshVisits = () => {
+    void utils.place.get.invalidate({ uid });
+    void utils.place.visits.invalidate({ uid });
+    void utils.place.list.invalidate();
+  };
+  const delVisitMut = api.visit.delete.useMutation({
+    onSuccess: () => {
+      // Halaman terakhir menjadi kosong setelah hapus: mundur satu halaman.
+      if (vq.data && vq.data.rows.length === 1 && visitPage > 1) setVisitPage(visitPage - 1);
+      refreshVisits();
+      setDelVisit(null);
+      toast.push(t("common.deleted"), "success");
+    },
+    onError: (e) => {
+      setDelVisit(null);
+      toast.push(errMsg(e), "error");
+    },
+  });
 
   return (
     <div className="pp">
@@ -368,10 +390,20 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
                 <ul className="pp-visits pp-timeline">
                   {(vq.data?.rows ?? []).map((v, i) => (
                     <li key={v.uid} className={`pp-tl-${v.context.toLowerCase()}${i === 0 && (vq.data?.page ?? 1) === 1 ? " is-latest" : ""}`}>
-                      <div className="pp-visit-top">
-                        <b>{fmt.dateTime(v.visitedAt)}</b>
-                        <Stars value={v.rating} />
-                        {v.context !== "STANDALONE" && <VisitContextChip context={v.context} />}
+                      <div className="pd-visit-top">
+                        <div className="pp-visit-top">
+                          <b>{fmt.dateTime(v.visitedAt)}</b>
+                          <Stars value={v.rating} />
+                          {v.context !== "STANDALONE" && <VisitContextChip context={v.context} />}
+                        </div>
+                        <span className="pd-visit-actions pp-visit-actions">
+                          <button type="button" className="pp-icon-btn" title={t("common.edit")} aria-label={t("common.edit")} onClick={() => setVisitModal({ visit: { uid: v.uid, visitedAt: v.visitedAt, rating: v.rating, note: v.note } })}>
+                            <Icon name="pen" fixedWidth={false} />
+                          </button>
+                          <button type="button" className="pp-icon-btn is-danger" title={t("common.delete")} aria-label={t("common.delete")} onClick={() => setDelVisit(v.uid)}>
+                            <Icon name="trash" fixedWidth={false} />
+                          </button>
+                        </span>
                       </div>
                       {v.note && <div className="pp-note">{v.note}</div>}
                       <ThumbStrip photos={v.photos} />
@@ -396,7 +428,7 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
 
           <div className="pp-actions">
             {p.isActive && (
-              <button className="btn btn-primary btn-sm" onClick={() => setVisitOpen(true)}>
+              <button className="btn btn-primary btn-sm" onClick={() => setVisitModal({})}>
                 <Icon name="plus" /> {t("visit.add")}
               </button>
             )}
@@ -405,15 +437,26 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
             </Link>
           </div>
 
-          {visitOpen && (
+          {visitModal && (
             <VisitFormModal
               placeUid={p.uid}
-              onClose={() => setVisitOpen(false)}
-              onSaved={() => {
-                void utils.place.get.invalidate({ uid });
-                void utils.place.visits.invalidate({ uid });
-                void utils.place.list.invalidate();
-              }}
+              visit={visitModal.visit}
+              // Foto diambil dari data terbaru agar unggah/hapus langsung terlihat di dialog.
+              photos={visitModal.visit ? (vq.data?.rows.find((r) => r.uid === visitModal.visit!.uid)?.photos ?? []) : undefined}
+              onPhotosChanged={refreshVisits}
+              onClose={() => setVisitModal(null)}
+              onSaved={refreshVisits}
+            />
+          )}
+          {delVisit && (
+            <ConfirmDialog
+              title={t("visit.deleteTitle")}
+              message={<p style={{ margin: 0 }}>{t("visit.deleteText")}</p>}
+              danger
+              confirmLabel={t("common.delete")}
+              busy={delVisitMut.isPending}
+              onClose={() => setDelVisit(null)}
+              onConfirm={() => delVisitMut.mutate({ uid: delVisit })}
             />
           )}
         </>

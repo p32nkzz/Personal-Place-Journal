@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { DateField } from "~/components/DateField";
 import { PendingPhotoPicker } from "~/components/PendingPhotoPicker";
-import { uploadPhotos } from "~/components/PhotoGallery";
+import { PhotoGallery, uploadPhotos, type GalleryPhoto } from "~/components/PhotoGallery";
 import { Alert, Field, Modal, StarInput, useErrorMessage, useToast } from "~/components/ui";
 import { useT, useZonedInput } from "~/lib/i18n";
 import { api } from "~/trpc/react";
@@ -23,6 +23,8 @@ export function VisitFormModal({
   visit,
   itineraryUid,
   itineraryPlaceUid,
+  photos,
+  onPhotosChanged,
   onClose,
   onSaved,
 }: {
@@ -30,6 +32,9 @@ export function VisitFormModal({
   visit?: VisitInit;
   itineraryUid?: string;
   itineraryPlaceUid?: string;
+  /** Saat mengubah: foto kunjungan terkini (dikelola langsung, tersimpan seketika). */
+  photos?: GalleryPhoto[];
+  onPhotosChanged?: () => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -46,6 +51,8 @@ export function VisitFormModal({
   const [captions, setCaptions] = useState<Map<File | string, string>>(new Map());
   const maxPerVisit = api.settings.photoRules.useQuery().data?.maxPerVisit;
   const addUrl = api.visit.addExternalPhoto.useMutation();
+  const delPhoto = api.visit.deletePhoto.useMutation();
+  const capPhoto = api.visit.updatePhotoCaption.useMutation();
 
   const ok = async (uid: string) => {
     if (files.length) {
@@ -125,6 +132,26 @@ export function VisitFormModal({
         <Field label={t("visit.note")} htmlFor="v-note" helper={t("common.max2000")}>
           <textarea id="v-note" className="textarea" maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
+        {visit && photos && (
+          <div className="field">
+            <span className="label">{t("visit.photos")}</span>
+            <PhotoGallery
+              fancy
+              kind="visit"
+              photos={photos}
+              canEdit
+              camera
+              uploadEndpoint="/api/upload/visit-photo"
+              parentField="visitUid"
+              parentUid={visit.uid}
+              max={maxPerVisit}
+              onChanged={() => onPhotosChanged?.()}
+              onDelete={(photoUid) => delPhoto.mutateAsync({ photoUid })}
+              onCaption={(photoUid, caption) => capPhoto.mutateAsync({ photoUid, caption })}
+              onAddUrl={(url, caption) => addUrl.mutateAsync({ visitUid: visit.uid, url, caption })}
+            />
+          </div>
+        )}
         {!visit && (
           <div className="field">
             <span className="label">{t("visit.photos")}</span>

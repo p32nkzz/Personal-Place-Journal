@@ -101,6 +101,9 @@ export function useToast() {
 
 /* ------------------------------ Modal --------------------------------- */
 
+/** Urutan modal yang sedang terbuka; Escape hanya menutup yang paling atas. */
+const modalStack: string[] = [];
+
 export function Modal({
   title,
   children,
@@ -116,10 +119,22 @@ export function Modal({
 }) {
   const titleId = useId();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    modalStack.push(titleId);
+    return () => {
+      const i = modalStack.lastIndexOf(titleId);
+      if (i >= 0) modalStack.splice(i, 1);
+    };
+  }, [titleId]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || modalStack[modalStack.length - 1] !== titleId) return;
+      // Pratinjau foto (Fancybox) di atas modal menangani Escape-nya sendiri.
+      if (document.querySelector(".fancybox__container")) return;
+      onClose();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, titleId]);
   const body = (
     <div
       className="modal-backdrop"
