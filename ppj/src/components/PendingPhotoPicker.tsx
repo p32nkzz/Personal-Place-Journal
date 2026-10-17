@@ -31,6 +31,7 @@ export function PendingPhotoPicker({
   captions,
   onCaptions,
   max: maxProp,
+  cameraTitle,
 }: {
   files: File[];
   urls: string[];
@@ -41,6 +42,8 @@ export function PendingPhotoPicker({
   onCaptions?: (c: Map<File | string, string>) => void;
   /** Batas jumlah foto; bawaan: aturan foto pantauan MY PLACE. */
   max?: number;
+  /** Judul dialog kamera (bawaan: "Ambil foto pantauan"). */
+  cameraTitle?: string;
 }) {
   const { t } = useT();
   const rules = api.settings.photoRules.useQuery();
@@ -184,6 +187,7 @@ export function PendingPhotoPicker({
       />
       {camOpen && (
         <CameraCapture
+          title={cameraTitle}
           items={camItems}
           max={max}
           // Pakai nilai terbaru (ref): beberapa jepretan dapat ditambahkan selama kamera terbuka.

@@ -35,6 +35,7 @@ export function CameraCapture({
   onDelete,
   onCaption,
   onClose,
+  title,
 }: {
   /** Foto yang sudah ada (urutan tampil). */
   items: CamItem[];
@@ -44,6 +45,8 @@ export function CameraCapture({
   onDelete?: (key: string) => Promise<unknown> | void;
   onCaption?: (key: string, caption: string) => Promise<unknown> | void;
   onClose: () => void;
+  /** Judul dialog (bawaan: "Ambil foto pantauan"). */
+  title?: string;
 }) {
   const { t } = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -284,7 +287,7 @@ export function CameraCapture({
   );
 
   const ui = (
-    <div className="cam" role="dialog" aria-modal="true" aria-label={t("photo.cameraTitle")}>
+    <div className="cam" role="dialog" aria-modal="true" aria-label={(title ?? t("photo.cameraTitle"))}>
       <div className="cam-stage">
         <video
           ref={videoRef}
@@ -352,7 +355,7 @@ export function CameraCapture({
             </>
           ) : (
             <>
-              <Icon name="camera" fixedWidth={false} /> {t("photo.cameraTitle")}
+              <Icon name="camera" fixedWidth={false} /> {(title ?? t("photo.cameraTitle"))}
               {total > 0 && <span className="cam-count">{max != null ? `${total}/${max}` : total}</span>}
             </>
           )}

@@ -141,6 +141,7 @@ export function VisitFormModal({
               photos={photos}
               canEdit
               camera
+              cameraTitle={t("visit.cameraTitle")}
               uploadEndpoint="/api/upload/visit-photo"
               parentField="visitUid"
               parentUid={visit.uid}
@@ -163,6 +164,7 @@ export function VisitFormModal({
               captions={captions}
               onCaptions={setCaptions}
               max={maxPerVisit}
+              cameraTitle={t("visit.cameraTitle")}
             />
           </div>
         )}

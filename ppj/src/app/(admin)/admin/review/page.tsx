@@ -114,6 +114,7 @@ function ApproveNewModal({ item, onClose }: { item: QueueItem; onClose: () => vo
             googlePlaceId: draft.data.googlePlaceId,
             categoryUids: draft.data.categoryUids,
           }}
+          followMap={{ name: false, address: false }}
           busy={approve.isPending}
           error={error}
           submitLabel={t("review.approveNewSubmit")}

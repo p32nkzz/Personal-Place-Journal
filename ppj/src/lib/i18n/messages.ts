@@ -41,6 +41,12 @@ const id: Record<string, string> = {
   "place.followMapHint": "Aktif: nama & alamat mengikuti hasil pencarian atau pin peta. Latitude & longitude selalu mengikuti pin.",
   "place.resolving": "Mencari alamat…",
   "place.requiredNote": "Wajib diisi: nama & titik lokasi.",
+  "master.cameraTitle": "Ambil foto MASTER",
+  "master.pickGoogle": "Jadikan foto MASTER",
+  "master.formPhotos": "Foto MASTER",
+  "master.googlePhotoPickHint": "Foto MASTER dapat dipilih dari foto Google Maps di bawah ini.",
+  "master.photoUploadFailedAfterSave": "MASTER tersimpan, tetapi unggah foto gagal.",
+  "master.photoUrlFailedAfterSave": "MASTER tersimpan, tetapi {n} link foto gagal ditambahkan.",
   "master.requiredNote": "Wajib diisi: nama, alamat & titik lokasi.",
   "common.optional": "Opsional",
   "settings.groupCategory": "Daftar kategori",
@@ -376,6 +382,7 @@ const id: Record<string, string> = {
   "history.UNREFERRED": "Referensi dilepas",
 
   /* visit & photo */
+  "visit.cameraTitle": "Ambil foto kunjungan",
   "visit.add": "Catat kunjungan",
   "visit.addUnexpected": "Kunjungan tak terduga",
   "visit.deleteText": "VISIT beserta fotonya akan dihapus permanen.",
@@ -795,6 +802,12 @@ const en: Record<string, string> = {
   "place.followMapHint": "On: name & address follow search results or the map pin. Latitude & longitude always follow the pin.",
   "place.resolving": "Looking up address…",
   "place.requiredNote": "Required: name & location pin.",
+  "master.cameraTitle": "Take a MASTER photo",
+  "master.pickGoogle": "Use as MASTER photo",
+  "master.formPhotos": "MASTER photos",
+  "master.googlePhotoPickHint": "You can pick MASTER photos from the Google Maps photos below.",
+  "master.photoUploadFailedAfterSave": "MASTER saved, but photo upload failed.",
+  "master.photoUrlFailedAfterSave": "MASTER saved, but {n} photo links could not be added.",
   "master.requiredNote": "Required: name, address & location pin.",
   "common.optional": "Optional",
   "settings.groupCategory": "Category lists",
@@ -1130,6 +1143,7 @@ const en: Record<string, string> = {
   "history.UNREFERRED": "Reference removed",
 
   /* visit & photo */
+  "visit.cameraTitle": "Take a visit photo",
   "visit.add": "Log a visit",
   "visit.addUnexpected": "Unexpected visit",
   "visit.deleteText": "The VISIT and its photos will be permanently deleted.",

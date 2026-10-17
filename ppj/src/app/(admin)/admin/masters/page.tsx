@@ -86,7 +86,7 @@ function Masters() {
             {/* Tombol tambah data sebaris dengan pencarian (tata letak sama dengan halaman Pengguna) */}
             <div className="fl-btns">
               <Link href="/" className="btn btn-map"><Icon name="map-pin" /> {t("master.addFromMap")}</Link>
-              <Link href="/admin/masters/new" className="btn btn-primary"><Icon name="plus" /> {t("master.new")}</Link>
+              <Link href="/admin/masters/new?from=list" className="btn btn-primary"><Icon name="plus" /> {t("master.new")}</Link>
             </div>
           </div>
           {/* Baris 2: filter ringkas */}

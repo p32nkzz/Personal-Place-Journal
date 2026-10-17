@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { ActiveChip, CategoryChips, MasterStatusChip } from "~/components/chips";
@@ -27,6 +27,8 @@ type Tab = "data" | "photos" | "refs";
 
 export default function MasterEditPage() {
   const { uid } = useParams<{ uid: string }>();
+  // Dibuka dari pop-up Peta (?from=map): tautan kembali & tujuan setelah hapus mengarah ke Peta.
+  const fromMap = useSearchParams().get("from") === "map";
   const { t } = useT();
   const router = useRouter();
   const toast = useToast();
@@ -51,7 +53,7 @@ export default function MasterEditPage() {
 
   const update = api.master.update.useMutation({ onSuccess: () => { refresh(); toast.push(t("common.saved"), "success"); }, onError });
   const setActive = api.master.setActive.useMutation({ onSuccess: () => { refresh(); setConfirm(null); toast.push(t("common.saved"), "success"); }, onError });
-  const softDelete = api.master.softDelete.useMutation({ onSuccess: (r) => { toast.push(t("master.deleted", { n: r.unreferred }), "success"); router.push("/admin/masters"); }, onError });
+  const softDelete = api.master.softDelete.useMutation({ onSuccess: (r) => { toast.push(t("master.deleted", { n: r.unreferred }), "success"); router.push(fromMap ? "/" : "/admin/masters"); }, onError });
   const setPrimary = api.master.setPrimaryPhoto.useMutation();
   const delPhoto = api.master.deletePhoto.useMutation();
   const capPhoto = api.master.updatePhotoCaption.useMutation();
@@ -88,8 +90,11 @@ export default function MasterEditPage() {
     <div className="container page pd">
       {/* ---------- Kepala: sampul + identitas + aksi (sama dengan detail MY PLACE) ---------- */}
       <section className="pd-hero card">
-        <Link href="/admin/masters" className="pd-back">
-          <Icon name="arrow-left" fixedWidth={false} /> {t("nav.masters")}
+        <Link
+          href={fromMap ? `/?${new URLSearchParams({ master: uid, lat: String(m.latitude), lng: String(m.longitude) })}` : "/admin/masters"}
+          className="pd-back"
+        >
+          <Icon name="arrow-left" fixedWidth={false} /> {fromMap ? t("nav.map") : t("nav.masters")}
         </Link>
         <div className="pd-hero-body">
           <div className="pd-cover">
@@ -158,6 +163,7 @@ export default function MasterEditPage() {
         ) : (
           <MasterForm
             initial={initial}
+            followMap={{ name: false, address: true }}
             busy={update.isPending}
             error={error}
             submitLabel={t("common.save")}
@@ -181,9 +187,13 @@ export default function MasterEditPage() {
             )}
           </div>
           {error && <Alert kind="error">{error}</Alert>}
+          {/* Skema sama dengan foto pantauan MY PLACE: pratinjau Fancybox, bar Unggah · Kamera · Link, validasi format/ukuran. */}
           <PhotoGallery
+            fancy
             photos={m.photos.map((p) => ({ uid: p.uid, url: p.url, caption: p.caption, isPrimary: p.isPrimary, badge: p.originType === "VISIT" ? t("master.photoVisitOrigin") : p.originType === "MY_PLACE" ? t("master.photoMyPlaceOrigin") : undefined }))}
             canEdit={!deleted}
+            camera={!deleted}
+            cameraTitle={t("master.cameraTitle")}
             uploadEndpoint="/api/upload/master-photo"
             parentField="masterUid"
             parentUid={uid}

@@ -18,6 +18,8 @@ export function GooglePhotoPreview({
   fallbackName,
   onPick,
   picked = [],
+  pickHint,
+  pickLabel,
 }: {
   placeId: string | null;
   lat: number;
@@ -26,6 +28,10 @@ export function GooglePhotoPreview({
   /** Bila diisi, tiap foto punya tombol untuk memilihnya sebagai foto pantauan. */
   onPick?: (url: string) => void;
   picked?: string[];
+  /** Teks petunjuk di atas foto saat dapat dipilih (bawaan: untuk foto pantauan MY PLACE). */
+  pickHint?: string;
+  /** Label aksi pilih di pratinjau (bawaan: "Jadikan foto pantauan"). */
+  pickLabel?: string;
 }) {
   const { t } = useT();
   const [state, setState] = useState<"loading" | "done">("loading");
@@ -62,7 +68,7 @@ export function GooglePhotoPreview({
       {/* Hanya saat pemilihan foto pantauan dimungkinkan (form) dan fotonya tersedia. */}
       {onPick && (
         <p className="gp-hint">
-          <Icon name="circle-info" fixedWidth={false} /> {t("place.googlePhotoPickHint")}
+          <Icon name="circle-info" fixedWidth={false} /> {pickHint ?? t("place.googlePhotoPickHint")}
         </p>
       )}
       <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}>
@@ -80,7 +86,7 @@ export function GooglePhotoPreview({
                   i,
                   onPick
                     ? {
-                        label: t("photo.pickGoogle"),
+                        label: pickLabel ?? t("photo.pickGoogle"),
                         doneLabel: t("photo.picked"),
                         isDone: (item) => pickedNow.current.has(item.src) || pickedProp.current.includes(item.src),
                         onAction: (item) => {
@@ -102,7 +108,7 @@ export function GooglePhotoPreview({
                 className="chip"
                 aria-pressed={picked.includes(ph.url)}
                 disabled={picked.includes(ph.url)}
-                title={t("photo.pickGoogle")}
+                title={pickLabel ?? t("photo.pickGoogle")}
                 onClick={() => onPick(ph.url)}
                 style={{ position: "absolute", right: 4, bottom: 4, minHeight: 24, padding: "0 8px", fontSize: 11 }}
               >

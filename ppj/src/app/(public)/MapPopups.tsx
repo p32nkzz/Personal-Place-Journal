@@ -241,7 +241,7 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
                 <Icon name="plus" /> {t("map.saveAsMine")}
               </Link>
             )}
-            <Link className="btn btn-secondary btn-sm" href={viewer === "ADMIN" ? `/admin/masters/${m.uid}` : `/masters/${m.uid}`}>
+            <Link className="btn btn-secondary btn-sm" href={viewer === "ADMIN" ? `/admin/masters/${m.uid}?from=map` : `/masters/${m.uid}`}>
               <Icon name="circle-info" /> {t("map.viewDetail")}
             </Link>
           </div>
@@ -599,7 +599,7 @@ export function PinPopup({
           </Link>
         )}
         {viewer === "ADMIN" && (
-          <Link className="btn btn-primary btn-sm" href={`/admin/masters/new?${params}`}>
+          <Link className="btn btn-primary btn-sm" href={`/admin/masters/new?${params}&from=map`}>
             <Icon name="plus" /> {t("map.createMaster")}
           </Link>
         )}

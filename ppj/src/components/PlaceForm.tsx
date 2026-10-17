@@ -447,7 +447,7 @@ export function PlaceForm({
 }
 
 /** Switch mini "Ikuti peta" di samping label field: saat ON, nilai field mengikuti pencarian / pin peta. */
-function FollowSwitch({ on, onToggle, hint, field }: { on: boolean; onToggle: () => void; hint: string; field: string }) {
+export function FollowSwitch({ on, onToggle, hint, field }: { on: boolean; onToggle: () => void; hint: string; field: string }) {
   const { t } = useT();
   return (
     <button

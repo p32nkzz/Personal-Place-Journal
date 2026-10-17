@@ -48,6 +48,7 @@ export function PhotoGallery({
   photos,
   canEdit,
   camera = false,
+  cameraTitle,
   uploadEndpoint,
   parentField,
   parentUid,
@@ -65,6 +66,8 @@ export function PhotoGallery({
   canEdit: boolean;
   /** Tampilkan tombol "Kamera" (ambil foto langsung dari kamera perangkat; diunggah per jepretan). */
   camera?: boolean;
+  /** Judul dialog kamera (bawaan: "Ambil foto pantauan"). */
+  cameraTitle?: string;
   uploadEndpoint?: string;
   parentField?: "visitUid" | "masterUid" | "placeUid";
   parentUid?: string;
@@ -247,6 +250,7 @@ export function PhotoGallery({
           />
           {camOpen && uploadEndpoint && parentField && parentUid && (
             <CameraCapture
+              title={cameraTitle}
               items={photos.map((p) => ({ key: p.uid, src: p.url, caption: p.caption }))}
               max={limit}
               onCapture={async (f) => {

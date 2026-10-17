@@ -24,6 +24,7 @@ export function HomeMap({
   initialFreePin = false,
   initialPin = null,
   initialMy = null,
+  initialMaster = null,
   initialNearby = false,
 }: {
   viewer: Viewer;
@@ -35,6 +36,8 @@ export function HomeMap({
   initialPin?: { lat: number; lng: number } | null;
   /** MY PLACE yang langsung dibuka pop-up-nya (kembali dari form ubah). */
   initialMy?: { uid: string; lat: number; lng: number } | null;
+  /** MASTER yang langsung dibuka pop-up-nya (setelah dibuat dari Peta). */
+  initialMaster?: { uid: string; lat: number; lng: number } | null;
 }) {
   const { t } = useT();
   const explorer = viewer === "EXPLORER";
@@ -101,7 +104,13 @@ export function HomeMap({
     </button>
   );
   const [sel, setSel] = useState<Selection | null>(
-    initialMy ? { kind: "my", uid: initialMy.uid } : initialPin ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng } : null,
+    initialMy
+      ? { kind: "my", uid: initialMy.uid }
+      : initialMaster
+        ? { kind: "master", uid: initialMaster.uid }
+        : initialPin
+          ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng }
+          : null,
   );
   const popupRef = useRef<HTMLDivElement>(null);
   const selKey = sel ? (sel.kind === "pin" ? "pin" : `${sel.kind}:${sel.uid}`) : "";
@@ -109,7 +118,13 @@ export function HomeMap({
     popupRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [selKey]);
   const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(
-    initialMy ? { lat: initialMy.lat, lng: initialMy.lng } : initialPin ? { ...initialPin } : null,
+    initialMy
+      ? { lat: initialMy.lat, lng: initialMy.lng }
+      : initialMaster
+        ? { lat: initialMaster.lat, lng: initialMaster.lng }
+        : initialPin
+          ? { ...initialPin }
+          : null,
   );
 
   const cats = api.categories.listActive.useQuery();
