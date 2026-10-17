@@ -102,6 +102,48 @@ function Lines({ lines }: { lines: MapLine[] }) {
   return null;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Animasi kamera halus ke `target` dengan zoom akhir `zoom`:
+ * - dekat: pan beranimasi (bawaan Google) lalu zoom naik/turun bertahap;
+ * - jauh (di luar layar): zoom-out bertahap sampai tujuan terlihat, pan, lalu zoom-in bertahap.
+ * Dibatalkan bila `cancelled()` (pin lain dipilih di tengah animasi).
+ */
+async function flyTo(map: google.maps.Map, target: google.maps.LatLngLiteral, zoom: number, cancelled: () => boolean) {
+  if (reducedMotion()) {
+    map.setCenter(target);
+    map.setZoom(zoom);
+    return;
+  }
+  const STEP = 110;
+  const idleOr = (ms: number) =>
+    Promise.race([new Promise<void>((r) => google.maps.event.addListenerOnce(map, "idle", () => r())), sleep(ms)]);
+  const visible = () => {
+    const b = map.getBounds();
+    return !!b && b.contains(target);
+  };
+  let z = map.getZoom() ?? zoom;
+  // Tujuan di luar layar: mundur (zoom-out) dulu agar pan tidak "melompat".
+  while (!visible() && z > 3) {
+    if (cancelled()) return;
+    z -= 1;
+    map.setZoom(z);
+    await sleep(STEP);
+  }
+  if (cancelled()) return;
+  map.panTo(target);
+  await idleOr(700);
+  while (z !== zoom) {
+    if (cancelled()) return;
+    z += z < zoom ? 1 : -1;
+    map.setZoom(z);
+    await sleep(STEP);
+  }
+  if (!cancelled()) map.panTo(target);
+}
+
 function Controller({
   markers,
   focus,
@@ -122,10 +164,12 @@ function Controller({
   const zoomRef = useRef(defaultZoom);
   zoomRef.current = defaultZoom;
 
+  // Fokus ke tempat/pin: kamera "terbang" halus (pan beranimasi + zoom bertahap) agar perpindahan antar pin nyaman diikuti.
+  const flight = useRef(0);
   useEffect(() => {
     if (!map || !focus) return;
-    map.panTo({ lat: focus.lat, lng: focus.lng });
-    map.setZoom(focus.zoom ?? zoomRef.current);
+    const id = ++flight.current;
+    void flyTo(map, { lat: focus.lat, lng: focus.lng }, focus.zoom ?? zoomRef.current, () => id !== flight.current);
   }, [map, focus, defaultZoom]);
 
   useEffect(() => {
@@ -247,6 +291,9 @@ export function MapView({
             zIndex={m.selected ? 100000 : (m.z ?? 1)}
             onClick={() => onMarkerClick?.(m.id)}
             draggable={!!m.draggable}
+            // Ukuran aktif lewat transform pada kontainer marker agar membesar/mengecil halus (ujung pin tetap di titiknya).
+            className="map-pin"
+            style={{ transform: `scale(${m.selected ? pinScaleActive / pinScale : 1})` }}
             onDragEnd={(e) => {
               const ll = e.latLng;
               if (ll) onMarkerDragEnd?.(m.id, ll.lat(), ll.lng());
@@ -257,7 +304,7 @@ export function MapView({
               borderColor="#ffffff"
               glyphColor={m.glyphColor ?? readableOn(m.color)}
               glyph={m.glyph}
-              scale={m.selected ? pinScaleActive : pinScale}
+              scale={pinScale}
             />
           </AdvancedMarker>
         ))}

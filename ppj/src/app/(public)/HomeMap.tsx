@@ -103,6 +103,11 @@ export function HomeMap({
   const [sel, setSel] = useState<Selection | null>(
     initialMy ? { kind: "my", uid: initialMy.uid } : initialPin ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng } : null,
   );
+  const popupRef = useRef<HTMLDivElement>(null);
+  const selKey = sel ? (sel.kind === "pin" ? "pin" : `${sel.kind}:${sel.uid}`) : "";
+  useEffect(() => {
+    popupRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [selKey]);
   const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(
     initialMy ? { lat: initialMy.lat, lng: initialMy.lng } : initialPin ? { ...initialPin } : null,
   );
@@ -402,10 +407,13 @@ export function HomeMap({
 
       {/* Popup detail + aksi */}
       {sel && (
-        <div className="map-float map-popup">
-          {sel.kind === "master" && <MasterPopup uid={sel.uid} viewer={viewer} onClose={() => setSel(null)} />}
-          {sel.kind === "my" && <MyPlacePopup uid={sel.uid} onClose={() => setSel(null)} />}
-          {sel.kind === "pin" && <PinPopup sel={sel} viewer={viewer} onClose={() => setSel(null)} />}
+        <div className="map-float map-popup" ref={popupRef}>
+          {/* Ganti isi dengan animasi halus saat berpindah antar pin (kunci = tempat yang dipilih). */}
+          <div key={sel.kind === "pin" ? "pin" : `${sel.kind}:${sel.uid}`} className="pp-swap">
+            {sel.kind === "master" && <MasterPopup uid={sel.uid} viewer={viewer} onClose={() => setSel(null)} />}
+            {sel.kind === "my" && <MyPlacePopup uid={sel.uid} onClose={() => setSel(null)} />}
+            {sel.kind === "pin" && <PinPopup sel={sel} viewer={viewer} onClose={() => setSel(null)} />}
+          </div>
         </div>
       )}
 
