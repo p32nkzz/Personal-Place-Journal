@@ -178,8 +178,10 @@ function Controller({
     if (fitted.current === sig) return;
     fitted.current = sig;
     if (markers.length === 1) {
-      map.setCenter({ lat: markers[0]!.lat, lng: markers[0]!.lng });
-      map.setZoom(zoomRef.current);
+      // Satu titik (form & detail): pusatkan pada titik. Zoom hanya dinaikkan ke zoom bawaan Pengaturan bila
+      // zoom saat ini lebih kecil; bila user sudah memperbesar (mis. saat menggeser pin), zoom-nya dipertahankan.
+      map.panTo({ lat: markers[0]!.lat, lng: markers[0]!.lng });
+      if ((map.getZoom() ?? 0) < zoomRef.current) map.setZoom(zoomRef.current);
       return;
     }
     const b = new google.maps.LatLngBounds();
