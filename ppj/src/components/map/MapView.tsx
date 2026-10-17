@@ -190,6 +190,7 @@ export function MapView({
   streetView?: boolean;
 }) {
   const { t } = useT();
+  const { pinScale, pinScaleActive } = useMapSearchConfig();
   const satellite = useSatellite();
   const toggleSatellite = () => setSatellite(!satellite);
   if (!KEY) {
@@ -256,7 +257,7 @@ export function MapView({
               borderColor="#ffffff"
               glyphColor={m.glyphColor ?? readableOn(m.color)}
               glyph={m.glyph}
-              scale={m.selected ? 1.4 : 1}
+              scale={m.selected ? pinScaleActive : pinScale}
             />
           </AdvancedMarker>
         ))}

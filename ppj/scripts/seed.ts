@@ -97,6 +97,8 @@ const settings: [string, string, string][] = [
   ["tag.page_size", "4", "Jumlah TAG per muat pada filter & pemilih TAG"],
   ["app.timezone", "Asia/Jakarta", "Zona waktu default aplikasi (IANA)"],
   ["map.default_zoom", "15", "Zoom bawaan peta (1-20) saat memfokuskan tempat, pin, atau lokasi perangkat"],
+  ["map.pin_scale", "1", "Skala pin peta saat normal (0,5-3)"],
+  ["map.pin_scale_active", "1.4", "Skala pin peta saat aktif/dipilih (0,5-3)"],
   ["map.recent_page_size", "3", "Jumlah data awal & per muat pada filter tempat (peta)"],
   ["map.color_master", "#111827", "Warna pin MASTER PLACE pada peta"],
   ["map.color_mine", "#CA8A04", "Warna pin Tempat Saya (bukan favorit)"],

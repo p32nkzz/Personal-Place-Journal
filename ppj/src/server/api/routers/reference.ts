@@ -297,9 +297,15 @@ export const settingsRouter = createTRPCRouter({
   /** Aturan avatar (format & ukuran) untuk validasi di sisi klien sebelum unggah. */
   avatarRules: activeProcedure.query(() => getAvatarRules()),
 
-  list: adminProcedure.query(({ ctx }) =>
-    ctx.db.select().from(appSettings).orderBy(asc(appSettings.key)),
-  ),
+  list: adminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db.select().from(appSettings).orderBy(asc(appSettings.key));
+    // Kunci bawaan yang belum pernah disimpan tetap tampil (memakai nilai bawaan); barisnya dibuat saat pertama diubah.
+    const have = new Set(rows.map((r) => r.key));
+    const virtual = Object.entries(SETTING_DEFAULTS)
+      .filter(([k]) => !have.has(k))
+      .map(([key, value]) => ({ ...rows[0]!, id: 0, uid: `default:${key}`, key, value, description: null, updatedBy: null, updatedAt: null as Date | null }));
+    return [...rows, ...(rows.length ? virtual : [])].sort((a, b) => a.key.localeCompare(b.key));
+  }),
 
   /** TX-16 — ubah nilai aturan; key tidak dapat ditambah/dihapus. */
   update: adminProcedure

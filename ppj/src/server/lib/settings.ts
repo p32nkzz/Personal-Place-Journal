@@ -86,6 +86,11 @@ export function validateSetting(key: string, value: string): string | null {
       const n = Number(value);
       return value.trim() !== "" && Number.isInteger(n) && n >= 1 && n <= 20 ? null : "SETTING_ZOOM";
     }
+    case "map.pin_scale":
+    case "map.pin_scale_active": {
+      const n = Number(value);
+      return value.trim() !== "" && Number.isFinite(n) && n >= 0.5 && n <= 3 ? null : "SETTING_PIN_SCALE";
+    }
     case "map.recent_page_size": {
       const n = Number(value);
       return Number.isInteger(n) && n >= 1 && n <= 50 ? null : "SETTING_PAGE_SIZE";
@@ -130,6 +135,8 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   ...MAP_COLOR_DEFAULTS,
   "map.recent_page_size": String(RECENT_PAGE_SIZE_DEFAULT),
   "map.default_zoom": "15",
+  "map.pin_scale": "1",
+  "map.pin_scale_active": "1.4",
   "app.timezone": "Asia/Jakarta",
   "category.page_size": "4",
   "tag.page_size": "4",
@@ -181,9 +188,16 @@ export async function getMapSearchConfig() {
   const m = new Map(rows.map((r) => [r.key, Number(r.value)]));
   const n = m.get("map.recent_page_size");
   const z = m.get("map.default_zoom");
+  const scale = (k: string, def: number) => {
+    const v = m.get(k);
+    return v != null && Number.isFinite(v) && v >= 0.5 && v <= 3 ? v : def;
+  };
   return {
     recentPageSize: n != null && Number.isInteger(n) && n >= 1 && n <= 50 ? n : RECENT_PAGE_SIZE_DEFAULT,
     // Zoom bawaan peta (1–20): dipakai saat memfokuskan tempat, pin, lokasi perangkat, dan titik tunggal.
     defaultZoom: z != null && Number.isInteger(z) && z >= 1 && z <= 20 ? z : 15,
+    // Ukuran pin (MASTER, MY PLACE, pin baru): normal & saat aktif/dipilih (skala 0,5–3).
+    pinScale: scale("map.pin_scale", 1),
+    pinScaleActive: scale("map.pin_scale_active", 1.4),
   };
 }

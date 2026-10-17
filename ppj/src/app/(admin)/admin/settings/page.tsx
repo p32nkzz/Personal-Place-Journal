@@ -114,7 +114,7 @@ function KeyRows({ keys }: { keys: readonly KeyDef[] }) {
                 style={{ width: k.type === "text" ? 180 : 110 }}
                 type={k.type}
                 min={k.type === "number" ? 0 : undefined}
-                step={k.type === "number" ? (k.key.endsWith("_mb") ? "any" : 1) : undefined}
+                step={k.type === "number" ? (k.key.endsWith("_mb") ? "any" : k.key.startsWith("map.pin_scale") ? 0.1 : 1) : undefined}
                 inputMode={k.type === "number" ? "decimal" : undefined}
                 value={values[k.key] ?? ""}
                 aria-label={t(k.label)}
@@ -167,6 +167,8 @@ const CATEGORY_KEYS = [
 
 const MAP_VIEW_KEYS = [
   { key: "map.default_zoom", def: "15", label: "settings.mapZoom", hint: "settings.mapZoomHint", type: "number" },
+  { key: "map.pin_scale", def: "1", label: "settings.pinScale", hint: "settings.pinScaleHint", type: "number" },
+  { key: "map.pin_scale_active", def: "1.4", label: "settings.pinScaleActive", hint: "settings.pinScaleActiveHint", type: "number" },
 ] as const;
 
 const VISIT_KEYS = [
