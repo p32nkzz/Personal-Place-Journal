@@ -80,7 +80,7 @@ function Places() {
             {/* Tombol tambah data sebaris dengan pencarian (tata letak sama dengan daftar MASTER/Pengguna) */}
             <div className="fl-btns">
               <Link href="/?add=1" className="btn btn-map"><Icon name="map-pin" /> {t("place.addFromMap")}</Link>
-              <Link href="/places/new" className="btn btn-primary"><Icon name="plus" /> {t("place.new")}</Link>
+              <Link href="/places/new?from=list" className="btn btn-primary"><Icon name="plus" /> {t("place.new")}</Link>
             </div>
           </div>
 
@@ -137,7 +137,7 @@ function Places() {
           <EmptyState
             title={t("place.empty")}
             text={t("place.emptyHint")}
-            action={<Link href="/places/new" className="btn btn-primary"><Icon name="plus" /> {t("place.new")}</Link>}
+            action={<Link href="/places/new?from=list" className="btn btn-primary"><Icon name="plus" /> {t("place.new")}</Link>}
           />
         ) : (
           <ul className="list">

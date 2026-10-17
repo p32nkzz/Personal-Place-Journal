@@ -7,6 +7,7 @@ export type MessageKey = string;
 
 const id: Record<string, string> = {
   /* common */
+  "common.retry": "Coba lagi",
   "common.actions": "Aksi",
   "common.active": "Aktif",
   "common.address": "Alamat",
@@ -286,6 +287,7 @@ const id: Record<string, string> = {
 
   /* place */
   "place.activate": "Aktifkan",
+  "place.alreadyDeleted": "Tempat ini sudah dihapus atau tidak ditemukan.",
   "place.addFromMap": "Tambah dari peta",
   "place.allRelation": "Semua status relasi",
   "place.allTags": "Semua TAG",
@@ -720,6 +722,7 @@ const id: Record<string, string> = {
 
 const en: Record<string, string> = {
   /* common */
+  "common.retry": "Try again",
   "common.actions": "Actions",
   "common.active": "Active",
   "common.address": "Address",
@@ -999,6 +1002,7 @@ const en: Record<string, string> = {
 
   /* place */
   "place.activate": "Activate",
+  "place.alreadyDeleted": "This place has already been deleted or was not found.",
   "place.addFromMap": "Add from map",
   "place.allRelation": "All relation statuses",
   "place.allTags": "All TAGs",

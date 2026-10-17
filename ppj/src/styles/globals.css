@@ -1625,3 +1625,6 @@ a.tg-usage.is-zero:hover { background: var(--color-border); }
 /* Field yang sedang mengikuti peta: aksen tipis di kiri agar terbaca tanpa mengganggu. */
 .pf .input.is-following, .pf .textarea.is-following { box-shadow: inset 3px 0 0 var(--color-secondary); }
 @media (max-width: 340px) { .pf-follow > span:not(.pf-follow-track) { display: none; } .pf-follow { padding-left: 8px; } }
+
+/* Pop-up peta: tempat sudah tidak ada */
+.pp-gone { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-bottom: 12px; }

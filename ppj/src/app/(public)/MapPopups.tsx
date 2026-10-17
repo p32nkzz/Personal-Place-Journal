@@ -279,7 +279,7 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
   const fmt = useFormat();
   const utils = api.useUtils();
   const colors = useMapColors();
-  const { data: p, isLoading } = api.place.get.useQuery({ uid });
+  const { data: p, isLoading, error: loadError } = api.place.get.useQuery({ uid }, { retry: false });
   const [visitOpen, setVisitOpen] = useState(false);
   const [tab, setTab] = useState<"visits" | "history">("visits");
   // Kunjungan dipaging di server; ukuran halaman dari Pengaturan (visit.page_size), sama dengan halaman detail.
@@ -303,7 +303,12 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
           )
         }
       />
-      {isLoading || !p ? (
+      {loadError && !p ? (
+        <div className="pp-gone">
+          <Alert kind="warning">{(loadError as { message?: string }).message === "NOT_FOUND" ? t("place.alreadyDeleted") : t("err.GENERIC")}</Alert>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>{t("common.close")}</button>
+        </div>
+      ) : isLoading || !p ? (
         <Spinner />
       ) : (
         <>

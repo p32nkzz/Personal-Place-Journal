@@ -56,8 +56,10 @@ function NewPlace() {
 
   const itineraryUid = sp.get("itinerary");
   const addStop = api.itinerary.addPlace.useMutation();
+  const utils = api.useUtils();
+  const from = sp.get("from");
   const create = api.place.create.useMutation({
-    onSuccess: async (r) => {
+    onSuccess: async (r, vars) => {
       toast.push(t("common.saved"), "success");
       if (files.length) {
         // Foto pantauan diunggah setelah MY PLACE tersimpan; kegagalan tidak membatalkan penyimpanan.
@@ -79,6 +81,8 @@ function NewPlace() {
         }
         if (failed) toast.push(t("photo.urlFailedAfterSave", { n: failed }), "error");
       }
+      // Segarkan daftar MY PLACE (peta, daftar, opsi) setelah foto terunggah agar tempat baru langsung muncul di tujuan redirect.
+      await utils.place.invalidate();
       if (itineraryUid) {
         // P-07 langkah 2b: tempat baru langsung menjadi ITINERARY PLACE.
         try {
@@ -89,7 +93,14 @@ function NewPlace() {
           // MY PLACE sudah tersimpan; lanjut ke detail.
         }
       }
-      router.push(`/places/${r.uid}`);
+      // Setelah simpan kembali ke asal: Peta (pop-up tempat baru terbuka), daftar MY PLACE, atau detail (bawaan).
+      router.push(
+        from === "map"
+          ? `/?${new URLSearchParams({ my: r.uid, lat: String(vars.latitude), lng: String(vars.longitude) })}`
+          : from === "list"
+            ? "/places"
+            : `/places/${r.uid}`,
+      );
     },
     onError: (e) => setError(errMsg(e)),
   });
@@ -112,7 +123,7 @@ function NewPlace() {
         busy={create.isPending}
         error={error}
         cancelHref={(v) => {
-          if (sp.get("from") !== "map") return "/places";
+          if (from !== "map") return "/places";
           // Kembali ke Peta: pin bebas aktif; pin dipasang hanya bila titik sudah dipilih di form.
           const q = new URLSearchParams({ freepin: "1" });
           if (v.latitude != null && v.longitude != null) {
