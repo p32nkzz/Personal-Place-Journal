@@ -231,7 +231,7 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
           </div>
           <PhotoTabs key={m.uid} ownLabel={t("map.tabMasterPhotos")} photos={m.photos} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} name={m.name} />
           <div className="pp-info">
-            {m.categories.length > 0 && <InfoRow icon="layers" label={t("common.category")}><CategoryChips items={m.categories} /></InfoRow>}
+            {m.categories.length > 0 && <InfoRow label={t("common.category")}><CategoryChips items={m.categories} /></InfoRow>}
             <InfoRow icon="map-pin" label={t("common.address")}>{m.address}</InfoRow>
             {m.description && <DescQuote text={m.description} />}
             <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={m.latitude} lng={m.longitude} placeId={m.googlePlaceId} googleLink streetView name={m.name} /></InfoRow>
@@ -366,7 +366,7 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
           <PhotoTabs key={p.uid} ownLabel={t("place.reviewPhotos")} photos={p.photos} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} name={p.name} />
           <div className="pp-info">
             {(p.categories.length > 0 || p.tags.length > 0) && (
-              <InfoRow icon="layers" label={`${t("common.category")} / ${t("nav.tags")}`}>
+              <InfoRow label={`${t("common.category")} / ${t("nav.tags")}`}>
                 <span className="pp-chips">
                   {p.categories.length > 0 && <CategoryChips items={p.categories} />}
                   {p.tags.length > 0 && <TagList items={p.tags} />}

@@ -10,10 +10,10 @@ import { openPhotoPreview } from "~/lib/photoPreview";
 /* Blok tampilan info tempat yang ringkas — dipakai pop-up Peta dan halaman detail MY PLACE. */
 
 /** Satu baris info berikon (alamat, kategori, koordinat, ...). */
-export function InfoRow({ icon, label, children }: { icon: React.ComponentProps<typeof Icon>["name"]; label: string; children: React.ReactNode }) {
+export function InfoRow({ icon, label, children }: { icon?: React.ComponentProps<typeof Icon>["name"]; label: string; children: React.ReactNode }) {
   return (
-    <div className="pp-info-row" title={label}>
-      <Icon name={icon} fixedWidth={false} aria-hidden />
+    <div className={`pp-info-row${icon ? "" : " no-ico"}`} title={label}>
+      {icon && <Icon name={icon} fixedWidth={false} aria-hidden />}
       <div className="pp-info-val">
         <span className="sr-only">{label}: </span>
         {children}
