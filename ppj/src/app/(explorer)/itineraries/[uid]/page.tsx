@@ -350,7 +350,7 @@ function StopModal({
             </div>
             <p className="helper" style={{ margin: 0 }}>
               {t("itinerary.newPlaceHint")}{" "}
-              <Link href={`/places/new?itinerary=${itineraryUid}`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{t("place.new")}</Link>
+              <Link href={`/places/new?itinerary=${itineraryUid}&from=itinerary`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{t("place.new")}</Link>
             </p>
           </>
         )}

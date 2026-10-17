@@ -60,6 +60,31 @@ function NewPlace() {
   const addStop = api.itinerary.addPlace.useMutation();
   const utils = api.useUtils();
   const from = sp.get("from");
+  /**
+   * Tujuan tombol Batal sesuai asal halaman:
+   * - Peta, dari pop-up MASTER → Peta dengan pop-up MASTER itu terbuka;
+   * - Peta, dari pin baru → Peta dengan pin bebas aktif (pin di titik form bila sudah dipilih);
+   * - halaman MASTER publik → kembali ke MASTER tersebut;
+   * - ITINERARY → kembali ke ITINERARY;
+   * - daftar MY PLACE / lainnya → daftar MY PLACE.
+   */
+  const backHref = (v?: PlaceFormValues) => {
+    if (from === "map" && masterUid && master.data)
+      return `/?${new URLSearchParams({ master: masterUid, lat: String(master.data.latitude), lng: String(master.data.longitude) })}`;
+    if (from === "map") {
+      const q = new URLSearchParams({ freepin: "1" });
+      const lat = v?.latitude ?? (sp.get("lat") ? Number(sp.get("lat")) : null);
+      const lng = v?.longitude ?? (sp.get("lng") ? Number(sp.get("lng")) : null);
+      if (lat != null && lng != null) {
+        q.set("lat", String(lat));
+        q.set("lng", String(lng));
+      }
+      return `/?${q.toString()}`;
+    }
+    if (from === "master" && masterUid) return `/masters/${masterUid}`;
+    if (itineraryUid) return `/itineraries/${itineraryUid}`;
+    return "/places";
+  };
   const create = api.place.create.useMutation({
     onSuccess: async (r, vars) => {
       toast.push(t("common.saved"), "success");
@@ -120,16 +145,7 @@ function NewPlace() {
         submitLabel={t("common.save")}
         busy={create.isPending}
         error={error}
-        cancelHref={(v) => {
-          if (from !== "map") return "/places";
-          // Kembali ke Peta: pin bebas aktif; pin dipasang hanya bila titik sudah dipilih di form.
-          const q = new URLSearchParams({ freepin: "1" });
-          if (v.latitude != null && v.longitude != null) {
-            q.set("lat", String(v.latitude));
-            q.set("lng", String(v.longitude));
-          }
-          return `/?${q.toString()}`;
-        }}
+        cancelHref={backHref}
         showFavorite
         photoSlot={<PendingPhotoPicker files={files} urls={urls} onFiles={setFiles} onUrls={setUrls} captions={captions} onCaptions={setCaptions} primary={primary} onPrimary={setPrimary} />}
         pickedGoogleUrls={urls}
