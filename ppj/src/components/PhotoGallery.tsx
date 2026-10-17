@@ -92,7 +92,7 @@ export function PhotoGallery({
   const errMsg = useErrorMessage();
   const rules = api.settings.photoRules.useQuery(undefined, { enabled: canEdit });
   const fileRef = useRef<HTMLInputElement>(null);
-  const guard = usePhotoGuard();
+  const guard = usePhotoGuard("photo", canEdit);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [view, setView] = useState<GalleryPhoto | null>(null);

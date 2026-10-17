@@ -36,12 +36,13 @@ export function photoExt(f: File) {
  * Validasi foto di sisi klien terhadap aturan aplikasi (format & ukuran maksimum dari Pengaturan),
  * sebelum diunggah. Server tetap memvalidasi ulang. `kind`: foto tempat/kunjungan/MASTER atau avatar.
  */
-export function usePhotoGuard(kind: "photo" | "avatar" = "photo") {
+export function usePhotoGuard(kind: "photo" | "avatar" = "photo", enabled = true) {
   const { t } = useT();
   const fmt = useFormat();
   const toast = useToast();
-  const photo = api.settings.photoRules.useQuery(undefined, { enabled: kind === "photo", staleTime: 60_000 });
-  const avatar = api.settings.avatarRules.useQuery(undefined, { enabled: kind === "avatar", staleTime: 60_000 });
+  // Aturan hanya dimuat bila unggah memang tersedia (endpoint aturan butuh login; galeri baca-saja dipakai juga oleh pengunjung).
+  const photo = api.settings.photoRules.useQuery(undefined, { enabled: enabled && kind === "photo", staleTime: 60_000 });
+  const avatar = api.settings.avatarRules.useQuery(undefined, { enabled: enabled && kind === "avatar", staleTime: 60_000 });
   const rules = kind === "photo" ? photo.data : avatar.data;
 
   const allowed = useMemo(() => (rules ? [...new Set(rules.allowedTypes.map(norm))] : null), [rules]);

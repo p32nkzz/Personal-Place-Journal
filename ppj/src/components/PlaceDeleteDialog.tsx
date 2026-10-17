@@ -30,32 +30,40 @@ export function PlaceDeleteDialog({
   const { t } = useT();
   const toast = useToast();
   const errMsg = useErrorMessage();
-  const utils = api.useUtils();
   const qc = useQueryClient();
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const preview = api.place.deletePreview.useQuery({ uid }, { retry: false });
+  // Setelah dihapus, pratinjau tidak boleh dimuat ulang (tempatnya sudah tidak ada → NOT_FOUND di console).
+  const [finished, setFinished] = useState(false);
+  const preview = api.place.deletePreview.useQuery({ uid }, { retry: false, enabled: !finished });
   // Tempat sudah tidak ada (mis. terhapus dari tab/perangkat lain): anggap selesai dan segarkan daftar.
   const gone = (e: unknown) => (e as { message?: string } | null)?.message === "NOT_FOUND";
   const forget = () => {
     // Buang cache tempat ini agar halaman detail/peta tidak mengambil ulang data yang sudah tidak ada (404 sekilas).
     qc.removeQueries({ queryKey: getQueryKey(api.place.get, { uid }, "query") });
     qc.removeQueries({ queryKey: getQueryKey(api.place.visits, undefined, "any") });
-    qc.removeQueries({ queryKey: getQueryKey(api.place.deletePreview, { uid }, "query") });
   };
+  // Segarkan data MY PLACE kecuali pratinjau hapus (tempatnya sudah tidak ada: memuat ulang = NOT_FOUND).
+  const refreshAfterDelete = () =>
+    void qc.invalidateQueries({
+      queryKey: getQueryKey(api.place),
+      predicate: (q) => !JSON.stringify(q.queryKey).includes("deletePreview"),
+    });
   const del = api.place.delete.useMutation({
     onSuccess: async () => {
+      setFinished(true);
       forget();
       toast.push(t("common.deleted"), "success");
       onDeleted();
-      void utils.place.invalidate();
+      refreshAfterDelete();
     },
     onError: (e) => {
       if (gone(e)) {
+        setFinished(true);
         forget();
         toast.push(t("place.alreadyDeleted"), "info");
         onDeleted();
-        void utils.place.invalidate();
+        refreshAfterDelete();
         return;
       }
       setError(errMsg(e));
@@ -76,7 +84,7 @@ export function PlaceDeleteDialog({
           <>
             <Alert kind="error">{gone(preview.error) ? t("place.alreadyDeleted") : errMsg(preview.error)}</Alert>
             {gone(preview.error) ? (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => { forget(); onDeleted(); void utils.place.invalidate(); }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setFinished(true); forget(); onDeleted(); refreshAfterDelete(); }}>
                 {t("common.close")}
               </button>
             ) : (
