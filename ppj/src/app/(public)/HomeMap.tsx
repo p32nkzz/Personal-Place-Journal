@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   GooglePlaceSearch,
@@ -11,6 +11,7 @@ import {
 import { useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
 import { CategoryMultiSelect } from "~/components/CategoryMultiSelect";
+import { TagMultiSelect } from "~/components/TagMultiSelect";
 import { Icon } from "~/components/Icon";
 import { readableOn } from "~/components/map/colors";
 import { useMapColors } from "~/components/map/useMapColors";
@@ -18,7 +19,26 @@ import { useMapSearchConfig } from "~/components/map/useMapSearchConfig";
 import { MasterPopup, MyPlacePopup, PinPopup, type Selection, type Viewer } from "./MapPopups";
 
 
-export function HomeMap({ viewer }: { viewer: Viewer }) {
+export function HomeMap({
+  viewer,
+  initialFreePin = false,
+  initialPin = null,
+  initialMy = null,
+  initialMaster = null,
+  initialNearby = false,
+}: {
+  viewer: Viewer;
+  /** Daftar lokasi terdekat langsung terbuka (dari tombol "Tambah dari peta"). */
+  initialNearby?: boolean;
+  /** Pin bebas langsung aktif (kembali dari form tempat baru). */
+  initialFreePin?: boolean;
+  /** Pin yang dipasang sejak awal (koordinat dari form tempat baru). */
+  initialPin?: { lat: number; lng: number } | null;
+  /** MY PLACE yang langsung dibuka pop-up-nya (kembali dari form ubah). */
+  initialMy?: { uid: string; lat: number; lng: number } | null;
+  /** MASTER yang langsung dibuka pop-up-nya (setelah dibuat dari Peta). */
+  initialMaster?: { uid: string; lat: number; lng: number } | null;
+}) {
   const { t } = useT();
   const explorer = viewer === "EXPLORER";
   const canPin = viewer !== "GUEST";
@@ -36,38 +56,114 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
   const { recentPageSize } = useMapSearchConfig();
   const [recentCount, setRecentCount] = useState(recentPageSize);
   const [categoryUids, setCategoryUids] = useState<string[]>([]);
+  // Filter TAG hanya untuk Explorer (TAG milik user; berlaku pada Tempat Saya).
+  const [tagUids, setTagUids] = useState<string[]>([]);
   // Filter jenis pin dikendalikan dari legenda di bawah peta.
   const [showMine, setShowMine] = useState(true);
   const [showFav, setShowFav] = useState(true);
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
   // Pin bebas default OFF agar peta nyaman digeser tanpa memunculkan pin baru.
-  const [freePin, setFreePin] = useState(false);
+  const [freePin, setFreePin] = useState(initialFreePin);
   const [showMaster, setShowMaster] = useState(true);
-  const [sel, setSel] = useState<Selection | null>(null);
-  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
+  // Panel filter tampil/sembunyi lewat tombol ikon filter. Bawaan: tersembunyi (peta lebih luas);
+  // pilihan user diingat per perangkat.
+  const [showFilters, setShowFilters] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("ppj.map.filters") === "1") setShowFilters(true);
+    } catch {
+      // penyimpanan tidak tersedia: tetap tersembunyi
+    }
+  }, []);
+  const toggleFilters = () =>
+    setShowFilters((s) => {
+      try {
+        localStorage.setItem("ppj.map.filters", s ? "0" : "1");
+      } catch {
+        // abaikan
+      }
+      return !s;
+    });
+  const activeFilters = categoryUids.length + tagUids.length + (q.trim() ? 1 : 0);
+  // Tombol filter dirender di dua tempat; CSS memilih yang tampil:
+  //  - "in-bar"   : satu baris dengan cari Google & Pin bebas (login, layar responsif).
+  //  - "in-panel" : di kanan field filter (layar penuh, atau pengunjung); saat panel disembunyikan
+  //                 tombol ini tinggal sendiri di pojok kanan atas peta.
+  const filterBtn = (where: "in-bar" | "in-panel") => (
+    <button
+      type="button"
+      className={`map-bar-filter ${where}`}
+      aria-pressed={showFilters}
+      aria-controls="map-filters"
+      title={t("map.filters")}
+      aria-label={t("map.filters")}
+      onClick={toggleFilters}
+    >
+      <Icon name="filter" fixedWidth={false} />
+      {!showFilters && activeFilters > 0 && <span className="map-bar-badge">{activeFilters}</span>}
+    </button>
+  );
+  const [sel, setSel] = useState<Selection | null>(
+    initialMy
+      ? { kind: "my", uid: initialMy.uid }
+      : initialMaster
+        ? { kind: "master", uid: initialMaster.uid }
+        : initialPin
+          ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng }
+          : null,
+  );
+  const popupRef = useRef<HTMLDivElement>(null);
+  const selKey = sel ? (sel.kind === "pin" ? "pin" : `${sel.kind}:${sel.uid}`) : "";
+  useEffect(() => {
+    popupRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [selKey]);
+  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom?: number } | null>(
+    initialMy
+      ? { lat: initialMy.lat, lng: initialMy.lng }
+      : initialMaster
+        ? { lat: initialMaster.lat, lng: initialMaster.lng }
+        : initialPin
+          ? { ...initialPin }
+          : null,
+  );
 
   const cats = api.categories.listActive.useQuery();
   const masters = api.master.listMap.useQuery({ categoryUids: categoryUids.length ? categoryUids : undefined });
   const mine = api.place.list.useQuery(undefined, { enabled: explorer });
+  const tags = api.tag.list.useQuery(undefined, { enabled: explorer });
 
   const needle = q.trim().toLowerCase();
   const myItems = useMemo(
     () =>
-      (mine.data ?? []).filter((p) => !categoryUids.length || p.categories.some((c) => categoryUids.includes(c.uid))).filter(
-        (p) => !needle || p.name.toLowerCase().includes(needle) || (p.address ?? "").toLowerCase().includes(needle),
-      ),
-    [mine.data, needle, categoryUids],
+      (mine.data ?? [])
+        .filter((p) => !categoryUids.length || p.categories.some((c) => categoryUids.includes(c.uid)))
+        .filter((p) => !tagUids.length || p.tags.some((x) => tagUids.includes(x.uid)))
+        .filter((p) => !needle || p.name.toLowerCase().includes(needle) || (p.address ?? "").toLowerCase().includes(needle)),
+    [mine.data, needle, categoryUids, tagUids],
   );
   const masterItems = useMemo(
     () =>
-      (masters.data ?? []).filter(
-        (m) => !needle || m.name.toLowerCase().includes(needle) || m.address.toLowerCase().includes(needle),
-      ),
-    [masters.data, needle],
+      // MASTER tidak memiliki TAG: saat filter TAG aktif, hanya Tempat Saya yang ditampilkan.
+      tagUids.length
+        ? []
+        : (masters.data ?? []).filter(
+            (m) => !needle || m.name.toLowerCase().includes(needle) || m.address.toLowerCase().includes(needle),
+          ),
+    [masters.data, needle, tagUids],
   );
 
   const markers: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
+    // Tumpukan pin yang berdekatan: Tempat Saya di atas MASTER; di antara jenis yang sama,
+    // data yang terakhir diinput/diubah berada paling atas.
+    const rank = <T extends { updatedAt: Date | string }>(items: T[]) => {
+      const order = new Map<T, number>();
+      [...items]
+        .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
+        .forEach((it, i) => order.set(it, i));
+      return order;
+    };
+    const masterRank = rank(masterItems);
     if (showMaster)
       for (const m of masterItems)
         out.push({
@@ -77,9 +173,11 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
           color: C_MASTER,
           glyph: "M",
           title: m.name,
+          z: 1000 + (masterRank.get(m) ?? 0),
           selected: sel?.kind === "master" && sel.uid === m.uid,
         });
-    if (explorer)
+    if (explorer) {
+      const myRank = rank(myItems);
       for (const p of myItems) {
         if (p.isFavorite ? !showFav : !showMine) continue;
         out.push({
@@ -87,11 +185,13 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
           lat: p.latitude,
           lng: p.longitude,
           color: p.isFavorite ? C_FAV : C_MY,
-          glyph: p.isFavorite ? "★" : undefined,
+          glyph: p.isFavorite ? "★" : undefined, // glyph pin Google wajib teks/DOM, bukan komponen React
           title: p.name,
+          z: 5000 + (myRank.get(p) ?? 0),
           selected: sel?.kind === "my" && sel.uid === p.uid,
         });
       }
+    }
     if (sel?.kind === "pin")
       out.push({ id: "pin", lat: sel.lat, lng: sel.lng, color: C_PIN, glyph: "+", selected: true, draggable: true, title: sel.google?.name });
     return out;
@@ -99,7 +199,7 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
 
   const select = (s: Selection, lat: number, lng: number) => {
     setSel(s);
-    setFocus({ lat, lng, zoom: 16 });
+    setFocus({ lat, lng });
   };
 
   const onMarkerClick = (id: string) => {
@@ -150,9 +250,10 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
   const matchRest = needle && allMatches.length > matches.length ? notLoaded(allMatches.slice(matches.length)) : "";
 
   return (
-    <div className="map-full">
+    <div className={`map-full${canPin ? " has-bar" : " is-guest"}${sel ? " has-popup" : ""}${showFilters ? " has-filters" : ""}`}>
       <MapView
         className="map-box"
+        satelliteToggle
         markers={markers}
         deviceLocation={location}
         focus={focus}
@@ -166,22 +267,42 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
         onMapClick={canPin && freePin ? (lat, lng) => setSel({ kind: "pin", lat, lng }) : undefined}
       />
 
-      {/* Kiri atas: pencarian Google */}
+      {/* Kiri atas (login): pencarian Google, pin bebas, dan tombol filter (layar responsif) */}
       {canPin && (
-        <div className="map-float map-tl">
-          <GooglePlaceSearch
-            placeholder={t("map.googlePlaceholder")}
-            origin={location ?? center}
-            onSelect={(g) => select({ kind: "pin", lat: g.lat, lng: g.lng, google: g }, g.lat, g.lng)}
-          />
+        <div className="map-float map-tl map-bar">
+          <div className="map-bar-search">
+            <GooglePlaceSearch
+              placeholder={t("map.googlePlaceholder")}
+              origin={location ?? center}
+              autoNearby={initialNearby}
+              onSelect={(g) => select({ kind: "pin", lat: g.lat, lng: g.lng, google: g }, g.lat, g.lng)}
+            />
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={freePin}
+            className="switch-btn map-bar-pin"
+            title={t("map.freePinHint")}
+            onClick={() => {
+              setFreePin((v) => !v);
+              // Mematikan fitur menghapus pin manual yang sedang tampil (hasil pencarian tetap).
+              if (freePin) setSel((s) => (s?.kind === "pin" && !s.google ? null : s));
+            }}
+          >
+            <span className="switch-track" aria-hidden><span className="switch-thumb" /></span>
+            <Icon name="pin" fixedWidth={false} className="map-bar-pin-ico" aria-hidden />
+            <span className="map-bar-pin-label">{t("map.freePin")}</span>
+          </button>
+          {filterBtn("in-bar")}
         </div>
       )}
 
-      {/* Kanan atas: pencarian data, kategori, chip jenis tempat */}
-      <div className="map-float map-tr">
+      {/* Panel filter: pencarian data, kategori, TAG, [tombol filter di paling kanan] — mengikuti state tombol filter */}
+      <div id="map-filters" className={`map-float map-tr map-filters${showFilters ? "" : " is-collapsed"}${canPin ? " is-auth" : ""}`}>
         <div
           className="map-search"
-          style={{ minWidth: 220 }}
+          style={{ width: 300, maxWidth: "100%" }}
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setRecentOpen(false);
           }}
@@ -293,33 +414,21 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
             </div>
           )}
         </div>
-        <CategoryMultiSelect categories={cats.data ?? []} value={categoryUids} onChange={setCategoryUids} />
-        {canPin && (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={freePin}
-            className="switch-btn"
-            title={t("map.freePinHint")}
-            onClick={() => {
-              setFreePin((v) => !v);
-              // Mematikan fitur menghapus pin manual yang sedang tampil (hasil pencarian tetap).
-              if (freePin) setSel((s) => (s?.kind === "pin" && !s.google ? null : s));
-            }}
-          >
-            <span className="switch-track" aria-hidden><span className="switch-thumb" /></span>
-            <Icon name="pin" /> {t("map.freePin")}
-          </button>
-        )}
-        {(masters.isLoading || (explorer && mine.isLoading)) && <Icon name="refresh" spin style={{ color: "var(--color-primary)" }} />}
+        <CategoryMultiSelect compact categories={cats.data ?? []} value={categoryUids} onChange={setCategoryUids} />
+        {explorer && <TagMultiSelect compact tags={tags.data ?? []} value={tagUids} onChange={setTagUids} />}
+        {(masters.isLoading || (explorer && mine.isLoading)) && <Icon name="refresh" spin className="map-filters-spin" />}
+        {filterBtn("in-panel")}
       </div>
 
       {/* Popup detail + aksi */}
       {sel && (
-        <div className="map-float map-popup">
-          {sel.kind === "master" && <MasterPopup uid={sel.uid} viewer={viewer} onClose={() => setSel(null)} />}
-          {sel.kind === "my" && <MyPlacePopup uid={sel.uid} onClose={() => setSel(null)} />}
-          {sel.kind === "pin" && <PinPopup sel={sel} viewer={viewer} onClose={() => setSel(null)} />}
+        <div className="map-float map-popup" ref={popupRef}>
+          {/* Ganti isi dengan animasi halus saat berpindah antar pin (kunci = tempat yang dipilih). */}
+          <div key={sel.kind === "pin" ? "pin" : `${sel.kind}:${sel.uid}`} className="pp-swap">
+            {sel.kind === "master" && <MasterPopup uid={sel.uid} viewer={viewer} onClose={() => setSel(null)} />}
+            {sel.kind === "my" && <MyPlacePopup uid={sel.uid} onClose={() => setSel(null)} />}
+            {sel.kind === "pin" && <PinPopup sel={sel} viewer={viewer} onClose={() => setSel(null)} />}
+          </div>
         </div>
       )}
 
@@ -339,9 +448,13 @@ export function HomeMap({ viewer }: { viewer: Viewer }) {
               </button>
             </>
           )}
-          {canPin && <span><i style={{ background: C_PIN }} /> {t("map.pin")}</span>}
-          {canPin && freePin && <span className="legend-note">{t("map.clickHint")}</span>}
-          {!location && <span className="legend-note">{t("map.noLocation")}</span>}
+          {canPin && <span className="legend-static"><i style={{ background: C_PIN }} /> {t("map.pin")}</span>}
+          {((canPin && freePin) || !location) && (
+            <span className="legend-note">
+              {canPin && freePin && <span><Icon name="pin" fixedWidth={false} /> {t("map.clickHint")}</span>}
+              {!location && <span><Icon name="circle-info" fixedWidth={false} /> {t("map.noLocation")}</span>}
+            </span>
+          )}
         </div>
       </div>
     </div>

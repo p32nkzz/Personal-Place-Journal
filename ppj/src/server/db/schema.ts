@@ -123,6 +123,9 @@ export const users = mysqlTable(
     mustChangePassword: boolean("must_change_password")
       .notNull()
       .default(false),
+    // Avatar opsional (hanya upload; CR-USR-01: keduanya NULL atau keduanya terisi).
+    avatarFilePath: varchar("avatar_file_path", { length: 1000 }),
+    avatarStorageType: mysqlEnum("avatar_storage_type", ["UPLOAD", "S3"]),
     deletedBy: fk("deleted_by"),
     isActive: boolean("is_active").notNull().default(true),
     deletedAt: ts("deleted_at"),
@@ -593,6 +596,35 @@ export const visitPhotos = mysqlTable(
   ],
 );
 
+/** Foto pantauan (penanda) MY PLACE — opsional, banyak per MY PLACE (ERD 12.22). */
+export const myPlacePhotos = mysqlTable(
+  "my_place_photos",
+  {
+    id: id(),
+    uid: uid(),
+    myPlaceId: fk("my_place_id").notNull(),
+    filePath: varchar("file_path", { length: 1000 }),
+    externalUrl: text("external_url"),
+    fileName: varchar("file_name", { length: 255 }),
+    caption: text("caption"),
+    storageType: storageType(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    sortOrder: int("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("uq_my_place_photos__uid").on(t.uid),
+    index("ix_my_place_photos__my_place_id_sort_order").on(t.myPlaceId, t.sortOrder),
+    index("ix_my_place_photos__storage_type").on(t.storageType),
+    foreignKey({
+      name: "fk_my_place_photos__my_place_id",
+      columns: [t.myPlaceId],
+      foreignColumns: [myPlaces.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 export const masterPlacePhotos = mysqlTable(
   "master_place_photos",
   {
@@ -600,12 +632,13 @@ export const masterPlacePhotos = mysqlTable(
     uid: uid(),
     masterPlaceId: fk("master_place_id").notNull(),
     sourceVisitPhotoId: fk("source_visit_photo_id"),
+    sourceMyPlacePhotoId: fk("source_my_place_photo_id"),
     filePath: varchar("file_path", { length: 1000 }),
     externalUrl: text("external_url"),
     fileName: varchar("file_name", { length: 255 }),
     caption: text("caption"),
     storageType: storageType(),
-    originType: mysqlEnum("origin_type", ["ADMIN", "VISIT"])
+    originType: mysqlEnum("origin_type", ["ADMIN", "VISIT", "MY_PLACE"])
       .notNull()
       .default("ADMIN"),
     isPrimary: boolean("is_primary").notNull().default(false),
@@ -623,6 +656,9 @@ export const masterPlacePhotos = mysqlTable(
     index("ix_master_place_photos__source_visit_photo_id").on(
       t.sourceVisitPhotoId,
     ),
+    index("ix_master_place_photos__source_my_place_photo_id").on(
+      t.sourceMyPlacePhotoId,
+    ),
     index("ix_master_place_photos__created_by").on(t.createdBy),
     foreignKey({
       name: "fk_master_place_photos__master_place_id",
@@ -633,6 +669,11 @@ export const masterPlacePhotos = mysqlTable(
       name: "fk_master_place_photos__source_visit_photo_id",
       columns: [t.sourceVisitPhotoId],
       foreignColumns: [visitPhotos.id],
+    }).onDelete("set null"),
+    foreignKey({
+      name: "fk_master_place_photos__source_my_place_photo_id",
+      columns: [t.sourceMyPlacePhotoId],
+      foreignColumns: [myPlacePhotos.id],
     }).onDelete("set null"),
     foreignKey({
       name: "fk_master_place_photos__created_by",

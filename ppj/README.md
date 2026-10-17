@@ -68,6 +68,7 @@ src/lib/i18n/                  kamus Indonesia / English
 - **Hapus MY PLACE** yang punya history/ITINERARY PLACE memerlukan DELETE CONSENT.
 - **Rating** dan **effective category** dihitung saat dibaca (tidak disimpan).
 - **Foto**: aturan (tipe, ukuran, jumlah) dibaca dari `app_settings` saat upload; metadata EXIF/GPS dihapus.
+- **Foto pantauan MY PLACE** (`my_place_photos`, maks `photo.max_per_my_place`) diunggah saat buat/ubah MY PLACE; Admin dapat menyalinnya menjadi MASTER PHOTO (origin `MY_PLACE`). **Avatar profil** (`users.avatar_*`, aturan `avatar.*`) diunggah/diganti/dihapus pemilik akun di halaman Profil.
 - **Akun**: login dengan email atau username; password wajib diganti setelah dibuat/di-reset; reset password
   mengakhiri sesi lama; perubahan email lewat link konfirmasi (24 jam, sekali pakai).
 - **Backup manual** (SQL dump + file foto → zip) oleh Admin; restore dilakukan di luar aplikasi.

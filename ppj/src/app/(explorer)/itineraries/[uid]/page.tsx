@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
+import { DateField } from "~/components/DateField";
 import { ItineraryForm } from "~/components/ItineraryForm";
 import { MapView, type MapLine, type MapMarker } from "~/components/map/MapView";
 import {
@@ -21,6 +23,7 @@ import {
 import { VisitFormModal } from "~/components/VisitFormModal";
 import { useFormat, useT } from "~/lib/i18n";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { VisitContextChip, VisitStatusChip } from "~/components/chips";
 import { Icon } from "~/components/Icon";
 
 const C_PLANNED = "#0077B6";
@@ -120,6 +123,7 @@ export default function ItineraryDetailPage() {
           <span><i className="line" style={{ borderColor: C_ACTUAL }} /> {t("itinerary.legendActual")}</span>
           <span><i style={{ background: C_UNEXPECTED }} /> {t("visit.unexpected")}</span>
         </div>
+        <MapTypeSwitch />
         <div className="map-box-md">
           <MapView markers={markers} lines={lines} fit />
         </div>
@@ -147,7 +151,7 @@ export default function ItineraryDetailPage() {
                     </span>
                     {s.note && <span className="t-small" style={{ whiteSpace: "pre-wrap" }}>{s.note}</span>}
                     <div className="row">
-                      {s.visitCount > 0 ? <StatusChip tone="success">{t("itinerary.visitedCount", { n: s.visitCount })}</StatusChip> : <StatusChip tone="info">{t("place.plan")}</StatusChip>}
+                      {s.visitCount > 0 ? <span className="vis vis-visited"><Icon name="map-pin" fixedWidth={false} />{t("itinerary.visitedCount", { n: s.visitCount })}</span> : <VisitStatusChip status="PLAN" />}
                       {!s.place.isActive && <StatusChip tone="neutral">{t("common.inactive")}</StatusChip>}
                     </div>
                     <div className="row">
@@ -183,7 +187,7 @@ export default function ItineraryDetailPage() {
                     <span className="sub">{fmt.dateTime(a.visitedAt)}</span>
                     <div className="row">
                       <Stars value={a.rating} />
-                      <StatusChip tone={a.kind === "PLANNED" ? "info" : "warning"}>{a.kind === "PLANNED" ? t("visit.planned") : t("visit.unexpected")}</StatusChip>
+                      <VisitContextChip context={a.kind === "PLANNED" ? "PLANNED" : "UNEXPECTED"} />
                     </div>
                     {a.note && <span className="t-small" style={{ whiteSpace: "pre-wrap" }}>{a.note}</span>}
                   </div>
@@ -346,16 +350,16 @@ function StopModal({
             </div>
             <p className="helper" style={{ margin: 0 }}>
               {t("itinerary.newPlaceHint")}{" "}
-              <Link href={`/places/new?itinerary=${itineraryUid}`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{t("place.new")}</Link>
+              <Link href={`/places/new?itinerary=${itineraryUid}&from=itinerary`} style={{ color: "var(--color-primary)", fontWeight: 600 }}>{t("place.new")}</Link>
             </p>
           </>
         )}
         <div className="form-grid cols-2">
           <Field label={t("itinerary.plannedDate")} htmlFor="stop-d">
-            <input id="stop-d" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <DateField id="stop-d" value={date} onChange={setDate} clearable />
           </Field>
           <Field label={t("itinerary.plannedTime")} htmlFor="stop-t">
-            <input id="stop-t" className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            <DateField id="stop-t" mode="time" value={time} onChange={setTime} clearable />
           </Field>
         </div>
         <Field label={t("itinerary.planNote")} htmlFor="stop-n" helper={t("itinerary.planNoteHint")}>

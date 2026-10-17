@@ -1,27 +1,54 @@
 "use client";
 
 import { useT } from "~/lib/i18n";
+import { Icon, type IconName } from "./Icon";
 import { StatusChip, TagChip } from "./ui";
+
+/*
+ * Tiga keluarga badge dibedakan bentuk + warna + ikon agar tidak tertukar walau warnanya mirip:
+ *  - Kategori        : label persegi, ungu, ikon lapisan            (.cat)
+ *  - Relasi MASTER   : pil terisi, huruf kapital, ikon tautan/status (.rel)
+ *  - Kunjungan       : pil bergaris tepi (outline), ikon kalender/pin (.vis)
+ */
+
+const RELATION_ICON: Record<string, IconName> = {
+  UNREFERRED: "unlink",
+  REVIEW: "history",
+  REJECTED: "circle-xmark",
+  REFERRED: "link",
+};
 
 export function RelationChip({ status }: { status: string }) {
   const { t } = useT();
-  const tone =
-    status === "REFERRED"
-      ? "success"
-      : status === "REVIEW"
-        ? "warning"
-        : status === "REJECTED"
-          ? "error"
-          : "neutral";
-  return <StatusChip tone={tone}>{t(`relation.${status}`)}</StatusChip>;
+  return (
+    <span className={`rel rel-${status.toLowerCase()}`} title={t("place.relationStatus")}>
+      <Icon name={RELATION_ICON[status] ?? "circle-regular"} fixedWidth={false} />
+      {t(`relation.${status}`)}
+    </span>
+  );
 }
 
 export function VisitStatusChip({ status }: { status: string }) {
   const { t } = useT();
+  const visited = status === "VISITED";
   return (
-    <StatusChip tone={status === "VISITED" ? "success" : "info"}>
-      {t(status === "VISITED" ? "place.visited" : "place.plan")}
-    </StatusChip>
+    <span className={`vis ${visited ? "vis-visited" : "vis-plan"}`} title={t("place.visitStatus")}>
+      <Icon name={visited ? "map-pin" : "calendar"} fixedWidth={false} />
+      {t(visited ? "place.visited" : "place.plan")}
+    </span>
+  );
+}
+
+/** Konteks sebuah kunjungan: sesuai rencana ITINERARY atau tidak terduga. */
+export function VisitContextChip({ context, itineraryName }: { context: "PLANNED" | "UNEXPECTED"; itineraryName?: string | null }) {
+  const { t } = useT();
+  const planned = context === "PLANNED";
+  return (
+    <span className={`vis ${planned ? "vis-planned" : "vis-unexpected"}`}>
+      <Icon name={planned ? "route" : "circle-dot"} fixedWidth={false} />
+      {planned ? t("visit.planned") : t("visit.unexpected")}
+      {itineraryName ? `: ${itineraryName}` : ""}
+    </span>
   );
 }
 
@@ -43,14 +70,21 @@ export function MasterStatusChip({ status }: { status: string }) {
   );
 }
 
+export function CategoryChip({ name }: { name: string }) {
+  return (
+    <span className="cat">
+      <Icon name="layers" fixedWidth={false} />
+      {name}
+    </span>
+  );
+}
+
 export function CategoryChips({ items }: { items: { uid: string; name: string }[] }) {
   if (!items.length) return <span className="muted">—</span>;
   return (
     <span className="row" style={{ gap: 6 }}>
       {items.map((c) => (
-        <span key={c.uid} className="cat">
-          {c.name}
-        </span>
+        <CategoryChip key={c.uid} name={c.name} />
       ))}
     </span>
   );

@@ -16,6 +16,8 @@ export type CurrentUser = {
   role: string;
   preferredLanguage: "ID" | "EN";
   mustChangePassword: boolean;
+  /** URL avatar (dengan versi untuk cache-busting) atau null bila belum ada. */
+  avatarUrl: string | null;
   /** Mode aktif efektif: EXPLORER selalu EXPLORER; ADMIN mengikuti token. */
   mode: ActiveMode;
 };
@@ -40,6 +42,9 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     role: u.role,
     preferredLanguage: u.preferredLanguage,
     mustChangePassword: u.mustChangePassword,
+    avatarUrl: u.avatarFilePath
+      ? `/api/files/avatar/${u.uid}?v=${u.updatedAt.getTime()}`
+      : null,
     mode: u.role === "ADMIN" ? session.user.mode : "EXPLORER",
   };
 });

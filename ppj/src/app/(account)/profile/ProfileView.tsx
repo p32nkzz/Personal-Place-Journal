@@ -2,20 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
-import {
-  Alert,
-  Field,
-  Spinner,
-  useErrorMessage,
-  useToast, PasswordInput } from "~/components/ui";
-import { useFormat, useT, type Lang } from "~/lib/i18n";
-import { Select } from "~/components/Select";
-import { api } from "~/trpc/react";
+import { usePhotoGuard } from "~/components/usePhotoGuard";
+import { Avatar } from "~/components/Avatar";
 import { Icon } from "~/components/Icon";
+import { Select } from "~/components/Select";
+import { SettingRow, SettingsShell } from "~/components/SettingRow";
+import { Alert, PasswordInput, Spinner, StatusChip, useErrorMessage, useToast } from "~/components/ui";
+import { useFormat, useT, type Lang } from "~/lib/i18n";
+import { useUrlState } from "~/lib/useUrlState";
+import { api } from "~/trpc/react";
 
-export function ProfileView() {
+type Tab = "profile" | "account" | "security";
+
+function Profile() {
   const { t, setLang } = useT();
   const fmt = useFormat();
   const router = useRouter();
@@ -24,6 +25,8 @@ export function ProfileView() {
   const errMsg = useErrorMessage();
   const utils = api.useUtils();
   const { data: me, isLoading } = api.account.me.useQuery();
+  const [s, set] = useUrlState({ tab: "profile" });
+  const tab: Tab = s.tab === "account" ? "account" : s.tab === "security" ? "security" : "profile";
 
   const [name, setName] = useState("");
   const [language, setLanguage] = useState<Lang>("ID");
@@ -32,6 +35,9 @@ export function ProfileView() {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [conf, setConf] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const avatarGuard = usePhotoGuard("avatar");
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
@@ -51,17 +57,48 @@ export function ProfileView() {
 
   const profile = api.account.updateProfile.useMutation({
     onSuccess: (_d, v) => {
+      setErr("name", null);
+      setErr("language", null);
       setLang(v.preferredLanguage);
       done(t("common.saved"));
     },
-    onError: (e) => setErr("profile", errMsg(e)),
+    onError: (e, v) => setErr(v.name !== me?.name ? "name" : "language", errMsg(e)),
   });
+  const removeAvatar = api.account.removeAvatar.useMutation({
+    onSuccess: () => {
+      setErr("avatar", null);
+      done(t("profile.avatarRemoved"));
+    },
+    onError: (e) => setErr("avatar", errMsg(e)),
+  });
+  const uploadAvatar = async (file: File) => {
+    setAvatarBusy(true);
+    setErr("avatar", null);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await fetch("/api/upload/avatar", { method: "POST", body: fd });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        const key = `err.${json.error ?? "UPLOAD_FAILED"}`;
+        setErr("avatar", t(key) !== key ? t(key) : t("err.UPLOAD_FAILED"));
+      } else done(t("profile.avatarSaved"));
+    } catch {
+      setErr("avatar", t("err.UPLOAD_FAILED"));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
   const uname = api.account.changeUsername.useMutation({
-    onSuccess: () => done(t("account.usernameChanged")),
+    onSuccess: () => {
+      setErr("username", null);
+      done(t("account.usernameChanged"));
+    },
     onError: (e) => setErr("username", errMsg(e)),
   });
   const mail = api.account.requestEmailChange.useMutation({
     onSuccess: () => {
+      setErr("email", null);
       setEmail("");
       done(t("account.emailRequested"));
     },
@@ -69,6 +106,7 @@ export function ProfileView() {
   });
   const pass = api.account.changePassword.useMutation({
     onSuccess: async () => {
+      setErr("password", null);
       await update({ refresh: true });
       setCur("");
       setNext("");
@@ -80,122 +118,201 @@ export function ProfileView() {
 
   if (isLoading || !me) return <Spinner />;
 
+  const nameDirty = name.trim() !== me.name;
+  const langDirty = language !== me.preferredLanguage;
+  const unameDirty = username.trim().toLowerCase() !== me.username;
+
+  const tabs = [
+    { id: "profile" as const, label: t("profile.tabProfile"), icon: "user" as const },
+    { id: "account" as const, label: t("profile.tabAccount"), icon: "key" as const },
+    { id: "security" as const, label: t("profile.tabSecurity"), icon: "shield" as const },
+  ];
+
   return (
     <div className="container page">
       <div className="page-head">
         <div>
           <h1>{t("nav.profile")}</h1>
-          <p>
-            @{me.username} · {me.email} · {me.role}
-          </p>
+          <p>{t("profile.hint")}</p>
         </div>
       </div>
 
-      <div className="grid grid-2">
-        <form
-          className="card stack"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setErr("profile", null);
-            profile.mutate({ name, preferredLanguage: language });
-          }}
-        >
-          <h2 className="card-title">{t("account.profileSection")}</h2>
-          {errors.profile && <Alert kind="error">{errors.profile}</Alert>}
-          <Field label={t("account.name")} required htmlFor="name">
-            <input id="name" className="input" value={name} maxLength={255} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label={t("common.language")} htmlFor="lang" helper={t("account.languageHint")}>
-            <Select id="lang" className="select" value={language} onChange={(e) => setLanguage(e.target.value as Lang)}>
-              <option value="ID">Bahasa Indonesia</option>
-              <option value="EN">English</option>
-            </Select>
-          </Field>
-          <div>
-            <button className="btn btn-primary" disabled={profile.isPending || !name.trim()}>
-              <Icon name="save" /> {t("common.save")}
-            </button>
+      <SettingsShell tabs={tabs} value={tab} onChange={(id) => set({ tab: id })} ariaLabel={t("nav.profile")}>
+        {/* Ringkasan akun */}
+        <div className="profile-head">
+          <Avatar name={me.name} src={me.avatarUrl} large />
+          <div style={{ minWidth: 0 }}>
+            <div className="profile-name">{me.name}</div>
+            <div className="t-caption muted">@{me.username} · {me.email}</div>
           </div>
-        </form>
+          <StatusChip tone="info">{me.role}</StatusChip>
+        </div>
 
-        <form
-          className="card stack"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setErr("username", null);
-            uname.mutate({ username });
-          }}
-        >
-          <h2 className="card-title">{t("account.usernameSection")}</h2>
-          {errors.username && <Alert kind="error">{errors.username}</Alert>}
-          <Field label={t("account.username")} required htmlFor="username" helper={t("account.usernameRule")}>
-            <input id="username" className="input mono" value={username} maxLength={20} autoCapitalize="none" onChange={(e) => setUsername(e.target.value)} />
-          </Field>
+        {tab === "profile" && (
           <div>
-            <button className="btn btn-primary" disabled={uname.isPending || username.trim().toLowerCase() === me.username}>
-              <Icon name="save" /> {t("common.save")}
-            </button>
+            <h2 className="settings-title">{t("profile.groupPersonal")}</h2>
+            <SettingRow label={t("profile.avatar")} hint={t("profile.avatarHint")} error={errors.avatar}>
+              <div className="avatar-edit">
+                <Avatar name={me.name} src={me.avatarUrl} xl />
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept={avatarGuard.accept}
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!f) return;
+                    // Tolak di sisi klien: format/ukuran di luar aturan avatar di Pengaturan.
+                    const msg = avatarGuard.check(f);
+                    if (msg) {
+                      setErr("avatar", msg);
+                      toast.push(msg, "error");
+                      return;
+                    }
+                    void uploadAvatar(f);
+                  }}
+                />
+                <button type="button" className="btn btn-secondary btn-sm" disabled={avatarBusy || removeAvatar.isPending} onClick={() => fileRef.current?.click()}>
+                  <Icon name="upload" /> {me.avatarUrl ? t("profile.avatarChange") : t("profile.avatarUpload")}
+                </button>
+                {me.avatarUrl && (
+                  <button type="button" className="btn btn-danger-ghost btn-sm" disabled={avatarBusy || removeAvatar.isPending} onClick={() => removeAvatar.mutate()}>
+                    <Icon name="trash" /> {t("profile.avatarRemove")}
+                  </button>
+                )}
+              </div>
+            </SettingRow>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                profile.mutate({ name, preferredLanguage: me.preferredLanguage });
+              }}
+            >
+              <SettingRow label={t("account.name")} hint={t("profile.nameHint")} dirty={nameDirty} error={errors.name}>
+                <input className="input" style={{ width: 260, maxWidth: "100%" }} maxLength={255} value={name} aria-label={t("account.name")} onChange={(e) => setName(e.target.value)} />
+                <button className="btn btn-primary btn-sm" disabled={profile.isPending || !nameDirty || !name.trim()}>
+                  <Icon name="save" /> {t("common.save")}
+                </button>
+              </SettingRow>
+            </form>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                profile.mutate({ name: me.name, preferredLanguage: language });
+              }}
+            >
+              <SettingRow label={t("common.language")} hint={t("account.languageHint")} dirty={langDirty} error={errors.language}>
+                <div style={{ width: 220 }}>
+                  <Select value={language} onChange={(e) => setLanguage(e.target.value as Lang)} aria-label={t("common.language")} width="100%">
+                    <option value="ID">Bahasa Indonesia</option>
+                    <option value="EN">English</option>
+                  </Select>
+                </div>
+                <button className="btn btn-primary btn-sm" disabled={profile.isPending || !langDirty}>
+                  <Icon name="save" /> {t("common.save")}
+                </button>
+              </SettingRow>
+            </form>
           </div>
-        </form>
+        )}
 
-        <form
-          className="card stack"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setErr("email", null);
-            mail.mutate({ email });
-          }}
-        >
-          <h2 className="card-title">{t("account.emailSection")}</h2>
-          <p className="helper" style={{ margin: 0 }}>
-            {t("account.emailCurrent")}: <b>{me.email}</b>
-          </p>
-          {me.pendingEmail && (
-            <Alert kind="info">
-              {t("account.emailPending", {
-                email: me.pendingEmail.newEmail,
-                until: fmt.dateTime(me.pendingEmail.expiresAt),
-              })}
-            </Alert>
-          )}
-          {errors.email && <Alert kind="error">{errors.email}</Alert>}
-          <Field label={t("account.newEmail")} required htmlFor="email" helper={t("account.emailHint")}>
-            <input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Field>
+        {tab === "account" && (
           <div>
-            <button className="btn btn-primary" disabled={mail.isPending || !email.trim()}>
-              {t("account.sendConfirmation")}
-            </button>
-          </div>
-        </form>
+            <h2 className="settings-title">{t("profile.groupLogin")}</h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                uname.mutate({ username });
+              }}
+            >
+              <SettingRow label={t("account.username")} hint={t("account.usernameRule")} dirty={unameDirty} error={errors.username}>
+                <input className="input mono" style={{ width: 220, maxWidth: "100%" }} maxLength={20} autoCapitalize="none" value={username} aria-label={t("account.username")} onChange={(e) => setUsername(e.target.value)} />
+                <button className="btn btn-primary btn-sm" disabled={uname.isPending || !unameDirty}>
+                  <Icon name="save" /> {t("common.save")}
+                </button>
+              </SettingRow>
+            </form>
 
-        <form
-          className="card stack"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setErr("password", null);
-            if (next !== conf) return setErr("password", t("err.PASSWORD_MISMATCH"));
-            pass.mutate({ current: cur, next });
-          }}
-        >
-          <h2 className="card-title">{t("account.changePassword")}</h2>
-          {errors.password && <Alert kind="error">{errors.password}</Alert>}
-          <Field label={t("account.currentPassword")} required htmlFor="p1">
-            <PasswordInput id="p1" className="input" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} />
-          </Field>
-          <Field label={t("account.newPassword")} required htmlFor="p2" helper={t("account.passwordRule")}>
-            <PasswordInput id="p2" className="input" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
-          </Field>
-          <Field label={t("account.confirmPassword")} required htmlFor="p3">
-            <PasswordInput id="p3" className="input" autoComplete="new-password" value={conf} onChange={(e) => setConf(e.target.value)} />
-          </Field>
-          <div>
-            <button className="btn btn-primary" disabled={pass.isPending || !cur || !next || !conf}>
-              <Icon name="save" /> {t("common.save")}
-            </button>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                mail.mutate({ email });
+              }}
+            >
+              <SettingRow
+                label={t("account.emailSection")}
+                hint={t("account.emailHint")}
+                meta={`${t("account.emailCurrent")}: ${me.email}`}
+                dirty={!!email.trim()}
+                error={errors.email}
+              >
+                <input className="input" type="email" style={{ width: 260, maxWidth: "100%" }} value={email} placeholder={t("account.newEmail")} aria-label={t("account.newEmail")} onChange={(e) => setEmail(e.target.value)} />
+                <button className="btn btn-primary btn-sm" disabled={mail.isPending || !email.trim()}>
+                  <Icon name="key" /> {t("account.sendConfirmation")}
+                </button>
+              </SettingRow>
+            </form>
+            {me.pendingEmail && (
+              <div style={{ padding: "0 20px 16px" }}>
+                <Alert kind="info">
+                  {t("account.emailPending", { email: me.pendingEmail.newEmail, until: fmt.dateTime(me.pendingEmail.expiresAt) })}
+                </Alert>
+              </div>
+            )}
           </div>
-        </form>
-      </div>
+        )}
+
+        {tab === "security" && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setErr("password", null);
+              if (next !== conf) return setErr("password", t("err.PASSWORD_MISMATCH"));
+              pass.mutate({ current: cur, next });
+            }}
+          >
+            <h2 className="settings-title">{t("account.changePassword")}</h2>
+            <p className="settings-sub">{t("account.passwordRule")}</p>
+            {errors.password && (
+              <div style={{ padding: "0 20px 12px" }}>
+                <Alert kind="error">{errors.password}</Alert>
+              </div>
+            )}
+            <SettingRow label={t("account.currentPassword")} dirty={!!cur}>
+              <div style={{ width: 280, maxWidth: "100%" }}>
+                <PasswordInput className="input" autoComplete="current-password" value={cur} aria-label={t("account.currentPassword")} onChange={(e) => setCur(e.target.value)} />
+              </div>
+            </SettingRow>
+            <SettingRow label={t("account.newPassword")} dirty={!!next}>
+              <div style={{ width: 280, maxWidth: "100%" }}>
+                <PasswordInput className="input" autoComplete="new-password" value={next} aria-label={t("account.newPassword")} onChange={(e) => setNext(e.target.value)} />
+              </div>
+            </SettingRow>
+            <SettingRow label={t("account.confirmPassword")} dirty={!!conf}>
+              <div style={{ width: 280, maxWidth: "100%" }}>
+                <PasswordInput className="input" autoComplete="new-password" value={conf} aria-label={t("account.confirmPassword")} onChange={(e) => setConf(e.target.value)} />
+              </div>
+            </SettingRow>
+            <div className="settings-footer">
+              <button className="btn btn-primary btn-sm" disabled={pass.isPending || !cur || !next || !conf}>
+                <Icon name="save" /> {t("common.save")}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={!cur && !next && !conf} onClick={() => { setCur(""); setNext(""); setConf(""); setErr("password", null); }}>
+                {t("common.cancel")}
+              </button>
+            </div>
+          </form>
+        )}
+      </SettingsShell>
     </div>
+  );
+}
+
+export function ProfileView() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <Profile />
+    </Suspense>
   );
 }

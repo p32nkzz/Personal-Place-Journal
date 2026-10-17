@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { MapTypeSwitch } from "~/components/map/MapTypeSwitch";
 import { ActiveChip, CategoryChips, RelationChip, VisitStatusChip } from "~/components/chips";
 import { MapView } from "~/components/map/MapView";
 import { useMapColors } from "~/components/map/useMapColors";
@@ -42,7 +43,20 @@ export default function CurationDetailPage() {
   };
 
   if (isLoading) return <Spinner />;
-  if (!p) return <EmptyState title={t("place.notFound")} action={<Link href="/admin/curation" className="btn btn-primary">{t("nav.curation")}</Link>} />;
+  if (!p)
+    return (
+      <div className="container page">
+        <EmptyState
+          title={t("common.notFound")}
+          text={t("curation.notFoundHint")}
+          action={
+            <Link href="/admin/curation" className="btn btn-primary">
+              <Icon name="arrow-left" /> {t("nav.curation")}
+            </Link>
+          }
+        />
+      </div>
+    );
 
   const referred = p.masterRelationStatus === "REFERRED";
 
@@ -94,6 +108,22 @@ export default function CurationDetailPage() {
           </div>
 
           <div className="card stack-sm">
+            <h2 className="card-title">{t("place.reviewPhotos")}</h2>
+            {!p.reviewPhotos.length ? (
+              <p className="muted" style={{ margin: 0 }}>{t("photo.none")}</p>
+            ) : (
+              <div className="photo-grid">
+                {p.reviewPhotos.map((ph) => (
+                  <div key={ph.uid} className="photo">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={ph.url} alt={ph.caption ?? ""} loading="lazy" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card stack-sm">
             <h2 className="card-title">{t("curation.visitPhotos")}</h2>
             {!p.photos.length ? (
               <p className="muted" style={{ margin: 0 }}>{t("photo.none")}</p>
@@ -111,6 +141,7 @@ export default function CurationDetailPage() {
         </div>
 
         <div className="stack">
+          <MapTypeSwitch />
           <div className="map-box-md">
             <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: mapColors.mine, title: p.name }]} fit />
           </div>

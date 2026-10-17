@@ -7,15 +7,15 @@
 | Document ID | ERD-PPJ-001 |
 | Document | Entity Relationship & Database Specification |
 | Application | Personal Place Journal |
-| Version | 1.2.0 |
+| Version | 1.3.0 |
 | Status | IN_REVIEW |
 | Model Level | Logical |
 | Target Engine | Engine-neutral (lihat SRS-PPJ-001 — `TBD`) |
-| Source Baseline | BRD-PPJ-001 v1.2.0 (`result/v1.2.0/BRD_PPJ_v1.2.0.md`) |
+| Source Baseline | BRD-PPJ-001 v1.3.0 (`result/v1.3.0/BRD_PPJ_v1.3.0.md`) |
 | Phase | Phase 1 |
 | Owner | Verry Prima |
 | Audience | PO, BA, Developer, QA, Database Engineer, AI coding agent |
-| Last Updated | 2026-10-14 |
+| Last Updated | 2026-10-15 |
 | Purpose | Mendefinisikan entity, atribut, relasi, cardinality, constraint, index, lifecycle, delete behavior, reference data, dan aturan integritas database Personal Place Journal secara engine-neutral. |
 
 Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan struktur yang breaking, MINOR = penambahan tabel/kolom non-breaking, PATCH = koreksi redaksi.
@@ -34,6 +34,7 @@ Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan struktur yang breaking, 
 | 1.0.0 | 2026-10-13 | Verry Prima | BRD-PPJ-001 v1.0.0 | Restrukturisasi sesuai `standard/ERD_standard.md` v1.0: tipe data logis, `TIMESTAMP` UTC, penamaan constraint/index, relationship catalog, check & partial unique constraint, katalog derived values, klasifikasi data, integrity test. Perubahan skema: `users.password` → `password_hash`; kolom `code` pada `ref_user_roles`, `ref_master_relation_statuses`, `ref_master_history_actions`; `master_place_photos.created_by`; email unik case-insensitive | Ya (migration) |
 | 1.1.0 | 2026-10-13 | Verry Prima | BRD-PPJ-001 v1.1.0 | Tabel baru `email_change_requests`, `app_settings`, `backup_logs`; kolom `users.preferred_language`, `users.must_change_password`; `master_places.address` NOT NULL; FK association CATEGORY menjadi RESTRICT; unique `tags (user_id, LOWER(name))` dan `itinerary_places (itinerary_id, sequence)`; check tanggal itinerary & panjang teks; rating MASTER mengecualikan user DELETED; restore user | Ya (migration) |
 | 1.2.0 | 2026-10-14 | Verry Prima | BRD-PPJ-001 v1.2.0 | Kolom baru `users.username` (STRING(20), lowercase) sebagai identifier login kedua; `uq_users__username` = `UNIQUE(LOWER(username))` termasuk soft-deleted; check `ck_users__username_format`; resolusi login email/username (24.22); TX-18 ubah username | Tidak (kolom baru; expand + backfill) |
+| 1.3.0 | 2026-10-15 | Verry Prima | BRD-PPJ-001 v1.3.0 | Kolom avatar `users.avatar_file_path` & `users.avatar_storage_type`; tabel baru `my_place_photos` (foto tinjauan MY PLACE); `master_place_photos.source_my_place_photo_id` + `origin_type` `MY_PLACE`; key `app_settings` baru `photo.max_per_my_place`, `avatar.allowed_types`, `avatar.max_size_mb`; TX-19 avatar | Tidak (tabel/kolom nullable baru; enum & check diperluas) |
 
 ### 2.1 Keputusan Klarifikasi pada Versi 1.0.0
 
@@ -63,6 +64,15 @@ Aturan versi: `MAJOR.MINOR.PATCH` — MAJOR = perubahan struktur yang breaking, 
 | EK-12 | Kolom baru `users.username` STRING(20) NOT NULL — identifier login selain email; dinormalisasi lowercase. | K-53, K-55 |
 | EK-13 | Constraint baru: `uq_users__username` = `UNIQUE(LOWER(username))` mencakup baris soft-deleted; `ck_users__username_format` = panjang 4–20, karakter `a-z`, `0-9`, `.`, `_`. | K-54 |
 | EK-14 | Login me-resolve identifier: mengandung `@` → `users.email`, selain itu → `users.username` (query 24.22). Username diubah langsung oleh pemilik akun (TX-18), tanpa tabel request/riwayat. | K-53, K-55 |
+
+### 2.4 Perubahan pada Versi 1.3.0 (dari BRD-PPJ-001 v1.3.0)
+
+| No | Perubahan | BRD Ref |
+|---:|---|---|
+| EK-15 | Kolom baru `users.avatar_file_path` STRING(1000) NULL dan `users.avatar_storage_type` ENUM{UPLOAD,S3} NULL — satu avatar opsional per user, tanpa external link (DD-21). | K-56 |
+| EK-16 | Tabel baru `my_place_photos` (foto tinjauan) dengan struktur & aturan storage yang sama dengan `visit_photos`; FK `my_place_id` CASCADE; partial unique primary per MY PLACE (DD-22). | K-58 |
+| EK-17 | `master_place_photos.source_my_place_photo_id` (nullable, SET NULL) dan nilai `origin_type` baru `MY_PLACE`; check `ck_master_place_photos__origin_admin` diganti `ck_master_place_photos__origin_source`. | K-59 |
+| EK-18 | Seed `app_settings` baru: `photo.max_per_my_place` = 10, `avatar.allowed_types` = `jpg,png,webp`, `avatar.max_size_mb` = 5 (total 7 key). | K-57, K-58 |
 
 ---
 
@@ -112,7 +122,9 @@ Kolom tipe pada Data Dictionary menggunakan **tipe logis** (Section 6.4). Contoh
 | VISIT, PLANNED/UNEXPECTED VISIT | FR-VST-001..006 | `visits` (`itinerary_id`, `itinerary_place_id`) |
 | VISIT STATUS | FR-VST-006 | `my_places.visit_status` (denormalized) |
 | VISIT PHOTO | FR-VPH-001..003 | `visit_photos` |
-| MASTER PLACE PHOTO | FR-MPH-001..003 | `master_place_photos` |
+| MY PLACE PHOTO (Foto Tinjauan) | FR-MYP-015, FR-MPP-001..004 | `my_place_photos` |
+| MASTER PLACE PHOTO | FR-MPH-001..004 | `master_place_photos` (`source_visit_photo_id`, `source_my_place_photo_id`) |
+| AVATAR | FR-USR-025..026 | `users.avatar_file_path`, `users.avatar_storage_type` |
 | ITINERARY | FR-ITN-001 | `itineraries` |
 | ITINERARY PLACE | FR-ITN-002..005 | `itinerary_places` |
 | Rating MY PLACE / MASTER | FR-MYP-008, FR-MST-009 | — (calculated, Section 19) |
@@ -124,7 +136,7 @@ Kolom tipe pada Data Dictionary menggunakan **tipe logis** (Section 6.4). Contoh
 | USERNAME (login email/username) | FR-USR-001, FR-USR-023..024 | `users.username` |
 | EMAIL CHANGE CONFIRMATION | FR-USR-018..019, FR-NTF-001 | `email_change_requests` |
 | Restore user | FR-USR-020 | `users.deleted_at`, `users.deleted_by` (dikosongkan, TX-15) |
-| APP SETTING (aturan foto) | FR-CFG-001..003 | `app_settings` |
+| APP SETTING (aturan foto & avatar) | FR-CFG-001..003 | `app_settings` |
 | BACKUP | FR-BKP-001..005 | `backup_logs` (file di storage, SRS) |
 
 ---
@@ -145,7 +157,7 @@ Kolom tipe pada Data Dictionary menggunakan **tipe logis** (Section 6.4). Contoh
 
 | Memakai UID | Dikecualikan (alasan) |
 |---|---|
-| `users`, `categories`, `master_places`, `master_place_photos`, `my_places`, `tags`, `my_place_master_histories`, `visits`, `visit_photos`, `itineraries`, `itinerary_places`, `app_settings`, `backup_logs` | `ref_*` (reference-only); `master_place_categories`, `my_place_categories`, `my_place_tags` (association, dikelola via resource parent); `email_change_requests` (diakses melalui token konfirmasi, bukan resource API) |
+| `users`, `categories`, `master_places`, `master_place_photos`, `my_places`, `my_place_photos`, `tags`, `my_place_master_histories`, `visits`, `visit_photos`, `itineraries`, `itinerary_places`, `app_settings`, `backup_logs` | `ref_*` (reference-only); `master_place_categories`, `my_place_categories`, `my_place_tags` (association, dikelola via resource parent); `email_change_requests` (diakses melalui token konfirmasi, bukan resource API) |
 
 Jika association kelak menjadi resource mandiri, keputusan UID ditinjau ulang di SRS.
 
@@ -221,7 +233,7 @@ Koordinat menggunakan `DECIMAL(10,7)`; tipe spasial: `TBD` (OI-09).
 | Actor | `created_by`, `updated_by`, `requested_by`, `triggered_by` | IDENTIFIER → `users.id` | NO / YES | `master_places`, `master_place_photos` (`created_by` saja), `app_settings` (`updated_by`), `email_change_requests` (`requested_by`), `backup_logs` (`triggered_by`) |
 | Active flag | `is_active` | BOOLEAN default TRUE | NO | `users`, `categories`, `master_places`, `my_places`, seluruh `ref_*` |
 | Soft delete | `deleted_at`, `deleted_by` | TIMESTAMP, IDENTIFIER | YES | `users`, `master_places` |
-| Ordering | `sort_order` | INTEGER default 0 | NO | `categories`, `ref_*`, `visit_photos`, `master_place_photos` |
+| Ordering | `sort_order` | INTEGER default 0 | NO | `categories`, `ref_*`, `visit_photos`, `my_place_photos`, `master_place_photos` |
 | Concurrency | `version` | INTEGER | — | Tidak dipakai Phase 1 (OI-10) |
 
 **Invariant soft delete:**
@@ -292,8 +304,8 @@ is_active = TRUE AND deleted_at IS NOT NULL →  TIDAK VALID
 **Konsekuensi:** Perlindungan history bergantung pada validasi consent di service layer (TX-03, DI-062).
 
 #### DD-12 — MASTER PLACE PHOTO sebagai salinan independen dengan lineage
-**Keputusan:** `master_place_photos.source_visit_photo_id` (nullable, SET NULL) + `origin_type`.
-**Alasan:** Menghapus VISIT PHOTO tidak boleh menghapus MASTER PHOTO.
+**Keputusan:** `master_place_photos.source_visit_photo_id` / `source_my_place_photo_id` (nullable, SET NULL) + `origin_type` (`ADMIN` / `VISIT` / `MY_PLACE`); maksimal satu sumber terisi.
+**Alasan:** Menghapus VISIT PHOTO atau MY PLACE PHOTO tidak boleh menghapus MASTER PHOTO.
 **Konsekuensi:** `origin_type = VISIT` dapat memiliki `source_visit_photo_id = NULL` setelah sumber dihapus; kewajiban source hanya saat pembuatan (CR-MPH-02).
 
 #### DD-13 — Mode Admin/Explorer tidak disimpan
@@ -311,6 +323,16 @@ is_active = TRUE AND deleted_at IS NOT NULL →  TIDAK VALID
 **Keputusan:** `users.username` disimpan lowercase dengan `uq_users__username` yang mencakup baris soft-deleted; perubahan langsung meng-update kolom (TX-18). Username lama tidak dicadangkan.
 **Alternatif ditolak:** Tabel `username_histories` / reservasi username lama.
 **Alasan:** BRD K-55 tidak mensyaratkan konfirmasi maupun jejak perubahan username; keunikan cukup ditegakkan pada nilai saat ini.
+
+#### DD-21 — Avatar sebagai kolom pada `users`
+**Keputusan:** `users.avatar_file_path` + `users.avatar_storage_type` (keduanya NULL bila tanpa avatar); file lama dihapus saat diganti (TX-19).
+**Alternatif ditolak:** Tabel `user_avatars` / riwayat avatar.
+**Alasan:** Relasi 1 : 0..1 tanpa riwayat (BRD K-56); tabel terpisah tidak menambah nilai.
+
+#### DD-22 — Foto tinjauan MY PLACE sebagai tabel tersendiri
+**Keputusan:** Tabel `my_place_photos` (struktur sama dengan `visit_photos`, parent `my_place_id`).
+**Alternatif ditolak:** Tabel foto polymorphic (`place_photos` dengan `parent_type`) atau menyimpan foto tinjauan sebagai VISIT PHOTO tanpa VISIT.
+**Alasan:** FK nyata & CASCADE per parent (sejalan DD-02); foto tinjauan bukan dokumentasi kunjungan sehingga tidak boleh memengaruhi `visit_status`.
 
 #### DD-16 — Aturan foto sebagai tabel konfigurasi key-value
 **Keputusan:** `app_settings(key, value)`; key ditetapkan melalui migration/seed, Admin hanya mengubah `value`.
@@ -343,6 +365,7 @@ USERS
  │      ├──> MASTER_PLACES (optional, 0..1)
  │      ├──< MY_PLACE_CATEGORIES >── CATEGORIES
  │      ├──< MY_PLACE_TAGS >──────── TAGS
+ │      ├──< MY_PLACE_PHOTOS
  │      ├──< VISITS
  │      │      ├──> ITINERARIES (context, optional)
  │      │      ├──> ITINERARY_PLACES (context, optional)
@@ -354,7 +377,7 @@ USERS
 
 MASTER_PLACES
  ├──< MASTER_PLACE_CATEGORIES >── CATEGORIES
- ├──< MASTER_PLACE_PHOTOS ──> VISIT_PHOTOS (source, optional)
+ ├──< MASTER_PLACE_PHOTOS ──> VISIT_PHOTOS / MY_PLACE_PHOTOS (source, optional)
  └──< MY_PLACES (referenced by)
 
 USERS
@@ -381,6 +404,7 @@ REFERENCE (no FK)
 | master_places | Core – shared | Admin | ✅ | ✅ | ✅ | `TBD` |
 | master_place_photos | Core – shared | Admin | ✅ | ❌ | ❌ | `TBD` |
 | my_places | Core – personal | Owner | ✅ | ❌ | ✅ | `TBD` |
+| my_place_photos | Core – personal | Owner (via my_places) | ✅ | ❌ | ❌ | `TBD` |
 | tags | Core – personal | Owner | ✅ | ❌ | ❌ | `TBD` |
 | visits | Core – personal | Owner (via my_places) | ✅ | ❌ | ❌ | `TBD` |
 | visit_photos | Core – personal | Owner (via visits) | ✅ | ❌ | ❌ | `TBD` |
@@ -398,7 +422,7 @@ REFERENCE (no FK)
 | ref_master_history_actions | Reference | System | ❌ | ❌ | ✅ | 5 |
 | ref_tag_colors | Reference | System (Admin) | ❌ | ❌ | ✅ | 10+ |
 
-**Total:** 12 core + 3 association + 1 history + 1 log + 4 reference = **21 tabel**.
+**Total:** 13 core + 3 association + 1 history + 1 log + 4 reference = **22 tabel**.
 
 > Koreksi dari ERD v3.x yang menyebut "15 core business tables / 19 tables": jumlah tabel tidak berubah; perbedaan berasal dari salah hitung.
 
@@ -413,7 +437,7 @@ REFERENCE (no FK)
 | Master Place | `master_places` | Shared, soft delete, inactive |
 | Category | `categories` | Shared master, inactive |
 | Master Place Category | `master_place_categories` | Association |
-| Master Place Photo | `master_place_photos` | Independen, lineage ke VISIT PHOTO |
+| Master Place Photo | `master_place_photos` | Independen, lineage ke VISIT PHOTO atau MY PLACE PHOTO |
 | My Place | `my_places` | Personal snapshot, inactive, physical delete |
 | My Place Category | `my_place_categories` | Stored category personal |
 | Favorite | `my_places.is_favorite` | Bukan tabel |
@@ -426,6 +450,8 @@ REFERENCE (no FK)
 | Visit | `visits` | |
 | Visit Status | `my_places.visit_status` | Denormalized (DV-01) |
 | Visit Photo | `visit_photos` | |
+| My Place Photo (Foto Tinjauan) | `my_place_photos` | Opsional, banyak per MY PLACE |
+| Avatar | `users.avatar_file_path`, `users.avatar_storage_type` | Opsional, satu per user (DD-21) |
 | Itinerary | `itineraries` | |
 | Itinerary Place | `itinerary_places` | Boleh berulang |
 | Rating MY PLACE / MASTER | — | Calculated (DV-02, DV-03) |
@@ -435,7 +461,7 @@ REFERENCE (no FK)
 | Wajib ganti password | `users.must_change_password` | |
 | Username | `users.username` | Identifier login kedua; diubah pemilik akun (TX-18) |
 | Email Change Confirmation | `email_change_requests` | Token hash, 24 jam |
-| App Setting (aturan foto) | `app_settings` | Key-value |
+| App Setting (aturan foto & avatar) | `app_settings` | Key-value |
 | Backup | `backup_logs` | File di media penyimpanan (SRS) |
 
 ---
@@ -448,7 +474,7 @@ Kolom **Key**: PK, FK, UQ, IX. Kolom **PII**: ✅ = data pribadi (Section 25).
 
 **Purpose:** Akun aplikasi (Explorer dan Admin).
 **Classification:** Core  **Ownership:** System (dikelola Admin)  **UID:** Ya  **Soft delete:** Ya
-**BRD Ref:** FR-USR-001..016, FR-USR-023..024
+**BRD Ref:** FR-USR-001..016, FR-USR-023..026
 
 | # | Column | Logical Type | Null | Key | Default | Constraint / Rule | PII | Description |
 |---:|---|---|:---:|---|---|---|:---:|---|
@@ -461,11 +487,13 @@ Kolom **Key**: PK, FK, UQ, IX. Kolom **PII**: ✅ = data pribadi (Section 25).
 | 7 | role | CODE(50) | NO | IX | `EXPLORER` | ∈ `ref_user_roles.code` (tanpa FK) | | Role akun |
 | 8 | preferred_language | ENUM{ID,EN} | NO | | `ID` | | | Bahasa antarmuka |
 | 9 | must_change_password | BOOLEAN | NO | | FALSE | TRUE saat akun dibuat / password di-reset | | Wajib ganti password |
-| 10 | deleted_by | IDENTIFIER | YES | FK, IX | NULL | → users.id | | Admin yang menghapus |
-| 11 | is_active | BOOLEAN | NO | IX | TRUE | | | Status aktif |
-| 12 | deleted_at | TIMESTAMP | YES | IX | NULL | | | Waktu soft delete |
-| 13 | created_at | TIMESTAMP | NO | | now (UTC) | | | |
-| 14 | updated_at | TIMESTAMP | NO | | now (UTC) | | | |
+| 10 | avatar_file_path | STRING(1000) | YES | | NULL | lihat CR-USR-01 | ✅ | Path/key file avatar (baru v1.3.0) |
+| 11 | avatar_storage_type | ENUM{UPLOAD,S3} | YES | | NULL | lihat CR-USR-01 | | Mekanisme storage avatar (baru v1.3.0) |
+| 12 | deleted_by | IDENTIFIER | YES | FK, IX | NULL | → users.id | | Admin yang menghapus |
+| 13 | is_active | BOOLEAN | NO | IX | TRUE | | | Status aktif |
+| 14 | deleted_at | TIMESTAMP | YES | IX | NULL | | | Waktu soft delete |
+| 15 | created_at | TIMESTAMP | NO | | now (UTC) | | | |
+| 16 | updated_at | TIMESTAMP | NO | | now (UTC) | | | |
 
 #### Column Rules
 - `password_hash` — password minimal 8 karakter; password hasil generate 12 karakter (BRD K-33).
@@ -474,12 +502,16 @@ Kolom **Key**: PK, FK, UQ, IX. Kolom **PII**: ✅ = data pribadi (Section 25).
 - `password_hash` — password asal HARUS memuat huruf kecil, huruf besar, angka, dan simbol; panjang minimum `TBD` (BRD OI-10). Komposisi divalidasi service layer sebelum di-hash.
 - `role` — `ADMIN` hanya melalui seed; aplikasi hanya membuat `EXPLORER` pada Phase 1 (Service).
 - `username` — wajib diisi Admin saat create Explorer (TX-13) atau melalui seed untuk Admin awal; dinormalisasi lowercase sebelum validasi & simpan; tidak boleh mengandung `@` (pembeda dengan email saat login, query 24.22). Hanya pemilik akun yang dapat mengubah (TX-18); Admin tidak mengubah username Explorer (BRD BR-USR-017). Perubahan tidak menghasilkan history.
+- `avatar_file_path` / `avatar_storage_type` — opsional; hanya diisi/diubah/dikosongkan oleh pemilik akun (TX-19); hanya upload file (tidak ada `EXTERNAL`); tipe & ukuran divalidasi terhadap `avatar.allowed_types` & `avatar.max_size_mb`; EXIF GPS dihapus; file lama dihapus dari storage setelah diganti/dihapus.
 - Mode aktif Admin/Explorer tidak disimpan (DD-13).
 
 #### Conditional Rules
 ```text
 deleted_at IS NOT NULL → is_active = FALSE
 is_active = FALSE      → tidak dapat login
+
+CR-USR-01 Avatar
+(avatar_file_path IS NULL) = (avatar_storage_type IS NULL)
 ```
 
 #### Lifecycle / Delete
@@ -568,25 +600,26 @@ Tidak terhapus saat MASTER di-soft-delete (MASTER tetap ada secara fisik).
 
 **Purpose:** Foto shared MASTER PLACE.
 **Classification:** Core – shared  **Ownership:** Admin  **UID:** Ya  **Soft delete:** Tidak
-**BRD Ref:** FR-MPH-001..003
+**BRD Ref:** FR-MPH-001..004
 
 | # | Column | Logical Type | Null | Key | Default | Constraint / Rule | PII | Description |
 |---:|---|---|:---:|---|---|---|:---:|---|
 | 1 | id | IDENTIFIER | NO | PK | generated | immutable | | |
 | 2 | uid | UUID | NO | UQ | backend (v7) | immutable | | |
 | 3 | master_place_id | IDENTIFIER | NO | FK, IX | — | → master_places.id | | Parent |
-| 4 | source_visit_photo_id | IDENTIFIER | YES | FK, IX | NULL | → visit_photos.id | | Lineage sumber |
-| 5 | file_path | STRING(1000) | YES | | NULL | lihat CR-MPH-01 | | Path internal |
-| 6 | external_url | TEXT | YES | | NULL | lihat CR-MPH-01 | | URL eksternal |
-| 7 | file_name | STRING(255) | YES | | NULL | | | |
-| 8 | caption | TEXT | YES | | NULL | | | |
-| 9 | storage_type | ENUM{UPLOAD,EXTERNAL,S3} | NO | IX | `UPLOAD` | | | Mekanisme storage |
-| 10 | origin_type | ENUM{ADMIN,VISIT} | NO | IX | `ADMIN` | | | Asal foto |
-| 11 | is_primary | BOOLEAN | NO | IX | FALSE | maks satu per MASTER | | |
-| 12 | sort_order | INTEGER | NO | IX | 0 | ≥ 0 | | |
-| 13 | created_by | IDENTIFIER | NO | FK, IX | — | → users.id (Admin) | | Pembuat (baru v1.0.0) |
-| 14 | created_at | TIMESTAMP | NO | | now (UTC) | | | |
-| 15 | updated_at | TIMESTAMP | NO | | now (UTC) | | | |
+| 4 | source_visit_photo_id | IDENTIFIER | YES | FK, IX | NULL | → visit_photos.id | | Lineage sumber VISIT PHOTO |
+| 5 | source_my_place_photo_id | IDENTIFIER | YES | FK, IX | NULL | → my_place_photos.id | | Lineage sumber MY PLACE PHOTO (baru v1.3.0) |
+| 6 | file_path | STRING(1000) | YES | | NULL | lihat CR-MPH-01 | | Path internal |
+| 7 | external_url | TEXT | YES | | NULL | lihat CR-MPH-01 | | URL eksternal |
+| 8 | file_name | STRING(255) | YES | | NULL | | | |
+| 9 | caption | TEXT | YES | | NULL | | | |
+| 10 | storage_type | ENUM{UPLOAD,EXTERNAL,S3} | NO | IX | `UPLOAD` | | | Mekanisme storage |
+| 11 | origin_type | ENUM{ADMIN,VISIT,MY_PLACE} | NO | IX | `ADMIN` | lihat CR-MPH-02 | | Asal foto (`MY_PLACE` baru v1.3.0) |
+| 12 | is_primary | BOOLEAN | NO | IX | FALSE | maks satu per MASTER | | |
+| 13 | sort_order | INTEGER | NO | IX | 0 | ≥ 0 | | |
+| 14 | created_by | IDENTIFIER | NO | FK, IX | — | → users.id (Admin) | | Pembuat (baru v1.0.0) |
+| 15 | created_at | TIMESTAMP | NO | | now (UTC) | | | |
+| 16 | updated_at | TIMESTAMP | NO | | now (UTC) | | | |
 
 #### Conditional Rules
 ```text
@@ -596,12 +629,14 @@ storage_type = 'EXTERNAL' → external_url NOT NULL, file_path NULL
 storage_type = 'S3'       → metadata/key ditentukan SRS (OI-08)
 
 CR-MPH-02 Origin
-origin_type = 'VISIT' → source_visit_photo_id WAJIB saat insert (Service);
-                        boleh menjadi NULL setelah VISIT PHOTO sumber dihapus (SET NULL)
-origin_type = 'ADMIN' → source_visit_photo_id NULL
+origin_type = 'VISIT'    → source_visit_photo_id WAJIB saat insert (Service); source_my_place_photo_id NULL;
+                           boleh menjadi NULL setelah VISIT PHOTO sumber dihapus (SET NULL)
+origin_type = 'MY_PLACE' → source_my_place_photo_id WAJIB saat insert (Service); source_visit_photo_id NULL;
+                           boleh menjadi NULL setelah MY PLACE PHOTO sumber dihapus (SET NULL)
+origin_type = 'ADMIN'    → source_visit_photo_id NULL dan source_my_place_photo_id NULL
 
 CR-MPH-03 Sumber (Svc)
-source_visit_photo_id saat insert → VISIT PHOTO dari MY PLACE yang saat ini
+source_visit_photo_id / source_my_place_photo_id saat insert → foto dari MY PLACE yang saat ini
                                     mereferensikan master_place_id yang sama
 
 CR-MPH-04 Batas (Svc)
@@ -609,7 +644,7 @@ Tipe, ukuran, dan jumlah per MASTER sesuai app_settings saat upload; EXIF GPS di
 ```
 
 #### Lifecycle / Delete
-Physical delete oleh Admin. Tidak terpengaruh penghapusan VISIT PHOTO, VISIT, MY PLACE, atau USER. Penghapusan primary tidak memilih pengganti otomatis.
+Physical delete oleh Admin. Tidak terpengaruh penghapusan VISIT PHOTO, MY PLACE PHOTO, VISIT, MY PLACE, atau USER. Penghapusan primary tidak memilih pengganti otomatis.
 
 ---
 
@@ -954,7 +989,7 @@ Tidak dihapus; request kedaluwarsa tetap tersimpan (BRD AS-15 → K-51).
 
 ### 12.20 TABLE: app_settings
 
-**Purpose:** Konfigurasi aplikasi yang dapat diubah Admin tanpa deploy (Phase 1: aturan foto).
+**Purpose:** Konfigurasi aplikasi yang dapat diubah Admin tanpa deploy (Phase 1: aturan foto & avatar).
 **Classification:** Core – configuration  **Ownership:** Admin  **UID:** Ya  **Soft delete:** Tidak
 **BRD Ref:** FR-CFG-001..003, BR-CFG-001..004
 
@@ -977,6 +1012,9 @@ Tidak dihapus; request kedaluwarsa tetap tersimpan (BRD AS-15 → K-51).
 | `photo.max_size_mb` | Angka desimal | > 0 |
 | `photo.max_per_visit` | Bilangan bulat | ≥ 1 |
 | `photo.max_per_master_place` | Bilangan bulat | ≥ 1 |
+| `photo.max_per_my_place` | Bilangan bulat | ≥ 1 |
+| `avatar.allowed_types` | Daftar ekstensi dipisah koma, lowercase | Minimal satu tipe file gambar |
+| `avatar.max_size_mb` | Angka desimal | > 0 |
 
 #### Lifecycle / Delete
 Tidak dapat dihapus atau ditambah melalui aplikasi; key dikelola melalui migration/seed. Riwayat perubahan tidak disimpan — hanya `updated_by`/`updated_at` terakhir (BRD BR-CFG-004). Perubahan berlaku untuk upload berikutnya.
@@ -1017,6 +1055,40 @@ Tidak dihapus/diedit melalui aplikasi; hanya sistem yang memperbarui status. Ret
 
 ---
 
+### 12.22 TABLE: my_place_photos
+
+**Purpose:** Foto tinjauan (penanda) MY PLACE yang diisi owner secara opsional (baru v1.3.0).
+**Classification:** Core – personal  **Ownership:** Owner (via my_places)  **UID:** Ya  **Soft delete:** Tidak
+**BRD Ref:** FR-MYP-015, FR-MPP-001..004, FR-MPH-004
+
+| # | Column | Logical Type | Null | Key | Default | Constraint / Rule | PII | Description |
+|---:|---|---|:---:|---|---|---|:---:|---|
+| 1 | id | IDENTIFIER | NO | PK | generated | immutable | | |
+| 2 | uid | UUID | NO | UQ | backend (v7) | immutable | | |
+| 3 | my_place_id | IDENTIFIER | NO | FK, IX | — | → my_places.id; immutable | | Parent |
+| 4 | file_path | STRING(1000) | YES | | NULL | lihat CR-MPP-01 | | |
+| 5 | external_url | TEXT | YES | | NULL | lihat CR-MPP-01 | | |
+| 6 | file_name | STRING(255) | YES | | NULL | | | |
+| 7 | caption | TEXT | YES | | NULL | | ✅ | |
+| 8 | storage_type | ENUM{UPLOAD,EXTERNAL,S3} | NO | IX | `UPLOAD` | | | |
+| 9 | is_primary | BOOLEAN | NO | IX | FALSE | maks satu per MY PLACE | | |
+| 10 | sort_order | INTEGER | NO | IX | 0 | ≥ 0 | | |
+| 11 | created_at | TIMESTAMP | NO | | now (UTC) | | | |
+| 12 | updated_at | TIMESTAMP | NO | | now (UTC) | | | |
+
+#### Conditional Rules
+```text
+CR-MPP-01 Storage — sama dengan CR-MPH-01
+CR-MPP-02 Batas (Svc) — tipe & ukuran sesuai photo.allowed_types / photo.max_size_mb;
+          jumlah per MY PLACE ≤ photo.max_per_my_place saat upload; EXIF GPS dihapus
+CR-MPP-03 Tidak termasuk snapshot_data pengajuan; tidak memengaruhi visit_status
+```
+
+#### Lifecycle / Delete
+Physical delete oleh owner; ikut terhapus (CASCADE) saat MY PLACE dihapus (TX-03) tanpa menambah syarat DELETE CONSENT. Penghapusan men-SET NULL `master_place_photos.source_my_place_photo_id`.
+
+---
+
 ## 13. Relationship & Cardinality Catalog
 
 | Parent | Child (FK column) | Cardinality | Wajib? | Jenis | ON DELETE |
@@ -1045,6 +1117,8 @@ Tidak dihapus/diedit melalui aplikasi; hanya sistem yang memperbarui status. Ret
 | tags.id | my_place_tags.tag_id | 1 : 0..N | Ya | Association | CASCADE |
 | visits.id | visit_photos.visit_id | 1 : 0..N | Ya | Composition | CASCADE |
 | visit_photos.id | master_place_photos.source_visit_photo_id | 0..1 : 0..N | Tidak | Source/lineage | SET NULL |
+| my_places.id | my_place_photos.my_place_id | 1 : 0..N | Ya | Composition | CASCADE |
+| my_place_photos.id | master_place_photos.source_my_place_photo_id | 0..1 : 0..N | Tidak | Source/lineage | SET NULL |
 | itineraries.id | itinerary_places.itinerary_id | 1 : 0..N | Ya | Composition | CASCADE |
 | itineraries.id | visits.itinerary_id | 0..1 : 0..N | Tidak | Context reference | SET NULL |
 | itinerary_places.id | visits.itinerary_place_id | 0..1 : 0..N | Tidak | Context reference | SET NULL |
@@ -1063,9 +1137,9 @@ Kolom reference value (`users.role`, `my_places.master_relation_status`, `my_pla
 |---|---|---|---|
 | Association | CASCADE | NO ACTION | `master_place_categories.master_place_id`, `my_place_categories.my_place_id`, `my_place_tags.*` |
 | Association (pengecualian) | **RESTRICT** | NO ACTION | `master_place_categories.category_id`, `my_place_categories.category_id` (DD-19) |
-| Composition | CASCADE | NO ACTION | `master_place_photos.master_place_id`, `visits.my_place_id`, `visit_photos.visit_id`, `itinerary_places.itinerary_id`, `itinerary_places.my_place_id` |
+| Composition | CASCADE | NO ACTION | `master_place_photos.master_place_id`, `my_place_photos.my_place_id`, `visits.my_place_id`, `visit_photos.visit_id`, `itinerary_places.itinerary_id`, `itinerary_places.my_place_id` |
 | Optional / context reference | SET NULL | NO ACTION | `my_places.master_place_id`, `visits.itinerary_id`, `visits.itinerary_place_id` |
-| Source / lineage | SET NULL | NO ACTION | `master_place_photos.source_visit_photo_id` |
+| Source / lineage | SET NULL | NO ACTION | `master_place_photos.source_visit_photo_id`, `master_place_photos.source_my_place_photo_id` |
 | Ownership | RESTRICT | NO ACTION | `my_places.user_id`, `tags.user_id`, `itineraries.user_id`, `email_change_requests.user_id` |
 | Audit actor (`*_by`) | RESTRICT | NO ACTION | `users.deleted_by`, `master_places.created_by/updated_by/deleted_by`, `master_place_photos.created_by`, `my_place_master_histories.performed_by`, `email_change_requests.requested_by`, `app_settings.updated_by`, `backup_logs.triggered_by` |
 | History reference | RESTRICT | NO ACTION | `my_place_master_histories.from_master_place_id`, `to_master_place_id` |
@@ -1116,6 +1190,7 @@ Lapisan penegak: **DB** = database constraint; **DB+Svc** = database jika engine
 |---|---|---|
 | `uq_visit_photos__visit_id__primary` | `UNIQUE(visit_id) WHERE is_primary = TRUE` | DB+Svc |
 | `uq_master_place_photos__master_place_id__primary` | `UNIQUE(master_place_id) WHERE is_primary = TRUE` | DB+Svc |
+| `uq_my_place_photos__my_place_id__primary` | `UNIQUE(my_place_id) WHERE is_primary = TRUE` | DB+Svc |
 | `uq_email_change_requests__user_id__open` | `UNIQUE(user_id) WHERE confirmed_at IS NULL AND cancelled_at IS NULL` | DB+Svc |
 | `uq_backup_logs__running` | `UNIQUE(status) WHERE status = 'RUNNING'` | DB+Svc |
 
@@ -1137,7 +1212,9 @@ Lapisan penegak: **DB** = database constraint; **DB+Svc** = database jika engine
 | `ck_itinerary_places__sequence_positive` | `sequence >= 1` | DB |
 | `ck_master_place_photos__storage` | CR-MPH-01 (UPLOAD/EXTERNAL) | DB+Svc |
 | `ck_visit_photos__storage` | CR-VPH-01 (UPLOAD/EXTERNAL) | DB+Svc |
-| `ck_master_place_photos__origin_admin` | `origin_type <> 'ADMIN' OR source_visit_photo_id IS NULL` | DB |
+| `ck_my_place_photos__storage` | CR-MPP-01 (UPLOAD/EXTERNAL) | DB+Svc |
+| `ck_master_place_photos__origin_source` | `(origin_type <> 'ADMIN' OR (source_visit_photo_id IS NULL AND source_my_place_photo_id IS NULL)) AND (origin_type <> 'VISIT' OR source_my_place_photo_id IS NULL) AND (origin_type <> 'MY_PLACE' OR source_visit_photo_id IS NULL)` — menggantikan `ck_master_place_photos__origin_admin` | DB |
+| `ck_users__avatar` | CR-USR-01: `(avatar_file_path IS NULL) = (avatar_storage_type IS NULL)` | DB |
 | `ck_*__sort_order_non_negative` | `sort_order >= 0` | DB |
 | `ck_users__preferred_language` | `preferred_language IN ('ID','EN')` | DB |
 | `ck_users__username_format` | `username ~ '^[a-z0-9._]{4,20}$'` (lowercase, 4–20 karakter, tanpa `@`) | DB+Svc |
@@ -1165,6 +1242,9 @@ Lapisan penegak: **DB** = database constraint; **DB+Svc** = database jika engine
 | `visited_at` ≤ waktu saat ini (fungsi waktu non-deterministik, tidak sebagai DB check) | Svc |
 | Upload foto sesuai `app_settings` (tipe, ukuran, jumlah) dan penghapusan EXIF GPS | Svc |
 | Sumber MASTER PHOTO dari MY PLACE yang mereferensikan MASTER (CR-MPH-03) | Svc |
+| `origin_type = 'MY_PLACE'` wajib `source_my_place_photo_id` saat insert | Svc (CR-MPH-02) |
+| Upload foto tinjauan sesuai `photo.*` termasuk `photo.max_per_my_place` (CR-MPP-02) | Svc |
+| Upload avatar sesuai `avatar.allowed_types` & `avatar.max_size_mb`; hanya pemilik akun; hapus file lama (TX-19) | Svc |
 | Konfirmasi email: token valid, PENDING, email baru masih unik (CR-ECR-04) | Svc (TX-12) |
 | `must_change_password = TRUE` membatasi akses hanya ke ganti password | Svc |
 | Resolusi identifier login (email bila mengandung `@`, selain itu username) dan pesan gagal login generik | Svc (24.22) |
@@ -1182,7 +1262,7 @@ Lapisan penegak: **DB** = database constraint; **DB+Svc** = database jika engine
 | FK kolom reference value → `ref_*` | DD-04 |
 | Check `start_date ≤ visited_at ≤ end_date` | Tanggal itinerary hanya label (BRD BR-VST-005) |
 | Check `visited_at <= now()` | Fungsi waktu non-deterministik; ditegakkan Svc |
-| Check `origin_type = 'VISIT' → source_visit_photo_id NOT NULL` | Bertentangan dengan SET NULL lineage (DD-12) |
+| Check `origin_type = 'VISIT' → source_visit_photo_id NOT NULL` / `origin_type = 'MY_PLACE' → source_my_place_photo_id NOT NULL` | Bertentangan dengan SET NULL lineage (DD-12) |
 | Kolom `sequence` pada `visits` | DD-07 |
 
 ---
@@ -1203,6 +1283,7 @@ PK dan UQ di atas otomatis menjadi index. Index tambahan:
 | ix_master_place_categories__category_id | master_place_categories | category_id | B-tree | MASTER per CATEGORY |
 | ix_master_place_photos__master_place_id_sort_order | master_place_photos | master_place_id, sort_order | Composite | Galeri MASTER |
 | ix_master_place_photos__source_visit_photo_id | master_place_photos | source_visit_photo_id | B-tree | FK lineage |
+| ix_master_place_photos__source_my_place_photo_id | master_place_photos | source_my_place_photo_id | B-tree | FK lineage |
 | ix_my_places__user_id_is_active | my_places | user_id, is_active | Composite | List/peta default MY PLACE owner |
 | ix_my_places__user_id_master_relation_status | my_places | user_id, master_relation_status | Composite | Filter status relasi milik owner |
 | ix_my_places__user_id_visit_status | my_places | user_id, visit_status | Composite | Filter PLAN/VISITED |
@@ -1221,6 +1302,7 @@ PK dan UQ di atas otomatis menjadi index. Index tambahan:
 | ix_visits__itinerary_id_visited_at | visits | itinerary_id, visited_at | Composite | Actual route itinerary |
 | ix_visits__itinerary_place_id | visits | itinerary_place_id | B-tree | FK |
 | ix_visit_photos__visit_id_sort_order | visit_photos | visit_id, sort_order | Composite | Galeri VISIT |
+| ix_my_place_photos__my_place_id_sort_order | my_place_photos | my_place_id, sort_order | Composite | Galeri foto tinjauan MY PLACE |
 | ix_itineraries__user_id | itineraries | user_id | B-tree | List itinerary owner |
 | (dicakup `uq_itinerary_places__itinerary_id_sequence`) | itinerary_places | itinerary_id, sequence | Unique | Planned route |
 | ix_itinerary_places__my_place_id | itinerary_places | my_place_id | B-tree | Cek DELETE CONSENT, FK |
@@ -1315,6 +1397,9 @@ Seed reference dikelola melalui migration seed terpisah dari migration struktur 
 | photo.max_size_mb | 5 | Ukuran maksimum per file (MB) |
 | photo.max_per_visit | 10 | Jumlah maksimum foto per VISIT |
 | photo.max_per_master_place | 20 | Jumlah maksimum foto per MASTER PLACE |
+| photo.max_per_my_place | 10 | Jumlah maksimum foto tinjauan per MY PLACE |
+| avatar.allowed_types | jpg,png,webp | Tipe file foto profil yang diizinkan |
+| avatar.max_size_mb | 5 | Ukuran maksimum file foto profil (MB) |
 
 **users (Admin awal):** dibuat melalui seed; jumlah & kredensial (termasuk `username`, wajib memenuhi `ck_users__username_format`) `TBD` (ditetapkan di SRS, tidak didokumentasikan di ERD).
 
@@ -1422,7 +1507,7 @@ Status `SUCCESS`/`FAILED` final.
 | DV-07 | Butuh DELETE CONSENT | Tidak | — | `my_place_master_histories`, `itinerary_places` | `EXISTS(history) OR EXISTS(itinerary_places)` | Svc | Saat request delete |
 | DV-08 | Snapshot pengajuan aktif | Tidak | — | `my_place_master_histories` | History `SUBMITTED` terakhir per MY PLACE berstatus `REVIEW` | Query | On read |
 | DV-09 | State request email | Tidak | — | `email_change_requests` | CR-ECR-01 | Query | On read |
-| DV-10 | Aturan foto aktif | Tidak | — | `app_settings` | Nilai `photo.*` saat upload | Svc | Setiap upload |
+| DV-10 | Aturan foto & avatar aktif | Tidak | — | `app_settings` | Nilai `photo.*` (foto) / `avatar.*` (avatar) saat upload | Svc | Setiap upload |
 
 Catatan DV-04: MY PLACE yang mereferensikan MASTER `INACTIVE` tetap memakai CATEGORY MASTER.
 
@@ -1432,16 +1517,18 @@ Catatan DV-04: MY PLACE yang mereferensikan MASTER `INACTIVE` tetap memakai CATE
 
 | Tabel | Mode Delete | Kolom yang Diubah | Efek ke Relasi | History? | Restore? | Retensi |
 |---|---|---|---|---|---|---|
-| users | Soft | `is_active=FALSE`, `deleted_at`, `deleted_by` | Owned data tetap; akses ditolak; email tetap terkunci | Tidak (tanpa UNREFER massal) | Ya — Admin (TX-15) | Permanen Fase 1; purge Fase 2 |
+| users | Soft | `is_active=FALSE`, `deleted_at`, `deleted_by` | Owned data (termasuk avatar) tetap; akses ditolak; email & username tetap terkunci | Tidak (tanpa UNREFER massal) | Ya — Admin (TX-15) | Permanen Fase 1; purge Fase 2 |
 | master_places | Soft | `is_active=FALSE`, `deleted_at`, `deleted_by` | MY PLACE terkait → UNREFERRED (TX-01); categories & photos tetap | Ya, per MY PLACE | Tidak (Phase 1) | Permanen (`ASUMSI`) |
 | master_places | Inactive | `is_active=FALSE` | Tidak ada perubahan pada MY PLACE | Tidak | ACTIVATE | — |
 | categories | Inactive | `is_active=FALSE` | Association tetap | Tidak | ACTIVATE | — |
 | categories | Physical | — | Hanya bila tanpa association (FK RESTRICT, DD-19) | Tidak | — | — |
 | my_places | Inactive | `is_active=FALSE` | Tidak ada perubahan data turunan | Tidak | ACTIVATE | — |
-| my_places | Physical (TX-03) | — | CASCADE: `my_place_categories`, `my_place_tags`, `visits`→`visit_photos`, `itinerary_places` terkait, `my_place_master_histories`; SET NULL: `master_place_photos.source_visit_photo_id`, `visits.itinerary_place_id` (visits lain yang mereferensikan stop terhapus) | Tidak (history ikut terhapus) | Tidak | — |
+| my_places | Physical (TX-03) | — | CASCADE: `my_place_categories`, `my_place_tags`, `my_place_photos`, `visits`→`visit_photos`, `itinerary_places` terkait, `my_place_master_histories`; SET NULL: `master_place_photos.source_visit_photo_id`, `master_place_photos.source_my_place_photo_id`, `visits.itinerary_place_id` (visits lain yang mereferensikan stop terhapus) | Tidak (history ikut terhapus) | Tidak | — |
 | tags | Physical | — | CASCADE `my_place_tags` | Tidak | — | — |
 | visits | Physical | — | CASCADE `visit_photos`; SET NULL lineage; DV-01 | Tidak | — | — |
 | visit_photos | Physical | — | SET NULL `master_place_photos.source_visit_photo_id` | Tidak | — | — |
+| my_place_photos | Physical | — | SET NULL `master_place_photos.source_my_place_photo_id` | Tidak | — | — |
+| users (avatar) | Kolom dikosongkan / diganti (TX-19) | `avatar_file_path`, `avatar_storage_type` | File lama dihapus dari storage | Tidak | — | Tidak ada riwayat |
 | master_place_photos | Physical | — | — | Tidak | — | — |
 | itineraries | Physical | — | CASCADE `itinerary_places`; SET NULL `visits.itinerary_id`, `visits.itinerary_place_id` | Tidak | — | — |
 | itinerary_places | Physical | — | SET NULL `visits.itinerary_place_id` | Tidak | — | — |
@@ -1595,6 +1682,15 @@ BEGIN
   2. UPDATE users SET username=:new, updated_at=now WHERE id=:current_user AND username <> :new
        — gagal bila :new sudah dipakai (uq_users__username, termasuk soft-deleted) → "Username sudah digunakan"
 COMMIT   — berlaku langsung; sesi aktif tidak diakhiri; tidak ada history
+
+TX-19 — Upload / ganti / hapus avatar (pemilik akun)
+  1. Validasi tipe & ukuran terhadap avatar.allowed_types / avatar.max_size_mb; hapus EXIF GPS; simpan file baru
+BEGIN
+  2. SELECT avatar_file_path lama FROM users WHERE id=:current_user FOR UPDATE
+  3. UPDATE users SET avatar_file_path=:new_path|NULL, avatar_storage_type=:type|NULL, updated_at=now
+       WHERE id=:current_user
+COMMIT → hapus file lama dari storage (di luar transaksi; gagal → dicatat untuk pembersihan, OI-08)
+         gagal COMMIT → hapus file baru yang sudah tersimpan
 ```
 
 **Concurrency**
@@ -1621,7 +1717,7 @@ COMMIT   — berlaku langsung; sesi aktif tidak diakhiri; tidak ada history
 
 Isi per action: lihat 12.10 Conditional Rules.
 
-**Yang TIDAK menghasilkan history:** delete MY PLACE, inactivate/activate MY PLACE, soft delete USER, perubahan atribut MASTER PLACE, inactivate MASTER, FAVORITE, TAG, CATEGORY, ITINERARY, VISIT, switch mode Admin, restore user, perubahan email/username/password, perubahan `app_settings` (hanya `updated_by`/`updated_at`). Backup tercatat di `backup_logs`, bukan history relasi.
+**Yang TIDAK menghasilkan history:** delete MY PLACE, inactivate/activate MY PLACE, soft delete USER, perubahan atribut MASTER PLACE, inactivate MASTER, FAVORITE, TAG, CATEGORY, ITINERARY, VISIT, switch mode Admin, restore user, perubahan email/username/password/avatar, foto tinjauan MY PLACE, perubahan `app_settings` (hanya `updated_by`/`updated_at`). Backup tercatat di `backup_logs`, bukan history relasi.
 
 ---
 
@@ -1637,6 +1733,7 @@ Isi per action: lihat 12.10 Conditional Rules.
 | itinerary_places | via itineraries | `itineraries.user_id = my_places.user_id` | Svc (composite FK tidak diwajibkan Phase 1) |
 | visits | via my_places | `itineraries.user_id = my_places.user_id` bila `itinerary_id` terisi | Svc |
 | visit_photos | via visits | — | Svc |
+| my_place_photos | via my_places | — | Svc |
 | master_places, master_place_photos, categories, ref_* | — (shared) | Tulis hanya Admin mode Admin | Svc |
 | my_place_master_histories | via my_places | Dibuat hanya oleh business action | Svc |
 | email_change_requests | user_id | `requested_by` = user ybs, atau Admin (mode Admin) untuk akun Explorer | Svc |
@@ -1644,8 +1741,8 @@ Isi per action: lihat 12.10 Conditional Rules.
 
 Akses:
 - **Owner (Explorer / Admin mode Explorer):** CRUD data personal sendiri.
-- **Setiap user:** mengubah `users.username` miliknya sendiri (TX-18); Admin tidak mengubah username Explorer.
-- **Admin mode Admin:** read-only `my_places` & `visit_photos` milik user lain untuk kurasi; kelola `app_settings` dan `backup_logs`.
+- **Setiap user:** mengubah `users.username` (TX-18) dan avatar (TX-19) miliknya sendiri; Admin tidak mengubah username maupun avatar user lain.
+- **Admin mode Admin:** read-only `my_places`, `my_place_photos`, & `visit_photos` milik user lain untuk kurasi; read-only avatar user; kelola `app_settings` dan `backup_logs`.
 - **Explorer:** read-only `master_places` INACTIVE yang direferensikan `my_places` miliknya.
 - **Guest:** hanya `master_places` ACTIVE + `master_place_categories` (CATEGORY aktif) + `master_place_photos` + rating MASTER.
 - Data milik user soft-deleted tidak dapat diakses melalui aplikasi.
@@ -1682,11 +1779,14 @@ Multi-tenant: Tidak berlaku — aplikasi single-tenant.
 24.18 Request email terbuka: email_change_requests WHERE user_id = :id
                             AND confirmed_at IS NULL AND cancelled_at IS NULL AND expires_at > now
 24.19 Riwayat backup       : backup_logs ORDER BY started_at DESC, id DESC
-24.20 Aturan foto          : app_settings WHERE key LIKE 'photo.%'
+24.20 Aturan foto / avatar : app_settings WHERE key LIKE 'photo.%' (foto) / key LIKE 'avatar.%' (avatar)
 24.21 CATEGORY dipakai?    : EXISTS(master_place_categories) OR EXISTS(my_place_categories) WHERE category_id = :id
 24.22 Login lookup         : :identifier mengandung '@' → users WHERE email = LOWER(:identifier)
                             selain itu                → users WHERE username = LOWER(:identifier)
                             lalu verifikasi password_hash & 24.1; gagal → pesan generik
+24.23 Kandidat MASTER PHOTO: visit_photos & my_place_photos dari my_places WHERE master_place_id = :master_id
+                            (CR-MPH-03)
+24.24 Galeri foto tinjauan : my_place_photos WHERE my_place_id = :id ORDER BY sort_order, id
 ```
 
 SEBAIKNYA didefinisikan sebagai view/named query (keputusan teknis di SRS).
@@ -1699,6 +1799,7 @@ SEBAIKNYA didefinisikan sebagai view/named query (keputusan teknis di SRS).
 |---|---|:---:|---|
 | users.email | Confidential | ✅ | Unik, lowercase; hanya user ybs & Admin; masking di log |
 | users.name | Confidential | ✅ | Hanya user ybs & Admin |
+| users.avatar_file_path | Confidential | ✅ | Hanya user ybs & Admin; tidak diekspos ke Guest; URL akses `TBD` (OI-08) |
 | users.username | Confidential | ✅ | Unik, lowercase; hanya user ybs & Admin; tidak diekspos ke Guest |
 | users.password_hash | Secret | ✅ | Hash (algoritma di SRS); tidak pernah dikembalikan API; tidak di-log |
 | my_places.latitude/longitude/address | Personal | ✅ | Hanya owner; Admin read-only |
@@ -1706,6 +1807,7 @@ SEBAIKNYA didefinisikan sebagai view/named query (keputusan teknis di SRS).
 | tags.*, itineraries.*, itinerary_places.* | Personal | ❌ | Hanya owner |
 | visits.visited_at, visits.note | Personal | ✅ | Hanya owner |
 | visit_photos.* | Personal | ✅ | Hanya owner; Admin read-only; EXIF GPS dihapus saat upload |
+| my_place_photos.* | Personal | ✅ | Hanya owner; Admin read-only; EXIF GPS dihapus saat upload; menjadi Public hanya bila disalin ke MASTER PHOTO |
 | my_place_master_histories.snapshot_data | Internal | ✅ | Admin; owner untuk MY PLACE miliknya (`ASUMSI`) |
 | master_places.*, master_place_photos.*, categories.* (aktif) | Public | ❌ | Semua termasuk Guest |
 | master_places.created_by/updated_by/deleted_by | Internal | ❌ | Tidak diekspos ke Guest |
@@ -1733,10 +1835,11 @@ Aturan:
 | my_places | `TBD` | `TBD` | `TBD` | |
 | visits | 0 | `TBD` | `TBD` | Tumbuh tercepat bersama foto |
 | visit_photos | 0 | `TBD` | `TBD` | Volume file storage |
+| my_place_photos | 0 | `TBD` | `TBD` | Volume file storage |
 | my_place_master_histories | 0 | `TBD` | `TBD` | Append-only |
 | email_change_requests | 0 | Kecil | Kecil | |
 | backup_logs | 0 | Sesuai frekuensi backup manual | Kecil | |
-| app_settings | 4 | ~0 | 4 | Seed |
+| app_settings | 7 | ~0 | 7 | Seed |
 | ref_* | 21 | ~0 | ~21 | Seed |
 
 Seluruh estimasi `TBD` (OI-11).
@@ -1789,6 +1892,16 @@ Seluruh estimasi `TBD` (OI-11).
 | 2 | Backfill `username` untuk user existing (aturan generate `TBD`, OI-24) | Migrate data |
 | 3 | `users.username` → NOT NULL; tambah `uq_users__username` & `ck_users__username_format` | Constraint |
 
+**Perubahan dari ERD v1.2.0 ke v1.3.0:**
+
+| Urutan | Migration | Pola |
+|---:|---|---|
+| 1 | Tambah `users.avatar_file_path` & `users.avatar_storage_type` (NULL) + `ck_users__avatar` | Expand |
+| 2 | Create `my_place_photos` + FK CASCADE, partial unique primary, check storage, index | Expand |
+| 3 | Tambah `master_place_photos.source_my_place_photo_id` (NULL, FK SET NULL) + index | Expand |
+| 4 | Perluas `master_place_photos.origin_type` dengan `MY_PLACE`; ganti `ck_master_place_photos__origin_admin` → `ck_master_place_photos__origin_source` | Constraint |
+| 5 | Seed `app_settings`: `photo.max_per_my_place`, `avatar.allowed_types`, `avatar.max_size_mb` | Seed |
+
 ---
 
 ## 28. Data Integrity Rules
@@ -1807,7 +1920,7 @@ Seluruh estimasi `TBD` (OI-11).
 | DI-021 | Uniqueness | `categories.slug` unik | DB |
 | DI-022 | Uniqueness | `tags.(user_id, LOWER(name))` dan `tags.(user_id, slug)` unik | DB |
 | DI-023 | Uniqueness | `ref_*.code` / `ref_tag_colors.hex_code` unik | DB |
-| DI-024 | Uniqueness | Maksimal satu primary photo per VISIT dan per MASTER | DB+Svc |
+| DI-024 | Uniqueness | Maksimal satu primary photo per VISIT, per MY PLACE, dan per MASTER | DB+Svc |
 | DI-025 | Uniqueness | Tidak ada unique `(itinerary_id, my_place_id)` maupun `(user_id, master_place_id)` | Desain |
 | DI-030 | Domain | `visits.rating` NULL atau 1..5 | DB |
 | DI-031 | Domain | `tags.color` format `#RRGGBB` | DB+Svc |
@@ -1824,7 +1937,8 @@ Seluruh estimasi `TBD` (OI-11).
 | DI-046 | Lifecycle | Transisi relasi MASTER mengikuti 18.1; tidak ada cancel REVIEW | Svc |
 | DI-050 | Independence | Perubahan MASTER tidak mengubah data MY PLACE maupun `my_place_categories` | Svc |
 | DI-051 | Independence | Penonaktifan reference/preset tidak mengubah data existing (`tags.color`) | Desain |
-| DI-052 | Independence | Penghapusan VISIT PHOTO/VISIT/MY PLACE/USER tidak menghapus MASTER PLACE PHOTO | DB (SET NULL) |
+| DI-052 | Independence | Penghapusan VISIT PHOTO/MY PLACE PHOTO/VISIT/MY PLACE/USER tidak menghapus MASTER PLACE PHOTO | DB (SET NULL) |
+| DI-053 | Independence | MASTER PLACE PHOTO memiliki paling banyak satu sumber (VISIT PHOTO atau MY PLACE PHOTO) sesuai `origin_type` | DB |
 | DI-060 | Transaction | Soft delete MASTER + auto UNREFER + history dalam satu transaksi | TX-01 |
 | DI-061 | Transaction | Insert/delete VISIT + update `visit_status` dalam satu transaksi | TX-04 |
 | DI-062 | Transaction | Physical delete MY PLACE ber-history/ber-ITINERARY PLACE hanya dengan DELETE CONSENT, dalam satu transaksi | TX-03 |
@@ -1842,8 +1956,10 @@ Seluruh estimasi `TBD` (OI-11).
 | DI-101 | Account | `must_change_password = TRUE` membatasi akses hingga password diganti | Svc |
 | DI-102 | Account | Restore user mengosongkan `deleted_at`/`deleted_by` dan `is_active = TRUE`, tanpa history | TX-15 |
 | DI-103 | Account | Login memakai email atau username (24.22); username hanya diubah pemilik akun, langsung tanpa konfirmasi, tanpa history | Svc (TX-18) |
+| DI-104 | Account | Avatar opsional, satu per user, hanya upload; hanya pemilik akun yang mengubah; file lama dihapus (TX-19) | DB (CR-USR-01) + Svc |
 | DI-110 | Config | Upload foto divalidasi terhadap `app_settings` saat upload; perubahan konfigurasi tidak memengaruhi foto existing | Svc |
 | DI-111 | Config | Key `app_settings` tetap; Admin hanya mengubah `value` | Svc |
+| DI-112 | Config | Avatar divalidasi terhadap `avatar.*`; foto tinjauan terhadap `photo.*` termasuk `photo.max_per_my_place` | Svc |
 | DI-120 | Backup | Maksimal satu backup RUNNING; field konsisten dengan status | DB |
 | DI-121 | Backup | File & riwayat backup hanya untuk Admin; restore tidak melalui aplikasi | Svc |
 | DI-130 | Domain | `end_date ≥ start_date`; `sequence` unik per itinerary; `visited_at ≤ now` | DB / DB / Svc |
@@ -1899,6 +2015,15 @@ Seluruh estimasi `TBD` (OI-11).
 | IT-40 | DI-103 | Login dengan identifier `JALAN.JALAN` + password benar | Berhasil (dicocokkan ke `users.username`) |
 | IT-41 | DI-103 | User mengganti username; username lama dipakai user lain | Keduanya berhasil; login dengan username lama mengarah ke akun baru pemiliknya |
 | IT-42 | DI-103 | Admin mode Admin mengubah username Explorer | Ditolak (Svc) |
+| IT-43 | DI-104 | Set `avatar_file_path` terisi dengan `avatar_storage_type` NULL | Ditolak (check) |
+| IT-44 | DI-112 | Upload avatar `.gif` atau 6 MB saat `avatar.allowed_types = jpg,png,webp`, `avatar.max_size_mb = 5` | Ditolak; avatar tidak berubah |
+| IT-45 | DI-104 | Admin mode Admin mengubah avatar Explorer | Ditolak (Svc) |
+| IT-46 | DI-112 | Tambah foto tinjauan ke-11 saat `photo.max_per_my_place = 10` | Ditolak |
+| IT-47 | DI-024 | Dua MY PLACE PHOTO primary pada MY PLACE yang sama tanpa TX-10 | Ditolak |
+| IT-48 | DI-062 | Delete MY PLACE yang memiliki foto tinjauan (tanpa history & itinerary) | Berhasil dengan konfirmasi biasa; `my_place_photos` terhapus |
+| IT-49 | DI-052 | Delete MY PLACE PHOTO sumber MASTER PHOTO | MASTER PHOTO tetap; `source_my_place_photo_id = NULL` |
+| IT-50 | DI-053 | Insert MASTER PHOTO `origin_type = 'MY_PLACE'` dengan `source_visit_photo_id` terisi | Ditolak (check) |
+| IT-51 | CR-MPH-03 | Salin MY PLACE PHOTO dari MY PLACE yang tidak mereferensikan MASTER tujuan | Ditolak (Svc) |
 
 ---
 
@@ -1998,6 +2123,12 @@ TBD tidak boleh mengubah business rule yang sudah dikunci tanpa persetujuan baru
 40. Login me-resolve identifier: mengandung `@` → email, selain itu → username; pesan gagal login generik.
 41. Username hanya diubah pemilik akun melalui TX-18 (langsung, tanpa konfirmasi, tanpa history); jangan buat tabel riwayat/reservasi username.
 
+**Avatar & Foto Tinjauan (v1.3.0)**
+42. Avatar disimpan di `users.avatar_file_path` + `avatar_storage_type` (keduanya NULL bila tanpa avatar); jangan buat tabel avatar; tidak ada `EXTERNAL` untuk avatar.
+43. Validasi avatar terhadap `avatar.allowed_types` & `avatar.max_size_mb`, bukan `photo.*`; hapus file avatar lama setelah COMMIT (TX-19).
+44. Gunakan `my_place_photos` untuk foto tinjauan; jangan simpan foto tinjauan sebagai `visit_photos` atau tabel foto polymorphic; jangan ubah `visit_status` karena foto tinjauan.
+45. MASTER PHOTO dari foto tinjauan memakai `origin_type = 'MY_PLACE'` + `source_my_place_photo_id` (SET NULL); maksimal satu sumber per MASTER PHOTO.
+
 ---
 
 ## 32. Logical ERD Diagram
@@ -2031,6 +2162,7 @@ TBD tidak boleh mengubah business rule yang sudah dikunci tanpa persetujuan baru
           MY_PLACE_CATEGORIES >──────────────── CATEGORIES ────< MASTER_PLACE_CATEGORIES
 
 REFERENCE (no FK): REF_USER_ROLES · REF_MASTER_RELATION_STATUSES · REF_MASTER_HISTORY_ACTIONS · REF_TAG_COLORS
+PHOTO (v1.3.0)    : MY_PLACES ──< MY_PLACE_PHOTOS ──(source, 0..1, SET NULL)──< MASTER_PLACE_PHOTOS · USERS.avatar_* (atribut)
 ACCOUNT / OPS     : USERS ──< EMAIL_CHANGE_REQUESTS · USERS ──< BACKUP_LOGS (triggered_by) · APP_SETTINGS (updated_by → USERS)
 ```
 
@@ -2059,6 +2191,8 @@ erDiagram
     ITINERARY_PLACES |o--o{ VISITS : "planned visit"
     VISITS ||--o{ VISIT_PHOTOS : has
     VISIT_PHOTOS |o--o{ MASTER_PLACE_PHOTOS : "source"
+    MY_PLACES ||--o{ MY_PLACE_PHOTOS : has
+    MY_PLACE_PHOTOS |o--o{ MASTER_PLACE_PHOTOS : "source"
     USERS ||--o{ EMAIL_CHANGE_REQUESTS : requests
     USERS |o--o{ BACKUP_LOGS : triggers
     USERS |o--o{ APP_SETTINGS : "updated_by"
@@ -2072,6 +2206,8 @@ erDiagram
         CODE role
         ENUM preferred_language
         BOOLEAN must_change_password
+        STRING avatar_file_path
+        ENUM avatar_storage_type
         BOOLEAN is_active
         TIMESTAMP deleted_at
     }
@@ -2138,6 +2274,14 @@ erDiagram
         TIMESTAMP expires_at
         TIMESTAMP confirmed_at
         TIMESTAMP cancelled_at
+    }
+    MY_PLACE_PHOTOS {
+        IDENTIFIER id PK
+        UUID uid UK
+        IDENTIFIER my_place_id FK
+        ENUM storage_type
+        BOOLEAN is_primary
+        INTEGER sort_order
     }
     APP_SETTINGS {
         IDENTIFIER id PK
@@ -2211,7 +2355,7 @@ id=901 my_place_id=100 itinerary_id=NULL itinerary_place_id=NULL visited_at=2026
 
 | Dokumen | File |
 |---|---|
-| BRD | `BRD_PPJ.md` (BRD-PPJ-001 v1.2.0; arsip `result/v1.2.0/BRD_PPJ_v1.2.0.md`) |
+| BRD | `BRD_PPJ.md` (BRD-PPJ-001 v1.3.0; arsip `result/v1.3.0/BRD_PPJ_v1.3.0.md`) |
 | ERD v1.0.0 (arsip) | `ERD_PPJ_v1.0.0.md` |
 | ERD sebelumnya (arsip) | `ERD_final.md` (v3.2) |
 | Standar ERD | `standard/ERD_standard.md` |

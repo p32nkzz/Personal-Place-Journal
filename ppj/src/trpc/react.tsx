@@ -45,9 +45,15 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
     api.createClient({
       links: [
         loggerLink({
-          enabled: (op) =>
-            process.env.NODE_ENV === "development" ||
-            (op.direction === "down" && op.result instanceof Error),
+          enabled: (op) => {
+            // "Data tidak ditemukan" ditangani di UI (pesan kosong/tidak ditemukan), bukan kesalahan aplikasi.
+            if (op.direction === "down" && op.result instanceof Error) {
+              const code = (op.result as { data?: { code?: string } }).data?.code;
+              if (code === "NOT_FOUND") return false;
+              return true;
+            }
+            return process.env.NODE_ENV === "development";
+          },
         }),
         httpBatchStreamLink({
           transformer: SuperJSON,

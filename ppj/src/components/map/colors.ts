@@ -1,8 +1,8 @@
 /** Warna bawaan pin peta. Admin dapat mengubahnya di Pengaturan (app_settings `map.color_*`). */
 export const MAP_COLOR_DEFAULTS = {
-  master: "#111827",
-  mine: "#CA8A04",
-  favorite: "#FACC15",
+  master: "#3730A3",
+  mine: "#C026D3",
+  favorite: "#F59E0B",
   newPin: "#DC2626",
 } as const;
 

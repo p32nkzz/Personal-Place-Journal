@@ -6,7 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 
+import { Avatar } from "~/components/Avatar";
 import { Icon } from "~/components/Icon";
+import { TableLabels } from "~/components/TableLabels";
+import { TooltipLayer } from "~/components/Tooltip";
+import { ModeSwitchOverlay } from "~/components/ModeSwitchOverlay";
 import { useT } from "~/lib/i18n";
 import { api } from "~/trpc/react";
 
@@ -16,15 +20,11 @@ type ShellUser = {
   role: string;
   mode: "ADMIN" | "EXPLORER";
   mustChangePassword: boolean;
+  avatarUrl: string | null;
 } | null;
 
 type NavLeaf = { href: string; label: string; exact?: boolean };
 type NavItem = NavLeaf | { group: string; label: string; children: NavLeaf[] };
-
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase();
-}
 
 export function AppShell({
   user,
@@ -33,7 +33,7 @@ export function AppShell({
   user: ShellUser;
   children: React.ReactNode;
 }) {
-  const { t, lang, setLang } = useT();
+  const { t, lang, setLang, timezone } = useT();
   const pathname = usePathname();
   const router = useRouter();
   const { update } = useSession();
@@ -87,19 +87,34 @@ export function AppShell({
         { href: "/tags", label: t("nav.tags") },
       );
     }
-  } else if (!user) {
-    nav.push({ href: "/", label: t("nav.map"), exact: true });
   }
+  // Pengunjung publik (belum masuk) tidak melihat menu navigasi; Peta tetap terbuka lewat logo/beranda.
 
   const isActive = (n: NavLeaf) =>
     n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + "/");
 
+  const [switching, setSwitching] = useState<null | "ADMIN" | "EXPLORER">(null);
+
   const switchMode = async () => {
     const to = adminMode ? "EXPLORER" : "ADMIN";
-    await update({ mode: to });
-    router.push(to === "ADMIN" ? "/admin" : "/places");
-    router.refresh();
+    setMenu(false);
+    setSwitching(to);
+    try {
+      await update({ mode: to });
+      router.push(to === "ADMIN" ? "/admin" : "/places");
+      router.refresh();
+    } catch {
+      setSwitching(null);
+    }
   };
+
+  // Tutup layar loading setelah halaman tujuan tampil; batas waktu 10 detik sebagai pengaman.
+  useEffect(() => {
+    if (!switching) return;
+    const arrived = switching === "ADMIN" ? pathname.startsWith("/admin") : !pathname.startsWith("/admin");
+    const h = setTimeout(() => setSwitching(null), arrived ? 500 : 10000);
+    return () => clearTimeout(h);
+  }, [switching, pathname]);
 
   const toggleLang = () => {
     const next = lang === "ID" ? "EN" : "ID";
@@ -173,7 +188,7 @@ export function AppShell({
                   title={`${user.name}${user.role === "ADMIN" ? ` — ${adminMode ? t("mode.admin") : t("mode.explorer")}` : ""}`}
                   onClick={() => setMenu((m) => !m)}
                 >
-                  <span className="avatar">{initials(user.name)}</span>
+                  <Avatar name={user.name} src={user.avatarUrl} />
                   {user.role === "ADMIN" && !user.mustChangePassword && (
                     <span className="avatar-mode" aria-hidden>
                       <Icon name={adminMode ? "shield" : "user"} fixedWidth={false} />
@@ -183,13 +198,13 @@ export function AppShell({
                 {menu && (
                   <div className="dropdown-menu" role="menu">
                     <div className="menu-head">
-                      <span className="avatar avatar-lg">{initials(user.name)}</span>
+                      <Avatar name={user.name} src={user.avatarUrl} large />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 600 }}>{user.name}</div>
                         <div className="t-caption muted">@{user.username}</div>
                         {user.role === "ADMIN" && !user.mustChangePassword && (
                           <span className="mode-badge" style={{ marginTop: 6 }}>
-                            <Icon name={adminMode ? "shield" : "user"} fixedWidth={false} />&nbsp;
+                            <Icon name={adminMode ? "shield" : "user"} fixedWidth={false} />
                             {adminMode ? t("mode.admin") : t("mode.explorer")}
                           </span>
                         )}
@@ -198,17 +213,20 @@ export function AppShell({
                     <div className="dropdown-sep" />
                     {!user.mustChangePassword && (
                       <Link href="/profile" role="menuitem">
-                        {t("nav.profile")}
+                        <Icon name="user-gear" className="menu-ico" />
+                        <span>{t("nav.profile")}</span>
                       </Link>
                     )}
                     {user.role === "ADMIN" && !user.mustChangePassword && (
                       <button role="menuitem" onClick={switchMode}>
-                        {adminMode ? t("mode.switchToExplorer") : t("mode.switchToAdmin")}
+                        <Icon name="repeat" className="menu-ico" />
+                        <span>{adminMode ? t("mode.switchToExplorer") : t("mode.switchToAdmin")}</span>
                       </button>
                     )}
                     <div className="dropdown-sep" />
-                    <button role="menuitem" onClick={() => signOut({ callbackUrl: "/login" })}>
-                      {t("nav.logout")}
+                    <button role="menuitem" className="menu-danger" onClick={() => signOut({ callbackUrl: "/login" })}>
+                      <Icon name="logout" className="menu-ico" />
+                      <span>{t("nav.logout")}</span>
                     </button>
                   </div>
                 )}
@@ -218,17 +236,19 @@ export function AppShell({
                 <Icon name="key" /> {t("nav.login")}
               </Link>
             )}
-            <button
-              className="btn btn-ghost btn-sm btn-icon menu-toggle"
-              aria-label="Menu"
-              aria-expanded={open}
-              onClick={() => setOpen((o) => !o)}
-            >
-              <Icon name={open ? "xmark" : "bars"} />
-            </button>
+            {nav.length > 0 && (
+              <button
+                className="btn btn-ghost btn-sm btn-icon menu-toggle"
+                aria-label="Menu"
+                aria-expanded={open}
+                onClick={() => setOpen((o) => !o)}
+              >
+                <Icon name={open ? "xmark" : "bars"} />
+              </button>
+            )}
           </div>
         </div>
-        {open && (
+        {open && nav.length > 0 && (
           <nav className="nav-mobile" aria-label="Mobile">
             {nav.map((n) =>
               "children" in n ? (
@@ -250,13 +270,17 @@ export function AppShell({
         )}
       </header>
 
+      {switching && <ModeSwitchOverlay to={switching} />}
+
       <main className="shell-main">{children}</main>
+      <TableLabels />
+      <TooltipLayer />
 
       {pathname !== "/" && (
         <footer className="site-footer">
           <div className="container row-between">
             <span>© {new Date().getFullYear()} Personal Place Journal — Your Best Place Gallery</span>
-            <span>{t("common.timezoneNote")}</span>
+            <span>{t("common.timezoneNote", { tz: timezone })}</span>
           </div>
         </footer>
       )}

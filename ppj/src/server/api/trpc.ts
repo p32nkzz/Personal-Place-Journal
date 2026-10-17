@@ -2,6 +2,7 @@
  * Inisialisasi tRPC + prosedur berbasis role/mode (BRD 10.5, ERD 23).
  * Mode aktif akun ADMIN divalidasi di server (DD-13).
  */
+import { isDbConnectionError } from "~/server/lib/dbError";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
@@ -17,6 +18,14 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
+    // Database tidak terjangkau: kode pesan yang dapat diterjemahkan, bukan error mentah driver.
+    if (isDbConnectionError(error) || isDbConnectionError(error.cause)) {
+      return {
+        ...shape,
+        message: "DB_UNAVAILABLE",
+        data: { ...shape.data, code: "INTERNAL_SERVER_ERROR" as const, httpStatus: 503, zodError: null },
+      };
+    }
     return {
       ...shape,
       data: {

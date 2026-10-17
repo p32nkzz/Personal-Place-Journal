@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { ActiveChip } from "~/components/chips";
+import { ActiveChip, CategoryChip } from "~/components/chips";
 import { MasterForm } from "~/components/MasterForm";
 import {
   Alert,
@@ -61,7 +61,7 @@ export default function ReviewPage() {
                 <dt>{t("common.description")}</dt><dd style={{ whiteSpace: "pre-wrap" }}>{q.snapshot?.description ?? "—"}</dd>
                 <dt>{t("common.coordinates")}</dt><dd className="mono">{q.snapshot ? `${q.snapshot.latitude.toFixed(6)}, ${q.snapshot.longitude.toFixed(6)}` : "—"}</dd>
                 <dt>{t("common.category")}</dt>
-                <dd className="row">{q.snapshot?.category_codes.length ? q.snapshot.category_codes.map((c) => <span key={c} className="cat">{c}</span>) : "—"}</dd>
+                <dd className="row">{q.snapshot?.category_codes.length ? q.snapshot.category_codes.map((c) => <CategoryChip key={c} name={c} />) : "—"}</dd>
               </dl>
               <div className="row" style={{ marginTop: 8 }}>
                 <button className="btn btn-primary btn-sm" onClick={() => setAction({ kind: "new", item: q })}>{t("review.approveNew")}</button>
@@ -114,6 +114,7 @@ function ApproveNewModal({ item, onClose }: { item: QueueItem; onClose: () => vo
             googlePlaceId: draft.data.googlePlaceId,
             categoryUids: draft.data.categoryUids,
           }}
+          followMap={{ name: false, address: false }}
           busy={approve.isPending}
           error={error}
           submitLabel={t("review.approveNewSubmit")}
