@@ -61,6 +61,7 @@ import {
   faRepeat,
   faLinkSlash,
   faCamera,
+  faSatellite,
   faCircleDot,
   faThumbtack,
   faStreetView,
@@ -147,6 +148,7 @@ const ICONS = {
   landmark: faBuildingColumns,
   clock: faClock,
   check: faCheck,
+  satellite: faSatellite,
 } as const;
 
 export type IconName = keyof typeof ICONS;

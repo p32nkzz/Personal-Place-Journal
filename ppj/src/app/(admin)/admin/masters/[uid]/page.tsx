@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { ActiveChip, CategoryChips, MasterStatusChip } from "~/components/chips";
-import { MasterForm, type MasterFormValues } from "~/components/MasterForm";
+import { EditMasterEditor } from "~/components/MasterEditors";
 import { PhotoGallery } from "~/components/PhotoGallery";
 import { Coords, DescQuote, InfoRow } from "~/components/PlaceInfo";
 import { PlaceThumb } from "~/components/PlaceThumb";
@@ -51,7 +51,6 @@ export default function MasterEditPage() {
     setConfirm(null);
   };
 
-  const update = api.master.update.useMutation({ onSuccess: () => { refresh(); toast.push(t("common.saved"), "success"); }, onError });
   const setActive = api.master.setActive.useMutation({ onSuccess: () => { refresh(); setConfirm(null); toast.push(t("common.saved"), "success"); }, onError });
   const softDelete = api.master.softDelete.useMutation({ onSuccess: (r) => { toast.push(t("master.deleted", { n: r.unreferred }), "success"); router.push(fromMap ? "/" : "/admin/masters"); }, onError });
   const setPrimary = api.master.setPrimaryPhoto.useMutation();
@@ -59,24 +58,8 @@ export default function MasterEditPage() {
   const capPhoto = api.master.updatePhotoCaption.useMutation();
   const urlPhoto = api.master.addExternalPhoto.useMutation();
 
-  const initial: MasterFormValues | null = useMemo(
-    () =>
-      m
-        ? {
-            name: m.name,
-            address: m.address,
-            description: m.description ?? "",
-            latitude: m.latitude,
-            longitude: m.longitude,
-            googlePlaceId: m.googlePlaceId,
-            categoryUids: m.categories.map((c) => c.uid),
-          }
-        : null,
-    [m],
-  );
-
   if (isLoading) return <Spinner />;
-  if (!m || !initial) return <EmptyState title={t("master.notFound")} action={<Link href="/admin/masters" className="btn btn-primary">{t("nav.masters")}</Link>} />;
+  if (!m) return <EmptyState title={t("master.notFound")} action={<Link href="/admin/masters" className="btn btn-primary">{t("nav.masters")}</Link>} />;
 
   const deleted = m.status === "DELETED";
   const refCount = refs.data?.length ?? 0;
@@ -161,19 +144,8 @@ export default function MasterEditPage() {
             </div>
           </section>
         ) : (
-          <MasterForm
-            initial={initial}
-            followMap={{ name: false, address: true }}
-            busy={update.isPending}
-            error={error}
-            submitLabel={t("common.save")}
-            onSubmit={(v) => {
-              setError(null);
-              update.mutate({ uid, googlePlaceId: v.googlePlaceId, name: v.name, address: v.address, description: v.description, latitude: v.latitude!, longitude: v.longitude!, categoryUids: v.categoryUids });
-            }}
-          >
-            <Alert kind="info">{t("master.editNote")}</Alert>
-          </MasterForm>
+          // Form ubah dipakai bersama dengan modal di menu Peta.
+          <EditMasterEditor uid={uid} />
         ))}
 
       {tab === "photos" && (

@@ -45,11 +45,13 @@ export function PlaceForm({
   error,
   onSubmit,
   cancelHref,
+  onCancel,
   showFavorite,
   followMap = { name: true, address: true },
   photoSlot,
   onPickGooglePhoto,
   pickedGoogleUrls,
+  mapZoom,
 }: {
   initial: PlaceFormValues;
   masterUid?: string | null;
@@ -59,8 +61,10 @@ export function PlaceForm({
   busy: boolean;
   error: string | null;
   onSubmit: (v: PlaceFormValues) => void;
-  /** Tujuan tombol Batal; boleh fungsi dari nilai form saat ini. */
-  cancelHref: string | ((v: PlaceFormValues) => string);
+  /** Tujuan tombol Batal (halaman); boleh fungsi dari nilai form saat ini. */
+  cancelHref?: string | ((v: PlaceFormValues) => string);
+  /** Aksi tombol Batal (modal); diutamakan daripada `cancelHref`. */
+  onCancel?: (v: PlaceFormValues) => void;
   showFavorite?: boolean;
   /** Nilai awal switch "Ikuti peta" per field. Form ubah: nama OFF (tidak tertimpa), alamat ON. */
   followMap?: { name: boolean; address: boolean };
@@ -69,6 +73,8 @@ export function PlaceForm({
   /** Memilih foto Google Maps sebagai foto pantauan (disimpan sebagai link eksternal). */
   onPickGooglePhoto?: (url: string) => void;
   pickedGoogleUrls?: string[];
+  /** Zoom Peta utama saat form dibuka sebagai modal: peta form memakai nilai ini bila lebih besar dari zoom bawaan. */
+  mapZoom?: number;
 }) {
   const { t } = useT();
   const [v, setV] = useState<PlaceFormValues>(initial);
@@ -257,6 +263,7 @@ export function PlaceForm({
             <MapView
               markers={markers}
               fit={hasCoord}
+              startZoom={mapZoom}
               deviceLocation={location}
               onMapClick={movePin}
               onMarkerDragEnd={(_id, lat, lng) => movePin(lat, lng)}
@@ -435,9 +442,17 @@ export function PlaceForm({
 
       <div className="pf-actions">
         <span className="pf-note"><span className="req" aria-hidden>*</span> {t("place.requiredNote")}</span>
-        <Link className="btn btn-secondary btn-sm" href={typeof cancelHref === "function" ? cancelHref(v) : cancelHref}>
-          {t("common.cancel")}
-        </Link>
+        {onCancel ? (
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onCancel(v)}>
+            {t("common.cancel")}
+          </button>
+        ) : (
+          cancelHref != null && (
+            <Link className="btn btn-secondary btn-sm" href={typeof cancelHref === "function" ? cancelHref(v) : cancelHref}>
+              {t("common.cancel")}
+            </Link>
+          )
+        )}
         <button className="btn btn-primary btn-sm" disabled={busy}>
           <Icon name="save" /> {busy ? t("common.processing") : submitLabel}
         </button>
