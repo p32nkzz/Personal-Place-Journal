@@ -5,7 +5,7 @@ import { useState } from "react";
 import { DateField } from "~/components/DateField";
 import { PendingPhotoPicker, savePendingPhotos, type PendingKey } from "~/components/PendingPhotoPicker";
 import { PhotoGallery, uploadPhotos, type GalleryPhoto } from "~/components/PhotoGallery";
-import { Alert, Field, Modal, StarInput, useErrorMessage, useToast } from "~/components/ui";
+import { Alert, Field, Modal, StarInput, useClosingAnimation, useErrorMessage, useToast } from "~/components/ui";
 import { useT, useZonedInput } from "~/lib/i18n";
 import { api } from "~/trpc/react";
 import { Icon } from "./Icon";
@@ -41,6 +41,8 @@ export function VisitFormModal({
   const { t } = useT();
   const toast = useToast();
   const errMsg = useErrorMessage();
+  // Batal & setelah Simpan: modal beranimasi keluar dulu.
+  const [closing, closeThen] = useClosingAnimation();
   const zi = useZonedInput();
   const [visitedAt, setVisitedAt] = useState(visit ? zi.toInput(visit.visitedAt) : zi.nowInput());
   const [rating, setRating] = useState<number | null>(visit?.rating ?? null);
@@ -74,7 +76,7 @@ export function VisitFormModal({
     }
     toast.push(t("common.saved"), "success");
     onSaved();
-    onClose();
+    closeThen(onClose);
   };
 
   const create = api.visit.create.useMutation({
@@ -103,33 +105,47 @@ export function VisitFormModal({
   };
 
   return (
-    <Modal
-      title={visit ? t("visit.edit") : t("visit.add")}
-      onClose={onClose}
-      actions={
-        <>
-          <button className="btn btn-secondary" onClick={onClose} disabled={busy}>{t("common.cancel")}</button>
-          <button className="btn btn-primary" onClick={submit} disabled={busy || !visitedAt}>
-            <Icon name="save" /> {busy ? t("common.processing") : t("common.save")}
-          </button>
-        </>
-      }
-    >
-      <div className="stack">
+    // Tampilan senada dengan modal tambah/ubah tempat: kepala dengan ✕, kartu bernomor, aksi menempel di bawah.
+    <Modal form narrow title={visit ? t("visit.edit") : t("visit.add")} onClose={onClose} closing={closing}>
+      <form
+        className="pf vf"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!busy && visitedAt) submit();
+        }}
+      >
         {error && <Alert kind="error">{error}</Alert>}
         {itineraryUid && !itineraryPlaceUid && !visit && <Alert kind="info">{t("visit.unexpectedNote")}</Alert>}
-        <Field label={t("visit.visitedAt")} required htmlFor="v-at" helper={t("visit.visitedAtHint", { tz: zi.tz })}>
-          <DateField id="v-at" mode="datetime" max={zi.nowInput()} value={visitedAt} onChange={setVisitedAt} />
-        </Field>
-        <Field label={t("visit.rating")}>
-          <StarInput value={rating} onChange={setRating} />
-        </Field>
-        <Field label={t("visit.note")} htmlFor="v-note" helper={t("common.max2000")}>
-          <textarea id="v-note" className="textarea" maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
-        </Field>
-        {visit && photos && (
+
+        <section className="card pf-card">
+          <div className="pf-head">
+            <h2 className="pf-title"><span className="pf-step">1</span>{t("visit.formDetail")}</h2>
+          </div>
+          <div className="vf-row">
+            <Field label={t("visit.visitedAt")} required htmlFor="v-at" helper={t("visit.visitedAtHint", { tz: zi.tz })}>
+              <DateField id="v-at" mode="datetime" max={zi.nowInput()} value={visitedAt} onChange={setVisitedAt} />
+            </Field>
+            <div className="field vf-rating">
+              <span className="label">{t("visit.rating")}</span>
+              <StarInput value={rating} onChange={setRating} />
+            </div>
+          </div>
           <div className="field">
-            <span className="label">{t("visit.photos")}</span>
+            <div className="pf-label-row">
+              <label className="label" htmlFor="v-note">{t("visit.note")}</label>
+              <span className="vf-count">{note.length}/2000</span>
+            </div>
+            <textarea id="v-note" className="textarea" rows={3} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+        </section>
+
+        <section className="card pf-card">
+          <div className="pf-head">
+            <h2 className="pf-title"><span className="pf-step">2</span>{t("visit.photos")}</h2>
+            <span className="pf-badge">{t("common.optional")}</span>
+          </div>
+          {visit && photos ? (
             <PhotoGallery
               fancy
               kind="visit"
@@ -146,11 +162,7 @@ export function VisitFormModal({
               onCaption={(photoUid, caption) => capPhoto.mutateAsync({ photoUid, caption })}
               onAddUrl={(url, caption) => addUrl.mutateAsync({ visitUid: visit.uid, url, caption })}
             />
-          </div>
-        )}
-        {!visit && (
-          <div className="field">
-            <span className="label">{t("visit.photos")}</span>
+          ) : (
             <PendingPhotoPicker
               files={files}
               urls={urls}
@@ -163,9 +175,19 @@ export function VisitFormModal({
               primary={primary}
               onPrimary={setPrimary}
             />
-          </div>
-        )}
-      </div>
+          )}
+        </section>
+
+        <div className="pf-actions">
+          <span className="pf-note"><span className="req" aria-hidden>*</span> {t("visit.requiredNote")}</span>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => closeThen(onClose)} disabled={busy}>
+            {t("common.cancel")}
+          </button>
+          <button className="btn btn-primary btn-sm" disabled={busy || !visitedAt}>
+            <Icon name="save" /> {busy ? t("common.processing") : t("common.save")}
+          </button>
+        </div>
+      </form>
     </Modal>
   );
 }

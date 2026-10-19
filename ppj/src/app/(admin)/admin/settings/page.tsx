@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { Icon, type IconName } from "~/components/Icon";
-import { MAP_COLOR_DEFAULTS, MAP_COLOR_KEYS, readableOn, type MapColors } from "~/components/map/colors";
+import { MAP_COLOR_DEFAULTS, MAP_COLOR_KEYS, type MapColors } from "~/components/map/colors";
+import { PinShape } from "~/components/map/PinShape";
 import { useMapColors } from "~/components/map/useMapColors";
 import { Select } from "~/components/Select";
 import { SettingRow, SettingsShell } from "~/components/SettingRow";
@@ -154,12 +155,13 @@ function PhotoSettings() {
   );
 }
 
+// Pratinjau isi pin: MASTER (gedung), MY PLACE rencana & sudah dikunjungi (jam, centang), favorit (bintang), pin baru (+).
 const COLOR_FIELDS = [
-  { prop: "master", label: "settings.colorMaster", glyph: "M" },
-  { prop: "mine", label: "settings.colorMine", glyph: "" },
-  { prop: "favorite", label: "settings.colorFavorite", glyph: "★" },
-  { prop: "newPin", label: "settings.colorNewPin", glyph: "+" },
-] as const;
+  { prop: "master", label: "settings.colorMaster", pins: [{ icon: "landmark" }] },
+  { prop: "mine", label: "settings.colorMine", pins: [{ icon: "clock" }, { icon: "check" }] },
+  { prop: "favorite", label: "settings.colorFavorite", pins: [{ icon: "star" }] },
+  { prop: "newPin", label: "settings.colorNewPin", pins: [{ glyph: "+" }] },
+] as const satisfies readonly { prop: keyof MapColors; label: string; pins: readonly PinFace[] }[];
 
 const CATEGORY_KEYS = [
   { key: "category.page_size", def: "4", label: "settings.categoryPageSize", hint: "settings.categoryPageSizeHint", type: "number" },
@@ -181,17 +183,16 @@ const TAG_KEYS = [
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
-/** Pratinjau bentuk pin Google Maps dengan warna terpilih. */
-function PinPreview({ color, glyph }: { color: string; glyph: string }) {
+type PinFace = { icon?: IconName; glyph?: string };
+
+/** Pratinjau pin peta (bentuk yang sama dengan peta) dengan warna terpilih. */
+function PinPreview({ color, pins }: { color: string; pins: readonly PinFace[] }) {
   return (
-    <svg width="22" height="30" viewBox="0 0 30 40" aria-hidden style={{ flexShrink: 0 }}>
-      <path d="M15 1C7.3 1 1 7.2 1 14.9 1 25 15 39 15 39s14-14 14-24.1C29 7.2 22.7 1 15 1z" fill={color} stroke="#fff" strokeWidth="2" />
-      {glyph ? (
-        <text x="15" y="20" textAnchor="middle" fontSize="13" fontWeight="700" fill={readableOn(color)}>{glyph}</text>
-      ) : (
-        <circle cx="15" cy="15" r="4.5" fill={readableOn(color)} />
-      )}
-    </svg>
+    <span className="pin-preview" aria-hidden>
+      {pins.map((p, i) => (
+        <PinShape key={i} color={color} icon={p.icon} glyph={p.glyph} scale={0.8} />
+      ))}
+    </span>
   );
 }
 
@@ -296,7 +297,7 @@ function MapSettings() {
         const ok = HEX.test(v);
         return (
           <SettingRow key={f.prop} label={t(f.label)} dirty={v.toUpperCase() !== current[f.prop].toUpperCase()}>
-            <PinPreview color={ok ? v : "#999999"} glyph={f.glyph} />
+            <PinPreview color={ok ? v : "#999999"} pins={f.pins} />
             <input
               type="color"
               aria-label={t(f.label)}

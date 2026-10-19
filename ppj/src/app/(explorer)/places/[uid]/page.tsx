@@ -313,7 +313,7 @@ export default function PlaceDetailPage() {
           <section className="card pd-card">
             <MapTypeSwitch />
             <div className="map-box-sm pd-map">
-              <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: p.isFavorite ? mapColors.favorite : mapColors.mine, glyph: p.isFavorite ? "★" : undefined, title: p.name }]} fit />
+              <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: p.isFavorite ? mapColors.favorite : mapColors.mine, icon: p.isFavorite ? "star" : p.visitStatus === "VISITED" ? "check" : "clock", title: p.name }]} fit />
             </div>
             <div className="pp-info">
               <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={p.latitude} lng={p.longitude} placeId={p.googlePlaceId} googleLink streetView name={p.name} /></InfoRow>

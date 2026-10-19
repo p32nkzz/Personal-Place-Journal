@@ -6,17 +6,16 @@ import {
   ControlPosition,
   Map,
   MapControl,
-  Pin,
   useMap,
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import { useEffect, useRef, useState } from "react";
 
-import { Icon } from "~/components/Icon";
+import { Icon, type IconName } from "~/components/Icon";
 import { Alert, Modal, useToast } from "~/components/ui";
 import { useT } from "~/lib/i18n";
 import { setSatellite, useSatellite } from "./mapType";
-import { readableOn } from "./colors";
+import { PinShape } from "./PinShape";
 import { useMapSearchConfig } from "./useMapSearchConfig";
 
 const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -27,6 +26,9 @@ export type MapMarker = {
   lng: number;
   /** Warna latar penanda. */
   color: string;
+  /** Ikon di kepala pin (diutamakan daripada `glyph`). */
+  icon?: IconName;
+  /** Teks pendek di kepala pin, mis. "+" (pin baru) atau nomor urut. */
   glyph?: string;
   glyphColor?: string;
   title?: string;
@@ -37,6 +39,13 @@ export type MapMarker = {
   /** Urutan tumpukan (z-index); makin besar makin di atas. Penanda terpilih selalu paling atas. */
   z?: number;
 };
+
+/**
+ * Lapisan tumpukan pin (makin besar makin di atas): pin baru/terpilih > MY PLACE favorit >
+ * MY PLACE sudah dikunjungi > MY PLACE rencana > MASTER. Tiap lapisan menyisakan ruang untuk urutan di dalamnya.
+ */
+export const PIN_LAYER = { master: 1_000, plan: 200_000, visited: 400_000, favorite: 600_000 } as const;
+const Z_SELECTED = 1_000_000;
 
 export type MapLine = {
   id: string;
@@ -149,14 +158,17 @@ function Controller({
   focus,
   fit,
   deviceLocation,
+  startZoom,
 }: {
   markers: MapMarker[];
   focus?: { lat: number; lng: number; zoom?: number } | null;
   fit?: boolean;
   deviceLocation: DeviceLocation;
+  startZoom?: number;
 }) {
   const map = useMap();
   const fitted = useRef("");
+  const firstFit = useRef(true);
   const centeredOnDevice = useRef<number | false>(false);
   // Zoom bawaan dari Pengaturan. Bila nilainya baru selesai dimuat setelah peta tampil, efek di bawah
   // dijalankan ulang sekali agar zoom akhir sesuai pengaturan.
@@ -180,8 +192,11 @@ function Controller({
     if (markers.length === 1) {
       // Satu titik (form & detail): pusatkan pada titik. Zoom hanya dinaikkan ke zoom bawaan Pengaturan bila
       // zoom saat ini lebih kecil; bila user sudah memperbesar (mis. saat menggeser pin), zoom-nya dipertahankan.
+      // Tampilan pertama boleh memakai zoom awal dari pemanggil (mis. zoom Peta utama) bila lebih besar dari zoom bawaan.
+      const target = firstFit.current && startZoom != null ? Math.max(zoomRef.current, startZoom) : zoomRef.current;
+      firstFit.current = false;
       map.panTo({ lat: markers[0]!.lat, lng: markers[0]!.lng });
-      if ((map.getZoom() ?? 0) < zoomRef.current) map.setZoom(zoomRef.current);
+      if ((map.getZoom() ?? 0) < target) map.setZoom(target);
       return;
     }
     const b = new google.maps.LatLngBounds();
@@ -192,6 +207,8 @@ function Controller({
       const cap = Math.min(21, zoomRef.current + 1);
       if ((map.getZoom() ?? 0) > cap) map.setZoom(cap);
     });
+    // startZoom hanya dibaca pada tampilan pertama.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, markers, fit, defaultZoom]);
 
   useEffect(() => {
@@ -206,11 +223,39 @@ function Controller({
 }
 
 /**
+ * Kontrol melayang kanan bawah peta, tersusun vertikal: (1) kembali ke lokasi saya, (2) ganti jalan ⇄ satelit
+ * (hanya bila `satelliteToggle`). Keduanya tombol bulat ikon dengan gaya yang sama.
+ */
+function MapCtrls({ known, onLocated, satelliteToggle }: { known: DeviceLocation; onLocated: (l: { lat: number; lng: number }) => void; satelliteToggle: boolean }) {
+  const { t } = useT();
+  const satellite = useSatellite();
+  return (
+    <MapControl position={ControlPosition.RIGHT_BOTTOM}>
+      <div className="map-ctrls">
+        <LocateButton known={known} onLocated={onLocated} />
+        {satelliteToggle && (
+          <button
+            type="button"
+            className="map-ctrl-btn map-type-toggle"
+            aria-pressed={satellite}
+            title={satellite ? t("map.typeRoadmap") : t("map.typeSatellite")}
+            aria-label={satellite ? t("map.typeRoadmap") : t("map.typeSatellite")}
+            onClick={() => setSatellite(!satellite)}
+          >
+            <Icon name={satellite ? "map" : "satellite"} fixedWidth={false} />
+          </button>
+        )}
+      </div>
+    </MapControl>
+  );
+}
+
+/**
  * Tombol melayang "kembali ke lokasi saya": ambil lokasi perangkat terbaru lalu kamera terbang halus
  * ke sana dengan zoom bawaan dari Pengaturan. Bila gagal (izin ditolak dsb.) memakai lokasi terakhir
  * yang diketahui, atau memberi tahu bahwa lokasi tidak tersedia.
  */
-function LocateControl({ known, onLocated }: { known: DeviceLocation; onLocated: (l: { lat: number; lng: number }) => void }) {
+function LocateButton({ known, onLocated }: { known: DeviceLocation; onLocated: (l: { lat: number; lng: number }) => void }) {
   const map = useMap();
   const { t } = useT();
   const toast = useToast();
@@ -242,11 +287,9 @@ function LocateControl({ known, onLocated }: { known: DeviceLocation; onLocated:
     );
   };
   return (
-    <MapControl position={ControlPosition.RIGHT_BOTTOM}>
-      <button type="button" className="map-locate-btn" onClick={locate} disabled={busy} title={t("map.locateMe")} aria-label={t("map.locateMe")}>
-        <Icon name={busy ? "refresh" : "crosshairs"} spin={busy} fixedWidth={false} />
-      </button>
-    </MapControl>
+    <button type="button" className="map-ctrl-btn map-locate-btn" onClick={locate} disabled={busy} title={t("map.locateMe")} aria-label={t("map.locateMe")}>
+      <Icon name={busy ? "refresh" : "crosshairs"} spin={busy} fixedWidth={false} />
+    </button>
   );
 }
 
@@ -257,8 +300,10 @@ export function MapView({
   onMarkerDragEnd,
   onMapClick,
   onCenterChange,
+  onZoomChange,
   focus,
   fit,
+  startZoom,
   deviceLocation = null,
   className = "map-box",
   satelliteToggle = false,
@@ -271,8 +316,15 @@ export function MapView({
   onMapClick?: (lat: number, lng: number) => void;
   /** Dipanggil saat peta berhenti digeser/di-zoom (pusat peta saat ini). */
   onCenterChange?: (lat: number, lng: number) => void;
+  /** Dipanggil saat peta berhenti digeser/di-zoom (nilai zoom saat ini). */
+  onZoomChange?: (zoom: number) => void;
   focus?: { lat: number; lng: number; zoom?: number } | null;
   fit?: boolean;
+  /**
+   * Zoom awal untuk peta satu titik (`fit`): dipakai bila lebih besar dari zoom bawaan Pengaturan,
+   * bila lebih kecil tetap memakai zoom bawaan. Contoh: form modal di Peta mengikuti zoom Peta utama.
+   */
+  startZoom?: number;
   deviceLocation?: DeviceLocation;
   className?: string;
   /** Tombol ganti jalan ⇄ satelit MELAYANG di dalam peta (hanya menu Peta). Peta lain memakai MapTypeSwitch di luar kotak peta. */
@@ -283,7 +335,6 @@ export function MapView({
   const { t } = useT();
   const { pinScale, pinScaleActive } = useMapSearchConfig();
   const satellite = useSatellite();
-  const toggleSatellite = () => setSatellite(!satellite);
   // Lokasi dari tombol "lokasi saya" (dipakai bila halaman tidak mengirim lokasi perangkat).
   const [located, setLocated] = useState<DeviceLocation>(null);
   const here = located ?? deviceLocation;
@@ -316,30 +367,19 @@ export function MapView({
         onIdle={(e) => {
           const c = e.map.getCenter();
           if (c && onCenterChange) onCenterChange(c.lat(), c.lng());
+          const z = e.map.getZoom();
+          if (z != null && onZoomChange) onZoomChange(z);
         }}
       >
-        {satelliteToggle && (
-          <MapControl position={ControlPosition.LEFT_BOTTOM}>
-            <button
-              type="button"
-              className="map-type-btn"
-              aria-pressed={satellite}
-              title={satellite ? t("map.typeRoadmap") : t("map.typeSatellite")}
-              onClick={toggleSatellite}
-            >
-              <Icon name={satellite ? "map" : "image"} fixedWidth={false} /> {satellite ? t("map.typeRoadmap") : t("map.typeSatellite")}
-            </button>
-          </MapControl>
-        )}
-        <Controller markers={markers} focus={focus} fit={fit} deviceLocation={deviceLocation} />
-        <LocateControl known={here} onLocated={setLocated} />
+        <Controller markers={markers} focus={focus} fit={fit} deviceLocation={deviceLocation} startZoom={startZoom} />
+        <MapCtrls known={here} onLocated={setLocated} satelliteToggle={satelliteToggle} />
         <Lines lines={lines} />
         {markers.map((m) => (
           <AdvancedMarker
             key={m.id}
             position={{ lat: m.lat, lng: m.lng }}
             title={m.title}
-            zIndex={m.selected ? 100000 : (m.z ?? 1)}
+            zIndex={m.selected ? Z_SELECTED : (m.z ?? 1)}
             onClick={() => onMarkerClick?.(m.id)}
             draggable={!!m.draggable}
             // Ukuran aktif lewat transform pada kontainer marker agar membesar/mengecil halus (ujung pin tetap di titiknya).
@@ -350,13 +390,7 @@ export function MapView({
               if (ll) onMarkerDragEnd?.(m.id, ll.lat(), ll.lng());
             }}
           >
-            <Pin
-              background={m.color}
-              borderColor="#ffffff"
-              glyphColor={m.glyphColor ?? readableOn(m.color)}
-              glyph={m.glyph}
-              scale={pinScale}
-            />
+            <PinShape color={m.color} icon={m.icon} glyph={m.glyph} glyphColor={m.glyphColor} scale={pinScale} />
           </AdvancedMarker>
         ))}
         {here && (

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GooglePlaceSearch,
   MapView,
+  PIN_LAYER,
   useDeviceLocation,
   type MapMarker,
 } from "~/components/map/MapView";
@@ -13,9 +14,11 @@ import { api } from "~/trpc/react";
 import { CategoryMultiSelect } from "~/components/CategoryMultiSelect";
 import { TagMultiSelect } from "~/components/TagMultiSelect";
 import { Icon } from "~/components/Icon";
-import { readableOn } from "~/components/map/colors";
+import { EXIT_MS, prefersReducedMotion } from "~/components/ui";
 import { useMapColors } from "~/components/map/useMapColors";
 import { useMapSearchConfig } from "~/components/map/useMapSearchConfig";
+import { MapFormModal, type MapForm } from "./MapFormModal";
+import { SheetGrip } from "./SheetGrip";
 import { MasterPopup, MyPlacePopup, PinPopup, type Selection, type Viewer } from "./MapPopups";
 
 
@@ -75,15 +78,28 @@ export function HomeMap({
       // penyimpanan tidak tersedia: tetap tersembunyi
     }
   }, []);
-  const toggleFilters = () =>
-    setShowFilters((s) => {
-      try {
-        localStorage.setItem("ppj.map.filters", s ? "0" : "1");
-      } catch {
-        // abaikan
-      }
-      return !s;
-    });
+  // Menutup panel: animasi keluar dulu (is-closing), baru disembunyikan. Klik lagi saat menutup = batal menutup.
+  const [filtersClosing, setFiltersClosing] = useState(false);
+  const filtersTimer = useRef<number | undefined>(undefined);
+  const toggleFilters = () => {
+    const next = !showFilters || filtersClosing;
+    try {
+      localStorage.setItem("ppj.map.filters", next ? "1" : "0");
+    } catch {
+      // abaikan
+    }
+    window.clearTimeout(filtersTimer.current);
+    if (next || prefersReducedMotion()) {
+      setFiltersClosing(false);
+      setShowFilters(next);
+      return;
+    }
+    setFiltersClosing(true);
+    filtersTimer.current = window.setTimeout(() => {
+      setShowFilters(false);
+      setFiltersClosing(false);
+    }, EXIT_MS);
+  };
   const activeFilters = categoryUids.length + tagUids.length + (q.trim() ? 1 : 0);
   // Tombol filter dirender di dua tempat; CSS memilih yang tampil:
   //  - "in-bar"   : satu baris dengan cari Google & Pin bebas (login, layar responsif).
@@ -93,7 +109,7 @@ export function HomeMap({
     <button
       type="button"
       className={`map-bar-filter ${where}`}
-      aria-pressed={showFilters}
+      aria-pressed={showFilters && !filtersClosing}
       aria-controls="map-filters"
       title={t("map.filters")}
       aria-label={t("map.filters")}
@@ -112,6 +128,23 @@ export function HomeMap({
           ? { kind: "pin", lat: initialPin.lat, lng: initialPin.lng }
           : null,
   );
+
+  // Pop-up detail ditutup: tetap ditampilkan sesaat dengan animasi keluar (is-leaving), lalu dilepas.
+  // Bila ditutup dengan menggeser pegangan (ponsel), sheet sudah turun sendiri sehingga langsung dilepas.
+  const [lastSel, setLastSel] = useState(sel);
+  const [leavingSel, setLeavingSel] = useState<Selection | null>(null);
+  const [swiped, setSwiped] = useState(false);
+  if (sel !== lastSel) {
+    setLastSel(sel);
+    setLeavingSel(!sel && lastSel && !swiped && !prefersReducedMotion() ? lastSel : null);
+    if (swiped) setSwiped(false);
+  }
+  useEffect(() => {
+    if (!leavingSel) return;
+    const h = window.setTimeout(() => setLeavingSel(null), EXIT_MS);
+    return () => window.clearTimeout(h);
+  }, [leavingSel]);
+  const shownSel = sel ?? leavingSel;
   const popupRef = useRef<HTMLDivElement>(null);
   const selKey = sel ? (sel.kind === "pin" ? "pin" : `${sel.kind}:${sel.uid}`) : "";
   useEffect(() => {
@@ -154,8 +187,8 @@ export function HomeMap({
 
   const markers: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
-    // Tumpukan pin yang berdekatan: Tempat Saya di atas MASTER; di antara jenis yang sama,
-    // data yang terakhir diinput/diubah berada paling atas.
+    // Tumpukan pin yang berdekatan mengikuti PIN_LAYER (favorit > sudah dikunjungi > rencana > MASTER);
+    // di antara jenis yang sama, data yang terakhir diinput/diubah berada paling atas.
     const rank = <T extends { updatedAt: Date | string }>(items: T[]) => {
       const order = new Map<T, number>();
       [...items]
@@ -171,9 +204,9 @@ export function HomeMap({
           lat: m.latitude,
           lng: m.longitude,
           color: C_MASTER,
-          glyph: "M",
+          icon: "landmark",
           title: m.name,
-          z: 1000 + (masterRank.get(m) ?? 0),
+          z: PIN_LAYER.master + (masterRank.get(m) ?? 0),
           selected: sel?.kind === "master" && sel.uid === m.uid,
         });
     if (explorer) {
@@ -185,9 +218,10 @@ export function HomeMap({
           lat: p.latitude,
           lng: p.longitude,
           color: p.isFavorite ? C_FAV : C_MY,
-          glyph: p.isFavorite ? "★" : undefined, // glyph pin Google wajib teks/DOM, bukan komponen React
+          // Ikon & lapisan: favorit (bintang) > sudah dikunjungi (centang) > rencana (jam).
+          icon: p.isFavorite ? "star" : p.visitStatus === "VISITED" ? "check" : "clock",
           title: p.name,
-          z: 5000 + (myRank.get(p) ?? 0),
+          z: (p.isFavorite ? PIN_LAYER.favorite : p.visitStatus === "VISITED" ? PIN_LAYER.visited : PIN_LAYER.plan) + (myRank.get(p) ?? 0),
           selected: sel?.kind === "my" && sel.uid === p.uid,
         });
       }
@@ -201,6 +235,28 @@ export function HomeMap({
     setSel(s);
     setFocus({ lat, lng });
   };
+
+  // Form tambah/ubah MY PLACE & MASTER sebagai modal di atas Peta (tanpa pindah halaman).
+  const [form, setFormState] = useState<{ form: MapForm; zoom: number | undefined } | null>(null);
+  // Zoom Peta utama terakhir (tanpa render ulang); dibekukan saat modal dibuka untuk peta di form.
+  const mapZoom = useRef<number | undefined>(undefined);
+  const setForm = (f: MapForm) => setFormState({ form: f, zoom: mapZoom.current });
+  const formModal = form && (
+    <MapFormModal
+      form={form.form}
+      mapZoom={form.zoom}
+      onClose={() => setFormState(null)}
+      // Batal dari form tambah pin: pin di peta ikut ke titik terakhir form.
+      onCancelAt={(lat, lng) =>
+        setSel((s) => (s?.kind === "pin" && (s.lat !== lat || s.lng !== lng) ? { kind: "pin", lat, lng, moved: true } : s))
+      }
+      // Setelah simpan: modal ditutup lalu pop-up data tersimpan dibuka di titik terbarunya.
+      onSaved={(kind, r) => {
+        setFormState(null);
+        select({ kind, uid: r.uid }, r.latitude, r.longitude);
+      }}
+    />
+  );
 
   const onMarkerClick = (id: string) => {
     if (id === "pin") return;
@@ -259,6 +315,7 @@ export function HomeMap({
         focus={focus}
         onMarkerClick={onMarkerClick}
         onCenterChange={(lat, lng) => setCenter({ lat, lng })}
+        onZoomChange={(z) => (mapZoom.current = z)}
         onMarkerDragEnd={(id, lat, lng) => {
           if (id !== "pin") return;
           // Geser pin: koordinat diperbarui dan alamat dicari ulang lewat reverse geocoding.
@@ -299,7 +356,7 @@ export function HomeMap({
       )}
 
       {/* Panel filter: pencarian data, kategori, TAG, [tombol filter di paling kanan] — mengikuti state tombol filter */}
-      <div id="map-filters" className={`map-float map-tr map-filters${showFilters ? "" : " is-collapsed"}${canPin ? " is-auth" : ""}`}>
+      <div id="map-filters" className={`map-float map-tr map-filters${showFilters ? "" : " is-collapsed"}${filtersClosing ? " is-closing" : ""}${canPin ? " is-auth" : ""}`}>
         <div
           className="map-search"
           style={{ width: 300, maxWidth: "100%" }}
@@ -421,13 +478,21 @@ export function HomeMap({
       </div>
 
       {/* Popup detail + aksi */}
-      {sel && (
-        <div className="map-float map-popup" ref={popupRef}>
+      {shownSel && (
+        <div className={`map-float map-popup${sel ? "" : " is-leaving"}`} ref={popupRef} aria-hidden={!sel || undefined}>
+          {/* Ponsel: garis pegangan di atas sheet, geser ke bawah untuk menutup (sheet sudah turun sendiri). */}
+          <SheetGrip
+            sheet={popupRef}
+            onClose={() => {
+              setSwiped(true);
+              setSel(null);
+            }}
+          />
           {/* Ganti isi dengan animasi halus saat berpindah antar pin (kunci = tempat yang dipilih). */}
-          <div key={sel.kind === "pin" ? "pin" : `${sel.kind}:${sel.uid}`} className="pp-swap">
-            {sel.kind === "master" && <MasterPopup uid={sel.uid} viewer={viewer} onClose={() => setSel(null)} />}
-            {sel.kind === "my" && <MyPlacePopup uid={sel.uid} onClose={() => setSel(null)} />}
-            {sel.kind === "pin" && <PinPopup sel={sel} viewer={viewer} onClose={() => setSel(null)} />}
+          <div key={shownSel.kind === "pin" ? "pin" : `${shownSel.kind}:${shownSel.uid}`} className="pp-swap">
+            {shownSel.kind === "master" && <MasterPopup uid={shownSel.uid} viewer={viewer} onClose={() => setSel(null)} onForm={setForm} />}
+            {shownSel.kind === "my" && <MyPlacePopup uid={shownSel.uid} onClose={() => setSel(null)} onForm={setForm} />}
+            {shownSel.kind === "pin" && <PinPopup sel={shownSel} viewer={viewer} onClose={() => setSel(null)} onForm={setForm} />}
           </div>
         </div>
       )}
@@ -444,7 +509,7 @@ export function HomeMap({
                 <i style={{ background: C_MY }} /> {t("nav.myPlaces")}
               </button>
               <button type="button" className="legend-btn" aria-pressed={showFav} title={t("map.legendToggle")} onClick={() => setShowFav((v) => !v)}>
-                <i style={{ background: C_FAV, display: "inline-grid", placeItems: "center", color: readableOn(C_FAV), fontSize: 8, width: 14, height: 14 }}>★</i> {t("place.favorite")}
+                <i style={{ background: C_FAV }} /> {t("place.favorite")}
               </button>
             </>
           )}
@@ -457,6 +522,7 @@ export function HomeMap({
           )}
         </div>
       </div>
+      {formModal}
     </div>
   );
 }

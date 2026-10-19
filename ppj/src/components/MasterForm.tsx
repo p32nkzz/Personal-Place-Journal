@@ -46,6 +46,7 @@ export function MasterForm({
   photoSlot,
   onPickGooglePhoto,
   pickedGoogleUrls,
+  mapZoom,
   children,
 }: {
   initial: MasterFormValues;
@@ -61,6 +62,8 @@ export function MasterForm({
   /** Memilih foto Google Maps sebagai foto MASTER (disimpan sebagai link eksternal); mengaktifkan chip "Foto Google Maps". */
   onPickGooglePhoto?: (url: string) => void;
   pickedGoogleUrls?: string[];
+  /** Zoom Peta utama saat form dibuka sebagai modal: peta form memakai nilai ini bila lebih besar dari zoom bawaan. */
+  mapZoom?: number;
   children?: React.ReactNode;
 }) {
   const { t } = useT();
@@ -213,6 +216,7 @@ export function MasterForm({
             <MapView
               markers={markers}
               fit={hasCoord}
+              startZoom={mapZoom}
               deviceLocation={location}
               onMapClick={movePin}
               onMarkerDragEnd={(_id, lat, lng) => movePin(lat, lng)}

@@ -139,7 +139,7 @@ export function MasterPublicView({
           <section className="card pd-card">
             <MapTypeSwitch />
             <div className="map-box-sm pd-map">
-              <MapView markers={[{ id: "m", lat: m.latitude, lng: m.longitude, color: mapColors.master, glyph: "M", title: m.name }]} fit />
+              <MapView markers={[{ id: "m", lat: m.latitude, lng: m.longitude, color: mapColors.master, icon: "landmark", title: m.name }]} fit />
             </div>
             <div className="pp-info">
               <InfoRow icon="pin" label={t("common.coordinates")}>
