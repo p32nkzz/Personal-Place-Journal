@@ -104,20 +104,65 @@ export function useToast() {
 /** Urutan modal yang sedang terbuka; Escape hanya menutup yang paling atas. */
 const modalStack: string[] = [];
 
+/** Durasi animasi tutup (ms): Modal, pop-up detail Peta, & panel filter Peta. Sama dengan CSS. */
+export const EXIT_MS = 180;
+
+/** User memilih "kurangi animasi" di perangkatnya: tutup langsung tanpa menunggu animasi. */
+export function prefersReducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * Tutup beranimasi untuk pemanggil Modal yang menutup sendiri (Batal / setelah Simpan):
+ * `run(fn)` menandai `closing` (Modal memainkan animasi keluar) lalu menjalankan `fn` setelah animasi selesai.
+ */
+export function useClosingAnimation() {
+  const [closing, setClosing] = useState(false);
+  const run = useCallback((fn: () => void) => {
+    if (prefersReducedMotion()) return fn();
+    setClosing(true);
+    window.setTimeout(fn, EXIT_MS);
+  }, []);
+  return [closing, run] as const;
+}
+
 export function Modal({
   title,
   children,
   onClose,
   large,
+  form,
+  narrow,
+  closing,
   actions,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
   large?: boolean;
+  /** Pemanggil sedang menutup modal (lihat `useClosingAnimation`): mainkan animasi keluar. */
+  closing?: boolean;
+  /**
+   * Modal form penuh (tambah/ubah tempat di Peta): lebar, layar penuh di ponsel, ada tombol tutup di kepala,
+   * dan klik latar tidak menutup agar isian tidak hilang tak sengaja.
+   */
+  form?: boolean;
+  /** Modal form berukuran sedang (mis. form kunjungan); tetap layar penuh di ponsel. */
+  narrow?: boolean;
   actions?: React.ReactNode;
 }) {
+  const { t } = useT();
   const titleId = useId();
+  // Tutup lewat ✕ / Escape / klik latar: animasi keluar dulu, baru onClose.
+  const [leaving, setLeaving] = useState(false);
+  const leavingRef = useRef(false);
+  const dismiss = useCallback(() => {
+    if (leavingRef.current) return;
+    if (prefersReducedMotion()) return onClose();
+    leavingRef.current = true;
+    setLeaving(true);
+    window.setTimeout(onClose, EXIT_MS);
+  }, [onClose]);
   useEffect(() => {
     modalStack.push(titleId);
     return () => {
@@ -130,23 +175,32 @@ export function Modal({
       if (e.key !== "Escape" || modalStack[modalStack.length - 1] !== titleId) return;
       // Pratinjau foto (Fancybox) di atas modal menangani Escape-nya sendiri.
       if (document.querySelector(".fancybox__container")) return;
-      onClose();
+      dismiss();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, titleId]);
+  }, [dismiss, titleId]);
   const body = (
     <div
-      className="modal-backdrop"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      className={`modal-backdrop${form ? " is-form" : ""}${leaving || closing ? " is-closing" : ""}`}
+      onMouseDown={(e) => !form && e.target === e.currentTarget && dismiss()}
     >
       <div
-        className={`modal ${large ? "modal-lg" : ""}`}
+        className={`modal ${large ? "modal-lg" : ""}${form ? " modal-form" : ""}${form && narrow ? " modal-form-narrow" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
       >
-        <h2 id={titleId}>{title}</h2>
+        {form ? (
+          <div className="modal-head">
+            <h2 id={titleId}>{title}</h2>
+            <button type="button" className="modal-x" onClick={dismiss} aria-label={t("common.close")} title={t("common.close")}>
+              <Icon name="xmark" fixedWidth={false} />
+            </button>
+          </div>
+        ) : (
+          <h2 id={titleId}>{title}</h2>
+        )}
         {children}
         {actions && <div className="modal-actions">{actions}</div>}
       </div>

@@ -15,6 +15,8 @@ import { useFormat, useT } from "~/lib/i18n";
 import { useMapColors } from "~/components/map/useMapColors";
 import { api } from "~/trpc/react";
 
+import type { MapForm } from "./MapFormModal";
+
 export type Viewer = "GUEST" | "EXPLORER" | "ADMIN";
 export type Selection =
   | { kind: "my"; uid: string }
@@ -213,13 +215,28 @@ function PopHead({
 }
 
 /** Detail lengkap MASTER PLACE langsung pada peta. */
-export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Viewer; onClose: () => void }) {
+export function MasterPopup({ uid, viewer, onClose, onForm }: { uid: string; viewer: Viewer; onClose: () => void; onForm: (f: MapForm) => void }) {
   const { t } = useT();
   const colors = useMapColors();
   const { data: m, isLoading } = api.master.get.useQuery({ uid });
   return (
     <div className="pp">
-      <PopHead kind="MASTER" color={colors.master} title={m?.name} onClose={onClose} />
+      <PopHead
+        kind="MASTER"
+        color={colors.master}
+        title={m?.name}
+        onClose={onClose}
+        actions={
+          // Admin mengubah MASTER langsung di Peta (modal), tanpa pindah halaman.
+          viewer === "ADMIN" &&
+          m &&
+          m.status !== "DELETED" && (
+            <button type="button" className="pp-icon-btn" title={t("common.edit")} aria-label={t("common.edit")} onClick={() => onForm({ kind: "master-edit", uid: m.uid })}>
+              <Icon name="pen" fixedWidth={false} />
+            </button>
+          )
+        }
+      />
       {isLoading || !m ? (
         <Spinner />
       ) : (
@@ -231,16 +248,16 @@ export function MasterPopup({ uid, viewer, onClose }: { uid: string; viewer: Vie
           </div>
           <PhotoTabs key={m.uid} ownLabel={t("map.tabMasterPhotos")} photos={m.photos} placeId={m.googlePlaceId} lat={m.latitude} lng={m.longitude} name={m.name} />
           <div className="pp-info">
-            {m.categories.length > 0 && <InfoRow icon="layers" label={t("common.category")}><CategoryChips items={m.categories} /></InfoRow>}
+            {m.categories.length > 0 && <InfoRow label={t("common.category")}><CategoryChips items={m.categories} /></InfoRow>}
             <InfoRow icon="map-pin" label={t("common.address")}>{m.address}</InfoRow>
             {m.description && <DescQuote text={m.description} />}
             <InfoRow icon="pin" label={t("common.coordinates")}><Coords lat={m.latitude} lng={m.longitude} placeId={m.googlePlaceId} googleLink streetView name={m.name} /></InfoRow>
           </div>
           <div className="pp-actions">
             {viewer === "EXPLORER" && m.status === "ACTIVE" && (
-              <Link className="btn btn-primary btn-sm" href={`/places/new?master=${m.uid}&from=map`}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => onForm({ kind: "place-new", masterUid: m.uid })}>
                 <Icon name="plus" /> {t("map.saveAsMine")}
-              </Link>
+              </button>
             )}
             <Link className="btn btn-secondary btn-sm" href={viewer === "ADMIN" ? `/admin/masters/${m.uid}?from=map` : `/masters/${m.uid}?from=map`}>
               <Icon name="circle-info" /> {t("map.viewDetail")}
@@ -275,7 +292,7 @@ function MiniPager({ page, pageSize, total, onPage }: { page: number; pageSize: 
 }
 
 /** Detail lengkap MY PLACE (kunjungan, foto, relasi MASTER) langsung pada peta. */
-export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => void }) {
+export function MyPlacePopup({ uid, onClose, onForm }: { uid: string; onClose: () => void; onForm: (f: MapForm) => void }) {
   const { t } = useT();
   const fmt = useFormat();
   const utils = api.useUtils();
@@ -341,9 +358,9 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
               >
                 <Icon name={p.isFavorite ? "star" : "star-regular"} fixedWidth={false} />
               </button>
-              <Link className="pp-icon-btn" href={`/places/${p.uid}/edit?from=map`} title={t("common.edit")} aria-label={t("common.edit")}>
+              <button type="button" className="pp-icon-btn" title={t("common.edit")} aria-label={t("common.edit")} onClick={() => onForm({ kind: "place-edit", uid: p.uid })}>
                 <Icon name="pen" fixedWidth={false} />
-              </Link>
+              </button>
             </>
           )
         }
@@ -366,7 +383,7 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
           <PhotoTabs key={p.uid} ownLabel={t("place.reviewPhotos")} photos={p.photos} placeId={p.googlePlaceId} lat={p.latitude} lng={p.longitude} name={p.name} />
           <div className="pp-info">
             {(p.categories.length > 0 || p.tags.length > 0) && (
-              <InfoRow icon="layers" label={`${t("common.category")} / ${t("nav.tags")}`}>
+              <InfoRow label={`${t("common.category")} / ${t("nav.tags")}`}>
                 <span className="pp-chips">
                   {p.categories.length > 0 && <CategoryChips items={p.categories} />}
                   {p.tags.length > 0 && <TagList items={p.tags} />}
@@ -488,23 +505,17 @@ export function MyPlacePopup({ uid, onClose }: { uid: string; onClose: () => voi
   );
 }
 
-function pinParams(a: { lat: number; lng: number; name?: string; address?: string; gid?: string }) {
-  const p = new URLSearchParams({ lat: String(a.lat), lng: String(a.lng) });
-  if (a.gid) p.set("gid", a.gid);
-  if (a.name) p.set("name", a.name);
-  if (a.address) p.set("address", a.address);
-  return p.toString();
-}
-
 /** Pin baru: alamat diambil dari reverse geocoding Google Maps bila bukan hasil pencarian. */
 export function PinPopup({
   sel,
   viewer,
   onClose,
+  onForm,
 }: {
   sel: Extract<Selection, { kind: "pin" }>;
   viewer: Viewer;
   onClose: () => void;
+  onForm: (f: MapForm) => void;
 }) {
   const { t } = useT();
   const colors = useMapColors();
@@ -547,13 +558,14 @@ export function PinPopup({
   const address = fromSearch ? sel.google!.address : geo?.address;
   // Nama mengikuti titik pin: hasil pencarian, atau tempat Google terdekat bila pin digeser/diklik.
   const placeName = fromSearch ? sel.google!.name : nearPhotos?.name;
-  const params = pinParams({
+  // Titik awal form tambah (modal): koordinat pin, Google Place ID, nama & alamat yang sudah diketahui.
+  const preset = {
     lat: sel.lat,
     lng: sel.lng,
-    gid: fromSearch ? sel.google!.googlePlaceId : geo?.placeId,
-    name: placeName,
-    address,
-  });
+    gid: (fromSearch ? sel.google!.googlePlaceId : geo?.placeId) ?? null,
+    name: placeName ?? null,
+    address: address ?? null,
+  };
 
   return (
     <div className="pp">
@@ -617,14 +629,14 @@ export function PinPopup({
       )}
       <div className="pp-actions">
         {viewer === "EXPLORER" && (
-          <Link className="btn btn-primary btn-sm" href={`/places/new?${params}&from=map`}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => onForm({ kind: "place-new", preset })}>
             <Icon name="plus" /> {t("map.addAsMine")}
-          </Link>
+          </button>
         )}
         {viewer === "ADMIN" && (
-          <Link className="btn btn-primary btn-sm" href={`/admin/masters/new?${params}&from=map`}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => onForm({ kind: "master-new", preset })}>
             <Icon name="plus" /> {t("map.createMaster")}
-          </Link>
+          </button>
         )}
       </div>
       {viewer === "GUEST" && <Alert>{t("map.loginToSave")}</Alert>}
