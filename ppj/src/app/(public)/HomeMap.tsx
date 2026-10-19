@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GooglePlaceSearch,
   MapView,
+  PIN_LAYER,
   useDeviceLocation,
   type MapMarker,
 } from "~/components/map/MapView";
@@ -13,7 +14,6 @@ import { api } from "~/trpc/react";
 import { CategoryMultiSelect } from "~/components/CategoryMultiSelect";
 import { TagMultiSelect } from "~/components/TagMultiSelect";
 import { Icon } from "~/components/Icon";
-import { readableOn } from "~/components/map/colors";
 import { useMapColors } from "~/components/map/useMapColors";
 import { useMapSearchConfig } from "~/components/map/useMapSearchConfig";
 import { MasterPopup, MyPlacePopup, PinPopup, type Selection, type Viewer } from "./MapPopups";
@@ -154,8 +154,8 @@ export function HomeMap({
 
   const markers: MapMarker[] = useMemo(() => {
     const out: MapMarker[] = [];
-    // Tumpukan pin yang berdekatan: Tempat Saya di atas MASTER; di antara jenis yang sama,
-    // data yang terakhir diinput/diubah berada paling atas.
+    // Tumpukan pin yang berdekatan mengikuti PIN_LAYER (favorit > sudah dikunjungi > rencana > MASTER);
+    // di antara jenis yang sama, data yang terakhir diinput/diubah berada paling atas.
     const rank = <T extends { updatedAt: Date | string }>(items: T[]) => {
       const order = new Map<T, number>();
       [...items]
@@ -171,9 +171,9 @@ export function HomeMap({
           lat: m.latitude,
           lng: m.longitude,
           color: C_MASTER,
-          glyph: "M",
+          icon: "landmark",
           title: m.name,
-          z: 1000 + (masterRank.get(m) ?? 0),
+          z: PIN_LAYER.master + (masterRank.get(m) ?? 0),
           selected: sel?.kind === "master" && sel.uid === m.uid,
         });
     if (explorer) {
@@ -185,9 +185,10 @@ export function HomeMap({
           lat: p.latitude,
           lng: p.longitude,
           color: p.isFavorite ? C_FAV : C_MY,
-          glyph: p.isFavorite ? "★" : undefined, // glyph pin Google wajib teks/DOM, bukan komponen React
+          // Ikon & lapisan: favorit (bintang) > sudah dikunjungi (centang) > rencana (jam).
+          icon: p.isFavorite ? "star" : p.visitStatus === "VISITED" ? "check" : "clock",
           title: p.name,
-          z: 5000 + (myRank.get(p) ?? 0),
+          z: (p.isFavorite ? PIN_LAYER.favorite : p.visitStatus === "VISITED" ? PIN_LAYER.visited : PIN_LAYER.plan) + (myRank.get(p) ?? 0),
           selected: sel?.kind === "my" && sel.uid === p.uid,
         });
       }
@@ -444,7 +445,7 @@ export function HomeMap({
                 <i style={{ background: C_MY }} /> {t("nav.myPlaces")}
               </button>
               <button type="button" className="legend-btn" aria-pressed={showFav} title={t("map.legendToggle")} onClick={() => setShowFav((v) => !v)}>
-                <i style={{ background: C_FAV, display: "inline-grid", placeItems: "center", color: readableOn(C_FAV), fontSize: 8, width: 14, height: 14 }}>★</i> {t("place.favorite")}
+                <i style={{ background: C_FAV }} /> {t("place.favorite")}
               </button>
             </>
           )}

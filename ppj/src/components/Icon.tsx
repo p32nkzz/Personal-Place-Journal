@@ -9,14 +9,17 @@ import {
   faArrowUpFromBracket,
   faBars,
   faBook,
+  faBuildingColumns,
   faBoxArchive,
   faCalendarDays,
   faChevronDown,
   faChevronUp,
   faCircle,
+  faCheck,
   faCircleCheck,
   faCircleInfo,
   faCircleXmark,
+  faClock,
   faClockRotateLeft,
   faCloudArrowDown,
   faCopy,
@@ -141,6 +144,9 @@ const ICONS = {
   layers: faLayerGroup,
   language: faLanguage,
   camera: faCamera,
+  landmark: faBuildingColumns,
+  clock: faClock,
+  check: faCheck,
 } as const;
 
 export type IconName = keyof typeof ICONS;

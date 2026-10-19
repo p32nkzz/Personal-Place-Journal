@@ -6,17 +6,16 @@ import {
   ControlPosition,
   Map,
   MapControl,
-  Pin,
   useMap,
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import { useEffect, useRef, useState } from "react";
 
-import { Icon } from "~/components/Icon";
+import { Icon, type IconName } from "~/components/Icon";
 import { Alert, Modal, useToast } from "~/components/ui";
 import { useT } from "~/lib/i18n";
 import { setSatellite, useSatellite } from "./mapType";
-import { readableOn } from "./colors";
+import { PinShape } from "./PinShape";
 import { useMapSearchConfig } from "./useMapSearchConfig";
 
 const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -27,6 +26,9 @@ export type MapMarker = {
   lng: number;
   /** Warna latar penanda. */
   color: string;
+  /** Ikon di kepala pin (diutamakan daripada `glyph`). */
+  icon?: IconName;
+  /** Teks pendek di kepala pin, mis. "+" (pin baru) atau nomor urut. */
   glyph?: string;
   glyphColor?: string;
   title?: string;
@@ -37,6 +39,13 @@ export type MapMarker = {
   /** Urutan tumpukan (z-index); makin besar makin di atas. Penanda terpilih selalu paling atas. */
   z?: number;
 };
+
+/**
+ * Lapisan tumpukan pin (makin besar makin di atas): pin baru/terpilih > MY PLACE favorit >
+ * MY PLACE sudah dikunjungi > MY PLACE rencana > MASTER. Tiap lapisan menyisakan ruang untuk urutan di dalamnya.
+ */
+export const PIN_LAYER = { master: 1_000, plan: 200_000, visited: 400_000, favorite: 600_000 } as const;
+const Z_SELECTED = 1_000_000;
 
 export type MapLine = {
   id: string;
@@ -339,7 +348,7 @@ export function MapView({
             key={m.id}
             position={{ lat: m.lat, lng: m.lng }}
             title={m.title}
-            zIndex={m.selected ? 100000 : (m.z ?? 1)}
+            zIndex={m.selected ? Z_SELECTED : (m.z ?? 1)}
             onClick={() => onMarkerClick?.(m.id)}
             draggable={!!m.draggable}
             // Ukuran aktif lewat transform pada kontainer marker agar membesar/mengecil halus (ujung pin tetap di titiknya).
@@ -350,13 +359,7 @@ export function MapView({
               if (ll) onMarkerDragEnd?.(m.id, ll.lat(), ll.lng());
             }}
           >
-            <Pin
-              background={m.color}
-              borderColor="#ffffff"
-              glyphColor={m.glyphColor ?? readableOn(m.color)}
-              glyph={m.glyph}
-              scale={pinScale}
-            />
+            <PinShape color={m.color} icon={m.icon} glyph={m.glyph} glyphColor={m.glyphColor} scale={pinScale} />
           </AdvancedMarker>
         ))}
         {here && (

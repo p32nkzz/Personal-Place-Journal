@@ -143,7 +143,7 @@ export default function CurationDetailPage() {
         <div className="stack">
           <MapTypeSwitch />
           <div className="map-box-md">
-            <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: mapColors.mine, title: p.name }]} fit />
+            <MapView markers={[{ id: "p", lat: p.latitude, lng: p.longitude, color: mapColors.mine, icon: p.visitStatus === "VISITED" ? "check" : "clock", title: p.name }]} fit />
           </div>
           <div className="card stack-sm">
             <h2 className="card-title">{t("relation.history")}</h2>
